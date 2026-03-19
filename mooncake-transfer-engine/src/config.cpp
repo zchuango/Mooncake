@@ -25,8 +25,11 @@ void loadGlobalConfig(GlobalConfig &config) {
     const char *num_cq_per_ctx_env = std::getenv("MC_NUM_CQ_PER_CTX");
     if (num_cq_per_ctx_env) {
         int val = atoi(num_cq_per_ctx_env);
-        if (val > 0 && val < 256)
+        if (val > 0 && val < 256) {
             config.num_cq_per_ctx = val;
+            config.num_jfc_per_ctx = val;
+            config.num_jfce_per_ctx = val; // urma中jfc和jfce是一对一绑定的
+        }
         else
             LOG(WARNING)
                 << "Ignore value from environment variable MC_NUM_CQ_PER_CTX";
