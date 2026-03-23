@@ -27,35 +27,30 @@
 
 namespace mooncake {
 struct UrmaJFC {
-    UrmaJFC() : native(nullptr), outstanding(0) {
-    }
+    UrmaJFC() : native(nullptr), outstanding(0) {}
 
     urma_jfc_t* native;
     volatile int outstanding;
 };
 
 struct UrmaJFR {
-    UrmaJFR() : native(nullptr), outstanding(0) {
-    }
+    UrmaJFR() : native(nullptr), outstanding(0) {}
 
     urma_jfr_t* native;
     volatile int outstanding;
 };
 
 static urma_import_seg_flag_t import_flag = {
-    .bs = {
-        .cacheable = URMA_NON_CACHEABLE,
-        .access = URMA_ACCESS_READ | URMA_ACCESS_WRITE | URMA_ACCESS_ATOMIC,
-        .mapping = URMA_SEG_NOMAP,
-        .reserved = 0
-    }
-};
+    .bs = {.cacheable = URMA_NON_CACHEABLE,
+           .access = URMA_ACCESS_READ | URMA_ACCESS_WRITE | URMA_ACCESS_ATOMIC,
+           .mapping = URMA_SEG_NOMAP,
+           .reserved = 0}};
 
 // define the UrmaContext class
 class UrmaContext : public UbContext {
     friend class UrmaEndpoint;
 
-public:
+   public:
     UrmaContext(UbTransport& engine, std::string device_name,
                 int max_endpoints);
     ~UrmaContext();
@@ -84,7 +79,7 @@ public:
     static bool uninit();
     static bool init();
 
-private:
+   private:
     int construct(GlobalConfig& config) override;
     int deconstruct() override;
     int openDevice(const std::string& device_name, uint8_t port,
@@ -102,22 +97,23 @@ private:
         return local_tseg_list_;
     }
 
-    void updateUrmaGlobalConfig(urma_device_attr_t &device_attr)
-    {
-        auto &config = globalConfig();
-        if (config.max_ep_per_ctx * config.num_jetty_per_ep > (size_t)device_attr.dev_cap.max_jetty) {
-            config.max_ep_per_ctx = device_attr.dev_cap.max_jetty / config.num_jetty_per_ep;
+    void updateUrmaGlobalConfig(urma_device_attr_t& device_attr) {
+        auto& config = globalConfig();
+        if (config.max_ep_per_ctx * config.num_jetty_per_ep >
+            (size_t)device_attr.dev_cap.max_jetty) {
+            config.max_ep_per_ctx =
+                device_attr.dev_cap.max_jetty / config.num_jetty_per_ep;
         }
         if (config.num_jfc_per_ctx > (size_t)device_attr.dev_cap.max_jfc) {
             config.num_jfc_per_ctx = device_attr.dev_cap.max_jfc;
         }
     }
 
-private:
+   private:
     std::vector<UrmaJFC> jfc_list_;
     urma_token_t urma_token = {.token = 0xACFE};
     urma_context_t* urma_context_ = nullptr;
-    //ibv_pd *pd_ = nullptr;
+    // ibv_pd *pd_ = nullptr;
     uint64_t max_seg_size{};
     urma_mtu active_mtu_;
     urma_eid_t eid_{};
@@ -152,11 +148,9 @@ private:
 
 // define the UrmaEndpoint class
 class UrmaEndpoint : public UbEndPoint {
-public:
+   public:
     UrmaEndpoint(UrmaContext* context)
-        : context_(context),
-          jfc_outstanding_(nullptr) {
-    }
+        : context_(context), jfc_outstanding_(nullptr) {}
 
     int construct(GlobalConfig& config) override;
 
@@ -171,16 +165,16 @@ public:
 
     bool hasOutstandingSlice() const override;
 
-    int submitPostSend(std::vector<Transport::Slice*>& slice_list,
-                       std::vector<Transport::Slice*>&
-                       failed_slice_list) override;
+    int submitPostSend(
+        std::vector<Transport::Slice*>& slice_list,
+        std::vector<Transport::Slice*>& failed_slice_list) override;
 
     const std::string toString() const override;
 
-private:
+   private:
     void disconnectUnlocked() override;
 
-private:
+   private:
     std::vector<uint32_t> JettyNum() const;
 
     int doSetupConnection(const std::string& peer_eid,
@@ -191,7 +185,7 @@ private:
                           uint32_t peer_jetty_num,
                           std::string* reply_msg = nullptr);
 
-private:
+   private:
     UrmaContext* context_;
     urma_token_t urma_token = {.token = 0xACFE};
     std::vector<urma_jetty_t*> jetty_list_;
@@ -200,5 +194,5 @@ private:
     volatile int* jfc_outstanding_;
     std::unordered_map<urma_jetty_t*, urma_target_jetty_t*> imported_jetty_map_;
 };
-}
-#endif // URMA_ENDPOINT_H
+}  // namespace mooncake
+#endif  // URMA_ENDPOINT_H

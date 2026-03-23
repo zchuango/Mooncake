@@ -235,25 +235,28 @@ static std::vector<UBDevice> listUBDevices(
         char path[PATH_MAX + 32];
         char resolved_path[PATH_MAX];
         // Get the PCI bus id for the infiniband device. Note that
-        snprintf(path, sizeof(path), "/sys/class/ubcore/%s", device_list[i]->name);
-            LOG(INFO) << "listUBDevices: path " << path;
+        snprintf(path, sizeof(path), "/sys/class/ubcore/%s",
+                 device_list[i]->name);
+        LOG(INFO) << "listUBDevices: path " << path;
         if (realpath(path, resolved_path) == NULL) {
             LOG(ERROR) << "listUBDevices: realpath " << resolved_path
-                        << " failed";
+                       << " failed";
             continue;
         }
         LOG(INFO) << "listUBDevices: realpath " << resolved_path;
         std::string pci_bus_id = basename(resolved_path);
 
         int numa_node = -1;
-        snprintf(path, sizeof(path), "%s/numa", dirname(dirname(resolved_path)));
+        snprintf(path, sizeof(path), "%s/numa",
+                 dirname(dirname(resolved_path)));
         LOG(INFO) << "listUBDevices: numanodepath " << path;
         std::ifstream(path) >> numa_node;
-        LOG(INFO) << "UBDevices : perfer node ----" << device_list[i]->name <<" : " << numa_node;
+        LOG(INFO) << "UBDevices : performation node ----"
+                  << device_list[i]->name << " : " << numa_node;
 
         devices.push_back(UBDevice{.name = std::move(device_name),
-                                           .pci_bus_id = std::move(pci_bus_id),
-                                           .numa_node = numa_node});
+                                   .pci_bus_id = std::move(pci_bus_id),
+                                   .numa_node = numa_node});
     }
     urma_free_device_list(device_list);
     urma_uninit();
@@ -276,7 +279,7 @@ static std::vector<TopologyEntry> discoverCpuTopology(
         if (entry->d_type != DT_DIR ||
             strncmp(entry->d_name, prefix, strlen(prefix)) != 0) {
             continue;
-            }
+        }
         int node_id = atoi(entry->d_name + strlen(prefix));
         std::vector<std::string> preferred_hca;
         std::vector<std::string> avail_hca;

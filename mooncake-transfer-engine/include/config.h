@@ -69,7 +69,7 @@ struct GlobalConfig {
     size_t num_jfce_per_ctx = 2;
     int eid_index = 0;
     uint64_t max_seg_size = 0x10000000000;
-    size_t max_jfc_e = 4096;// urma暂时使用此默认值
+    size_t max_jfc_e = 4096;  // urma暂时使用此默认值
     size_t num_jetty_per_ep = 1;
 };
 

@@ -33,7 +33,7 @@ class UbContext;
 
 // define worker pool class
 class UbWorkerPool {
-public:
+   public:
     UbWorkerPool(UbContext& context, int numa_socket_id = 0);
 
     ~UbWorkerPool();
@@ -41,7 +41,7 @@ public:
     // Add slices to queue, called by Transport
     int submitPostSend(const std::vector<Transport::Slice*>& slice_list);
 
-private:
+   private:
     void performPostSend(int thread_id);
 
     void performPoll(int thread_id);
@@ -54,7 +54,7 @@ private:
 
     int doProcessContextEvents();
 
-private:
+   private:
     UbContext& context_;
     const int numa_socket_id_;
     std::vector<std::thread> worker_thread_;
@@ -69,14 +69,14 @@ private:
     std::atomic<uint64_t> slice_queue_count_[kShardCount];
     TicketLock slice_queue_lock_[kShardCount];
     std::vector<std::unordered_map<std::string, SliceList>>
-    collective_slice_queue_;
+        collective_slice_queue_;
     std::atomic<uint64_t> submitted_slice_count_;
     std::atomic<uint64_t> processed_slice_count_;
     uint64_t success_nr_polls = 0, failed_nr_polls = 0;
 };
 
 class UbEndpointStore {
-public:
+   public:
     virtual ~UbEndpointStore() = default;
     virtual std::shared_ptr<UbEndPoint> getEndpoint(
         const std::string& peer_nic_path) = 0;
@@ -93,15 +93,14 @@ public:
 
 // NSDI 24, similar to clock with quick demotion
 class UbSIEVEEndpointStore : public UbEndpointStore {
-public:
+   public:
     UbSIEVEEndpointStore(size_t max_size)
-        : waiting_list_len_(0), max_size_(max_size) {
-    }
+        : waiting_list_len_(0), max_size_(max_size) {}
 
     std::shared_ptr<UbEndPoint> getEndpoint(
         const std::string& peer_nic_path) override;
-    std::shared_ptr<UbEndPoint> insertEndpoint(
-        const std::string& peer_nic_path, UbContext* context) override;
+    std::shared_ptr<UbEndPoint> insertEndpoint(const std::string& peer_nic_path,
+                                               UbContext* context) override;
     int deleteEndpoint(const std::string& peer_nic_path) override;
     void evictEndpoint() override;
     void reclaimEndpoint() override;
@@ -110,12 +109,12 @@ public:
     int destroy() override;
     int disconnect() override;
 
-private:
+   private:
     RWSpinlock endpoint_map_lock_;
     // The bool represents visited
-    std::unordered_map<
-        std::string, std::pair<std::shared_ptr<UbEndPoint>, std::atomic_bool>>
-    endpoint_map_;
+    std::unordered_map<std::string,
+                       std::pair<std::shared_ptr<UbEndPoint>, std::atomic_bool>>
+        endpoint_map_;
     std::unordered_map<std::string, std::list<std::string>::iterator> fifo_map_;
     std::list<std::string> fifo_list_;
 
@@ -129,18 +128,16 @@ private:
 
 // UbContext class
 class UbContext {
-public:
+   public:
     UbContext(UbTransport& engine, std::string device_name, int max_endpoints)
         : device_name_(std::move(device_name)),
           engine_(engine),
           max_endpoints_(max_endpoints),
           worker_pool_(nullptr),
           active_(true),
-          show_work_request_flushed_error_(false) {
-    }
+          show_work_request_flushed_error_(false) {}
 
-    ~UbContext() {
-    }
+    ~UbContext() {}
 
     int doConstruct(GlobalConfig& config) {
         show_work_request_flushed_error_ = globalConfig().trace;
@@ -149,8 +146,8 @@ public:
             return 1;
         }
         LOG(INFO) << "finish construct context " << toString();
-        endpoint_store_ = std::make_shared<
-            UbSIEVEEndpointStore>(max_endpoints_);
+        endpoint_store_ =
+            std::make_shared<UbSIEVEEndpointStore>(max_endpoints_);
         if (endpoint_store_ == nullptr) {
             LOG(INFO) << "failed create endpoint store.";
             return 1;
@@ -166,12 +163,12 @@ public:
 
     virtual std::shared_ptr<UbEndPoint> makeEndpoint() = 0;
 
-private:
+   private:
     virtual int construct(GlobalConfig& config) = 0;
 
     virtual int deconstruct() = 0;
 
-public:
+   public:
     virtual int registerMemoryRegion(uint64_t va, size_t length) = 0;
 
     virtual int unregisterMemoryRegion(uint64_t va) = 0;
@@ -190,8 +187,8 @@ public:
 
     virtual int jfcCount() = 0;
 
-    virtual int submitPostSend(const std::vector<Transport::Slice*>& slice_list)
-    = 0;
+    virtual int submitPostSend(
+        const std::vector<Transport::Slice*>& slice_list) = 0;
 
     virtual int getAsyncFd() = 0;
 
@@ -232,9 +229,7 @@ public:
         return endpoint_store_->deleteEndpoint(peer_nic_path);
     }
 
-    int disconnectAllEndpoints() {
-        return endpoint_store_->disconnect();
-    }
+    int disconnectAllEndpoints() { return endpoint_store_->disconnect(); }
 
     // Device name, such as `mlx5_3`
     std::string deviceName() const { return device_name_; }
@@ -253,8 +248,8 @@ public:
     int eventFd() const { return event_fd_; }
 
     int socketId() {
-        std::string path = "/sys/class/infiniband/" +
-                           device_name_ + "/device/numa_node";
+        std::string path =
+            "/sys/class/infiniband/" + device_name_ + "/device/numa_node";
         std::ifstream file(path);
         if (file.is_open()) {
             int socket_id;
@@ -306,7 +301,7 @@ public:
         }
     }
 
-protected:
+   protected:
     static int joinNonblockingPollList(int& event_fd, int data_fd) {
         event_fd = epoll_create1(0);
         if (event_fd < 0) {
@@ -335,7 +330,7 @@ protected:
         return 0;
     }
 
-protected:
+   protected:
     const std::string device_name_;
     UbTransport& engine_;
     int max_endpoints_;
@@ -357,6 +352,6 @@ protected:
 
     bool show_work_request_flushed_error_;
 };
-}
+}  // namespace mooncake
 
 #endif  // UB_CONTEXT_H

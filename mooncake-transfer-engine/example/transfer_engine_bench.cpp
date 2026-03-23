@@ -232,7 +232,7 @@ static void freeMemoryPool(void *addr, size_t size) {
     }
 #else
     if (FLAGS_protocol == "ub") {
-        munmap(addr, size); // for urma
+        munmap(addr, size);  // for urma
     } else {
         numa_free(addr, size);
     }

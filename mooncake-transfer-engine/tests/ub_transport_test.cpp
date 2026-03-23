@@ -43,7 +43,7 @@
 
 #include <cassert>
 
-static void checkCudaError(cudaError_t result, const char *message) {
+static void checkCudaError(cudaError_t result, const char* message) {
     if (result != cudaSuccess) {
         LOG(ERROR) << message << " (Error code: " << result << " - "
                    << cudaGetErrorString(result) << ")" << std::endl;
@@ -83,7 +83,7 @@ static void* allocateMemoryPool(size_t size, int socket_id,
 #if defined(USE_CUDA) || defined(USE_MUSA) || defined(USE_HIP)
     if (from_vram) {
         int gpu_id = FLAGS_gpu_id;
-        void *d_buf;
+        void* d_buf;
         checkCudaError(cudaSetDevice(gpu_id), "Failed to set device");
         checkCudaError(cudaMalloc(&d_buf, size),
                        "Failed to allocate device memory");
@@ -184,7 +184,7 @@ int initiatorWorker(TransferEngine* engine, SegmentID segment_id, int thread_id,
     int ret =
         memcmp((uint8_t*)(addr), (uint8_t*)(addr) + kDataLength, kDataLength);
     LOG(INFO) << "Read Data: " << std::string((char*)(addr) + kDataLength, 16)
-        << "...";
+              << "...";
     LOG(INFO) << "Compare: " << (ret == 0 ? "OK" : "FAILED");
 
     return 0;

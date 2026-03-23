@@ -28,9 +28,8 @@ void loadGlobalConfig(GlobalConfig &config) {
         if (val > 0 && val < 256) {
             config.num_cq_per_ctx = val;
             config.num_jfc_per_ctx = val;
-            config.num_jfce_per_ctx = val; // urma中jfc和jfce是一对一绑定的
-        }
-        else
+            config.num_jfce_per_ctx = val;  // urma中jfc和jfce是一对一绑定的
+        } else
             LOG(WARNING)
                 << "Ignore value from environment variable MC_NUM_CQ_PER_CTX";
     }
