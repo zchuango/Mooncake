@@ -22,13 +22,12 @@
 #include "transport/ub_transport/urma_endpoint.h"
 
 namespace mooncake {
-UbTransport::UbTransport(UB_ENDPOINT_TYPE endpoint_type): endpoint_type_(
-    endpoint_type) {
-}
+UbTransport::UbTransport(UB_ENDPOINT_TYPE endpoint_type)
+    : endpoint_type_(endpoint_type) {}
 
 UbTransport::~UbTransport() {
 #ifdef CONFIG_USE_BATCH_DESC_SET
-    for (auto &entry : batch_desc_set_) delete entry.second;
+    for (auto& entry : batch_desc_set_) delete entry.second;
     batch_desc_set_.clear();
 #endif
     metadata_->removeSegmentDesc(local_server_name_);
@@ -57,7 +56,7 @@ int UbTransport::install(std::string& local_server_name,
     ret = allocateLocalSegmentID();
     if (ret) {
         LOG(ERROR) << "Transfer engine cannot be initialized: cannot "
-            "allocate local segment";
+                      "allocate local segment";
         uninit(this);
         return ret;
     }
@@ -128,8 +127,7 @@ int UbTransport::unregisterLocalMemory(void* addr, bool update_metadata) {
     int rc = metadata_->removeLocalMemoryBuffer(addr, update_metadata);
     if (rc) return rc;
     for (auto& context : context_list_)
-        context->unregisterMemoryRegion(
-            (uint64_t)addr);
+        context->unregisterMemoryRegion((uint64_t)addr);
     return 0;
 }
 
@@ -148,8 +146,8 @@ int UbTransport::registerLocalMemoryBatch(
     for (size_t i = 0; i < buffer_list.size(); ++i) {
         if (results[i].get()) {
             LOG(WARNING) << "UrmaTransport: Failed to register memory: addr "
-                << buffer_list[i].addr << " length "
-                << buffer_list[i].length;
+                         << buffer_list[i].addr << " length "
+                         << buffer_list[i].length;
         }
     }
 
@@ -170,19 +168,18 @@ int UbTransport::unregisterLocalMemoryBatch(
     for (size_t i = 0; i < addr_list.size(); ++i) {
         if (results[i].get())
             LOG(WARNING) << "UbTransport: Failed to unregister memory: addr "
-                << addr_list[i];
+                         << addr_list[i];
     }
 
     return metadata_->updateLocalSegmentDesc();
 }
 
-Status UbTransport::submitTransfer(BatchID batch_id,
-                                   const std::vector<TransferRequest>&
-                                   entries) {
+Status UbTransport::submitTransfer(
+    BatchID batch_id, const std::vector<TransferRequest>& entries) {
     auto& batch_desc = *((BatchDesc*)(batch_id));
     if (batch_desc.task_list.size() + entries.size() > batch_desc.batch_size) {
         LOG(ERROR) << "UrmaTransport: Exceed the limitation of current batch's "
-            "capacity";
+                      "capacity";
         return Status::InvalidArgument(
             "UrmaTransport: Exceed the limitation of capacity, batch id: " +
             std::to_string(batch_id));
@@ -231,11 +228,11 @@ Status UbTransport::submitTransferTask(
             bool merge_final_slice =
                 request.length - offset <= kBlockSize + kFragmentSize;
             slice->source_addr = (char*)request.source + offset;
-            slice->length = merge_final_slice
-                                ? request.length - offset
-                                : kBlockSize;
+            slice->length =
+                merge_final_slice ? request.length - offset : kBlockSize;
             slice->opcode = request.opcode;
-            // LOG(INFO) << "target_offset : " << request.target_offset << ", offset : " << offset;
+            // LOG(INFO) << "target_offset : " << request.target_offset << ",
+            // offset : " << offset;
             slice->ub.dest_addr = request.target_offset + offset;
             slice->ub.retry_cnt = 0;
             slice->ub.max_retry_cnt = kMaxRetryCount;
@@ -259,15 +256,15 @@ Status UbTransport::submitTransferTask(
                                  buffer_id, device_id, retry_cnt++))
                     continue;
                 assert(device_id >= 0 &&
-                    static_cast<size_t>(device_id) < context_list_.size());
+                       static_cast<size_t>(device_id) < context_list_.size());
                 auto& context = context_list_[device_id];
                 assert(context.get());
                 if (!context->active()) continue;
                 assert(buffer_id >= 0 &&
-                    static_cast<size_t>(buffer_id) <
-                    local_segment_desc->buffers.size());
+                       static_cast<size_t>(buffer_id) <
+                           local_segment_desc->buffers.size());
                 assert(local_segment_desc->buffers[buffer_id].tseg.size() ==
-                    context_list_.size());
+                       context_list_.size());
                 found_device = true;
                 break;
             }
@@ -283,16 +280,15 @@ Status UbTransport::submitTransferTask(
                     "address: " +
                     std::to_string(reinterpret_cast<uintptr_t>(source_addr)));
             }
-            // start to submit batch reqeust task
+            // start to submit batch request task
             auto& context = context_list_[device_id];
             if (!context->active()) {
                 LOG(ERROR) << "Device " << device_id << " is not active";
-                return Status::InvalidArgument("Device " +
-                                               std::to_string(device_id) +
-                                               " is not active");
+                return Status::InvalidArgument(
+                    "Device " + std::to_string(device_id) + " is not active");
             }
-            auto local_tseg_index = local_segment_desc->buffers[buffer_id].
-                l_seg_index[device_id];
+            auto local_tseg_index =
+                local_segment_desc->buffers[buffer_id].l_seg_index[device_id];
             slice->ub.l_seg = context->localSegWithIndex(local_tseg_index);
             slices_to_post[context].push_back(slice);
             task.total_bytes += slice->length;
@@ -339,8 +335,8 @@ Status UbTransport::getTransferStatus(BatchID batch_id, size_t task_id,
     return Status::OK();
 }
 
-Transport::SegmentID
-UbTransport::getSegmentID(const std::string& segment_name) {
+Transport::SegmentID UbTransport::getSegmentID(
+    const std::string& segment_name) {
     return metadata_->getSegmentID(segment_name);
 }
 
@@ -387,8 +383,8 @@ int UbTransport::onSetupConnections(const HandShakeDesc& peer_desc,
 
 int UbTransport::startHandshakeDaemon(std::string& local_server_name) {
     return metadata_->startHandshakeDaemon(
-        std::bind(&UbTransport::onSetupConnections, this,
-                  std::placeholders::_1, std::placeholders::_2),
+        std::bind(&UbTransport::onSetupConnections, this, std::placeholders::_1,
+                  std::placeholders::_2),
         metadata_->localRpcMeta().rpc_port, metadata_->localRpcMeta().sockfd);
 }
 
@@ -407,8 +403,8 @@ int UbTransport::selectDevice(SegmentDesc* desc, uint64_t offset, size_t length,
     }
 
     const auto& buffers = desc->buffers;
-    for (buffer_id = 0; buffer_id < static_cast<int>(buffers.size()); ++
-         buffer_id) {
+    for (buffer_id = 0; buffer_id < static_cast<int>(buffers.size());
+         ++buffer_id) {
         const auto& buffer = buffers[buffer_id];
         // Check if offset is within buffer range
         if (offset < buffer.addr || length > buffer.length ||
@@ -416,16 +412,15 @@ int UbTransport::selectDevice(SegmentDesc* desc, uint64_t offset, size_t length,
             continue;
         }
 
-        device_id = hint.empty()
-                        ? desc->topology.selectDevice(buffer.name, retry_cnt)
-                        : desc->topology.selectDevice(
-                            buffer.name, hint, retry_cnt);
+        device_id =
+            hint.empty()
+                ? desc->topology.selectDevice(buffer.name, retry_cnt)
+                : desc->topology.selectDevice(buffer.name, hint, retry_cnt);
         if (device_id >= 0) return 0;
-        device_id = hint.empty()
-                        ? desc->topology.selectDevice(
-                            kWildcardLocation, retry_cnt)
-                        : desc->topology.selectDevice(
-                            kWildcardLocation, hint, retry_cnt);
+        device_id = hint.empty() ? desc->topology.selectDevice(
+                                       kWildcardLocation, retry_cnt)
+                                 : desc->topology.selectDevice(
+                                       kWildcardLocation, hint, retry_cnt);
         if (device_id >= 0) return 0;
     }
     return ERR_ADDRESS_NOT_REGISTERED;
@@ -487,11 +482,11 @@ void UbTransport::uninit(UbTransport* transport) {
     }
 }
 
-std::shared_ptr<UbContext> UbTransport::buildContext(UbTransport* t,
-    const std::string& device_name, int max_endpoints) {
+std::shared_ptr<UbContext> UbTransport::buildContext(
+    UbTransport* t, const std::string& device_name, int max_endpoints) {
     if (t->endpoint_type_ == URMA_ENDPOINT) {
-        auto context = std::make_shared<UrmaContext>(
-            *t, device_name, max_endpoints);
+        auto context =
+            std::make_shared<UrmaContext>(*t, device_name, max_endpoints);
         if (!context) {
             LOG(ERROR) << "UrmaContext build failed";
             return nullptr;
@@ -505,27 +500,4 @@ std::shared_ptr<UbContext> UbTransport::buildContext(UbTransport* t,
         return nullptr;
     }
 }
-}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+}  // namespace mooncake

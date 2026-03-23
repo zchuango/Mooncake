@@ -22,7 +22,7 @@
 namespace mooncake {
 // define the UbEndpoint class
 class UbEndPoint {
-public:
+   public:
     enum Status {
         INITIALIZING,
         UNCONNECTED,
@@ -31,10 +31,7 @@ public:
 
     using HandShakeDesc = TransferMetadata::HandShakeDesc;
 
-    UbEndPoint()
-        : status_(INITIALIZING),
-          active_(true) {
-    }
+    UbEndPoint() : status_(INITIALIZING), active_(true) {}
 
     virtual int construct(GlobalConfig& config) = 0;
 
@@ -49,9 +46,9 @@ public:
 
     virtual bool hasOutstandingSlice() const = 0;
 
-    virtual int submitPostSend(std::vector<Transport::Slice*>& slice_list,
-                               std::vector<Transport::Slice*>&
-                               failed_slice_list) = 0;
+    virtual int submitPostSend(
+        std::vector<Transport::Slice*>& slice_list,
+        std::vector<Transport::Slice*>& failed_slice_list) = 0;
 
     virtual const std::string toString() const = 0;
 
@@ -82,16 +79,16 @@ public:
         disconnectUnlocked();
     }
 
-private:
+   private:
     virtual void disconnectUnlocked() = 0;
 
-protected:
+   protected:
     volatile uint64_t inactive_time_{};
     volatile bool active_{};
     std::atomic<Status> status_;
     RWSpinlock lock_;
     std::string peer_nic_path_;
 };
-} // namespace mooncake
+}  // namespace mooncake
 
 #endif  // UB_ENDPOINT_H

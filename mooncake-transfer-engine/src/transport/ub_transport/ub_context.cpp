@@ -29,7 +29,7 @@ std::shared_ptr<UbEndPoint> UbSIEVEEndpointStore::getEndpoint(
     auto iter = endpoint_map_.find(peer_nic_path);
     if (iter != endpoint_map_.end()) {
         iter->second.second.store(
-            true, std::memory_order_relaxed); // This is safe within read lock
+            true, std::memory_order_relaxed);  // This is safe within read lock
         // because of idempotence
         return iter->second.first;
     }
@@ -43,7 +43,7 @@ std::shared_ptr<UbEndPoint> UbSIEVEEndpointStore::insertEndpoint(
     RWSpinlock::WriteGuard guard(endpoint_map_lock_);
     if (endpoint_map_.find(peer_nic_path) != endpoint_map_.end()) {
         LOG(INFO) << "Endpoint " << peer_nic_path
-            << " already exists in SIEVEEndpointStore";
+                  << " already exists in SIEVEEndpointStore";
         return endpoint_map_[peer_nic_path].first;
     }
     auto endpoint = context->makeEndpoint();
@@ -75,9 +75,8 @@ int UbSIEVEEndpointStore::deleteEndpoint(const std::string& peer_nic_path) {
         endpoint_map_.erase(iter);
         auto fifo_iter = fifo_map_[peer_nic_path];
         if (hand_.has_value() && hand_.value() == fifo_iter) {
-            fifo_iter == fifo_list_.begin()
-                ? hand_ = std::nullopt
-                : hand_ = std::prev(fifo_iter);
+            fifo_iter == fifo_list_.begin() ? hand_ = std::nullopt
+                                            : hand_ = std::prev(fifo_iter);
         }
         fifo_list_.erase(fifo_iter);
         fifo_map_.erase(peer_nic_path);
@@ -147,15 +146,12 @@ UbWorkerPool::UbWorkerPool(UbContext& context, int numa_socket_id)
       redispatch_counter_(0),
       submitted_slice_count_(0),
       processed_slice_count_(0) {
-    for (auto& i : slice_queue_count_)
-        i.store(0, std::memory_order_relaxed);
+    for (auto& i : slice_queue_count_) i.store(0, std::memory_order_relaxed);
     collective_slice_queue_.resize(kTransferWorkerCount);
     for (int i = 0; i < kTransferWorkerCount; ++i) {
-        worker_thread_.emplace_back(
-            [this, i] { transferWorker(i); });
+        worker_thread_.emplace_back([this, i] { transferWorker(i); });
     }
-    worker_thread_.emplace_back(
-        [this] { monitorWorker(); });
+    worker_thread_.emplace_back([this] { monitorWorker(); });
 }
 
 UbWorkerPool::~UbWorkerPool() {
@@ -180,7 +176,7 @@ int UbWorkerPool::submitPostSend(
         tl_last_cache_ts = current_ts;
     }
 
-    for (auto &slice : slice_list) {
+    for (auto& slice : slice_list) {
         auto target_id = slice->target_id;
         if (!segment_desc_map.count(target_id)) {
             segment_desc_map[target_id] =
@@ -194,8 +190,8 @@ int UbWorkerPool::submitPostSend(
         }
     }
 #else
-    std::unordered_map<UbTransport::SegmentID, std::shared_ptr<
-                           UbTransport::SegmentDesc>>
+    std::unordered_map<UbTransport::SegmentID,
+                       std::shared_ptr<UbTransport::SegmentDesc>>
         segment_desc_map;
     for (auto& slice : slice_list) {
         auto target_id = slice->target_id;
@@ -222,22 +218,22 @@ int UbWorkerPool::submitPostSend(
         auto hint = globalConfig().enable_dest_device_affinity
                         ? context_.deviceName()
                         : "";
-        if (UbTransport::selectDevice(
-            peer_segment_desc.get(), slice->ub.dest_addr, slice->length,
-            hint, buffer_id, device_id)) {
+        if (UbTransport::selectDevice(peer_segment_desc.get(),
+                                      slice->ub.dest_addr, slice->length, hint,
+                                      buffer_id, device_id)) {
             peer_segment_desc = context_.engine().meta()->getSegmentDescByID(
                 slice->target_id, true);
             if (!peer_segment_desc) {
                 LOG(ERROR) << "Cannot reload target segment #"
-                    << slice->target_id;
+                           << slice->target_id;
                 slice->markFailed();
                 failed_target_ids[slice->target_id] = getCurrentTimeInNano();
                 continue;
             }
 
-            if (UbTransport::selectDevice(
-                peer_segment_desc.get(), slice->ub.dest_addr,
-                slice->length, hint, buffer_id, device_id)) {
+            if (UbTransport::selectDevice(peer_segment_desc.get(),
+                                          slice->ub.dest_addr, slice->length,
+                                          hint, buffer_id, device_id)) {
                 slice->markFailed();
                 for (const auto& dev_desc : peer_segment_desc.get()->devices) {
                     LOG(ERROR) << "peer device : " << dev_desc.name;
@@ -252,8 +248,8 @@ int UbWorkerPool::submitPostSend(
             slice->markFailed();
             continue;
         }
-        auto targetSegment = peer_segment_desc->buffers[buffer_id].tseg[
-            device_id];
+        auto targetSegment =
+            peer_segment_desc->buffers[buffer_id].tseg[device_id];
         slice->ub.r_seg = context_.retrieveRemoteSeg(targetSegment);
         auto peer_nic_path =
             MakeNicPath(peer_segment_desc->name,
@@ -324,12 +320,12 @@ void UbWorkerPool::performPostSend(int thread_id) {
         if (entry.second.empty()) continue;
 
 #ifdef USE_FAKE_POST_SEND
-        for (auto &slice : entry.second) slice->markSuccess();
+        for (auto& slice : entry.second) slice->markSuccess();
         processed_slice_count_.fetch_add(entry.second.size());
         entry.second.clear();
 #else
 #ifdef CONFIG_CACHE_ENDPOINT
-        auto &endpoint = endpoint_map[entry.first];
+        auto& endpoint = endpoint_map[entry.first];
         if (endpoint == nullptr || !endpoint->active())
             endpoint = context_.endpoint(entry.first);
 #else
@@ -350,7 +346,7 @@ void UbWorkerPool::performPostSend(int thread_id) {
         }
         if (!endpoint->connected() && endpoint->setupConnectionsByActive()) {
             LOG(ERROR) << "Worker: Cannot make connection for endpoint: "
-                << entry.first << ", mark it inactive";
+                       << entry.first << ", mark it inactive";
             for (auto& slice : entry.second) failed_slice_list.push_back(slice);
             endpoint->set_active(false);
             failed_nr_polls++;
@@ -395,10 +391,10 @@ void UbWorkerPool::performPoll(int thread_id) {
                 jetty_depth_set[slice->ub.jetty_depth] = 1;
             if (cr[i]->status != Transport::Slice::SUCCESS) {
                 failed_nr_polls++;
-                if (context_.active() && failed_nr_polls > 32 && !
-                    success_nr_polls) {
+                if (context_.active() && failed_nr_polls > 32 &&
+                    !success_nr_polls) {
                     LOG(WARNING) << "Too many errors found in local RNIC "
-                        << context_.nicPath() << ", mark it inactive";
+                                 << context_.nicPath() << ", mark it inactive";
                     context_.set_active(false);
                 }
                 context_.deleteEndpoint(slice->peer_nic_path);
@@ -430,8 +426,8 @@ void UbWorkerPool::performPoll(int thread_id) {
 
 void UbWorkerPool::redispatch(std::vector<Transport::Slice*>& slice_list,
                               int thread_id) {
-    std::unordered_map<Transport::SegmentID, std::shared_ptr<
-                           Transport::SegmentDesc>>
+    std::unordered_map<Transport::SegmentID,
+                       std::shared_ptr<Transport::SegmentDesc>>
         segment_desc_map;
     for (auto& slice : slice_list) {
         auto target_id = slice->target_id;
@@ -448,16 +444,15 @@ void UbWorkerPool::redispatch(std::vector<Transport::Slice*>& slice_list,
             auto& peer_segment_desc = segment_desc_map[slice->target_id];
             int buffer_id, device_id;
             if (!peer_segment_desc ||
-                UbTransport::selectDevice(peer_segment_desc.get(),
-                                          slice->ub.dest_addr,
-                                          slice->length, buffer_id, device_id,
-                                          slice->ub.retry_cnt)) {
+                UbTransport::selectDevice(
+                    peer_segment_desc.get(), slice->ub.dest_addr, slice->length,
+                    buffer_id, device_id, slice->ub.retry_cnt)) {
                 slice->markFailed();
                 processed_slice_count_++;
                 continue;
             }
-            auto targetSegment = peer_segment_desc->buffers[buffer_id].tseg[
-                device_id];
+            auto targetSegment =
+                peer_segment_desc->buffers[buffer_id].tseg[device_id];
             slice->ub.r_seg = context_.retrieveRemoteSeg(targetSegment);
             auto peer_nic_path =
                 MakeNicPath(peer_segment_desc->name,
@@ -479,7 +474,7 @@ void UbWorkerPool::transferWorker(int thread_id) {
         std::array<uint64_t, 6> poll_jfc_buckets{};
     } stats;
     bindToSocket(numa_socket_id_);
-    const static uint64_t kWaitPeriodInNano = 100000000; // 100ms
+    const static uint64_t kWaitPeriodInNano = 100000000;  // 100ms
     uint64_t last_wait_ts = getCurrentTimeInNano();
     while (workers_running_.load(std::memory_order_relaxed)) {
         auto processed_slice_count =
@@ -525,12 +520,12 @@ void UbWorkerPool::monitorWorker() {
 
         if (!(event.events & EPOLLIN)) continue;
 
-        if (event.data.fd == context_.getAsyncFd())
-            doProcessContextEvents();
+        if (event.data.fd == context_.getAsyncFd()) doProcessContextEvents();
     }
 }
 
 int UbWorkerPool::doProcessContextEvents() {
-    return context_.doProcessContextEvents();;
+    return context_.doProcessContextEvents();
+    ;
 }
-}
+}  // namespace mooncake

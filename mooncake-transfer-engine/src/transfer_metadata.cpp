@@ -70,9 +70,9 @@ struct TransferHandshakeUtil {
         Json::Value jettyNums(Json::arrayValue);
         for (const auto &jetty : desc.jetty_num) jettyNums.append(jetty);
         root["jetty_num"] = jettyNums;
-        LOG(INFO) << "Encode: local_nic_path is " << desc.local_nic_path <<
-                     " peer_nic_path is " << desc.peer_nic_path <<
-                     " jetty_num size is " << desc.jetty_num.size();
+        LOG(INFO) << "Encode: local_nic_path is " << desc.local_nic_path
+                  << " peer_nic_path is " << desc.peer_nic_path
+                  << " jetty_num size is " << desc.jetty_num.size();
 #endif
         return root;
     }
@@ -94,9 +94,9 @@ struct TransferHandshakeUtil {
         for (const auto &jetty : root["jetty_num"]) {
             desc.jetty_num.push_back(jetty.asUInt());
         }
-        LOG(INFO) << "Decode: remote_nic_path is " << desc.local_nic_path <<
-                     " peer_nic_path is " << desc.peer_nic_path <<
-                     " jetty_num size is " << desc.jetty_num.size();
+        LOG(INFO) << "Decode: remote_nic_path is " << desc.local_nic_path
+                  << " peer_nic_path is " << desc.peer_nic_path
+                  << " jetty_num size is " << desc.jetty_num.size();
 #endif
         return 0;
     }
@@ -216,30 +216,30 @@ int TransferMetadata::encodeSegmentDesc(const SegmentDesc &desc,
         }
         segmentJSON["buffers"] = buffersJSON;
         segmentJSON["priority_matrix"] = desc.topology.toJson();
-        } else if (segmentJSON["protocol"] == "ub") {
-            Json::Value devicesJSON(Json::arrayValue);
-            for (const auto &device : desc.devices) {
-                Json::Value deviceJSON;
-                deviceJSON["name"] = device.name;
-                deviceJSON["eid"] = device.eid;
-                devicesJSON.append(deviceJSON);
-            }
-            segmentJSON["devices"] = devicesJSON;
+    } else if (segmentJSON["protocol"] == "ub") {
+        Json::Value devicesJSON(Json::arrayValue);
+        for (const auto &device : desc.devices) {
+            Json::Value deviceJSON;
+            deviceJSON["name"] = device.name;
+            deviceJSON["eid"] = device.eid;
+            devicesJSON.append(deviceJSON);
+        }
+        segmentJSON["devices"] = devicesJSON;
 
-            Json::Value buffersJSON(Json::arrayValue);
-            for (const auto &buffer : desc.buffers) {
-                Json::Value bufferJSON;
-                bufferJSON["name"] = buffer.name;
-                bufferJSON["addr"] = static_cast<Json::UInt64>(buffer.addr);
-                bufferJSON["length"] = static_cast<Json::UInt64>(buffer.length);
-                Json::Value tsegJSON(Json::arrayValue);
-                for (auto &entry : buffer.tseg) tsegJSON.append(entry);
-                bufferJSON["tseg"] = tsegJSON;
-                buffersJSON.append(bufferJSON);
-            }
-            segmentJSON["buffers"] = buffersJSON;
-            segmentJSON["priority_matrix"] = desc.topology.toJson();
-        }  else if (segmentJSON["protocol"] == "tcp") {
+        Json::Value buffersJSON(Json::arrayValue);
+        for (const auto &buffer : desc.buffers) {
+            Json::Value bufferJSON;
+            bufferJSON["name"] = buffer.name;
+            bufferJSON["addr"] = static_cast<Json::UInt64>(buffer.addr);
+            bufferJSON["length"] = static_cast<Json::UInt64>(buffer.length);
+            Json::Value tsegJSON(Json::arrayValue);
+            for (auto &entry : buffer.tseg) tsegJSON.append(entry);
+            bufferJSON["tseg"] = tsegJSON;
+            buffersJSON.append(bufferJSON);
+        }
+        segmentJSON["buffers"] = buffersJSON;
+        segmentJSON["priority_matrix"] = desc.topology.toJson();
+    } else if (segmentJSON["protocol"] == "tcp") {
         Json::Value buffersJSON(Json::arrayValue);
         for (const auto &buffer : desc.buffers) {
             Json::Value bufferJSON;
@@ -422,7 +422,7 @@ TransferMetadata::decodeSegmentDesc(Json::Value &segmentJSON,
             LOG(WARNING) << "Corrupted segment descriptor, name "
                          << segment_name << " protocol " << desc->protocol;
         }
-    }  else if (desc->protocol == "ub") {
+    } else if (desc->protocol == "ub") {
         for (const auto &deviceJSON : segmentJSON["devices"]) {
             DeviceDesc device;
             device.name = deviceJSON["name"].asString();
@@ -448,7 +448,7 @@ TransferMetadata::decodeSegmentDesc(Json::Value &segmentJSON,
                 LOG(WARNING) << "Corrupted segment descriptor, name "
                              << segment_name << " protocol " << desc->protocol;
                 return nullptr;
-                }
+            }
             desc->buffers.push_back(buffer);
         }
 
@@ -458,7 +458,7 @@ TransferMetadata::decodeSegmentDesc(Json::Value &segmentJSON,
             LOG(WARNING) << "Corrupted segment descriptor, name "
                          << segment_name << " protocol " << desc->protocol;
         }
-    }  else if (desc->protocol == "tcp") {
+    } else if (desc->protocol == "tcp") {
         for (const auto &bufferJSON : segmentJSON["buffers"]) {
             BufferDesc buffer;
             buffer.name = bufferJSON["name"].asString();
