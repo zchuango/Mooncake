@@ -39,7 +39,7 @@ int UbTransport::install(std::string& local_server_name,
                          std::shared_ptr<TransferMetadata> meta,
                          std::shared_ptr<Topology> topo) {
     if (topo == nullptr) {
-        LOG(ERROR) << "UrmaTransport: missing topology";
+        LOG(ERROR) << "UbTransport: missing topology";
         return ERR_INVALID_ARGUMENT;
     }
     metadata_ = meta;
@@ -47,11 +47,11 @@ int UbTransport::install(std::string& local_server_name,
     local_topology_ = topo;
     auto ret = initializeUbResources(this);
     if (ret) {
-        LOG(ERROR) << "UrmaTransport: cannot initialize URMA resources";
+        LOG(ERROR) << "UbTransport: cannot initialize Ub resources";
         uninit(this);
         return ret;
     }
-    LOG(INFO) << "UrmaTransport: initialize URMA resources done";
+    LOG(INFO) << "UbTransport: initialize Ub resources done";
 
     ret = allocateLocalSegmentID();
     if (ret) {
@@ -64,19 +64,19 @@ int UbTransport::install(std::string& local_server_name,
 
     ret = startHandshakeDaemon(local_server_name);
     if (ret) {
-        LOG(ERROR) << "UrmaTransport: cannot start handshake daemon";
+        LOG(ERROR) << "UbTransport: cannot start handshake daemon";
         uninit(this);
         return ret;
     }
-    LOG(INFO) << "UrmaTransport: start handshake daemon done";
+    LOG(INFO) << "UbTransport: start handshake daemon done";
 
     ret = metadata_->updateLocalSegmentDesc();
     if (ret) {
-        LOG(ERROR) << "UrmaTransport: cannot publish segments";
+        LOG(ERROR) << "UbTransport: cannot publish segments";
         uninit(this);
         return ret;
     }
-    LOG(INFO) << "UrmaTransport: publish segments done";
+    LOG(INFO) << "UbTransport: publish segments done";
 
     return 0;
 }
@@ -145,7 +145,7 @@ int UbTransport::registerLocalMemoryBatch(
 
     for (size_t i = 0; i < buffer_list.size(); ++i) {
         if (results[i].get()) {
-            LOG(WARNING) << "UrmaTransport: Failed to register memory: addr "
+            LOG(WARNING) << "UbTransport: Failed to register memory: addr "
                          << buffer_list[i].addr << " length "
                          << buffer_list[i].length;
         }
@@ -178,10 +178,10 @@ Status UbTransport::submitTransfer(
     BatchID batch_id, const std::vector<TransferRequest>& entries) {
     auto& batch_desc = *((BatchDesc*)(batch_id));
     if (batch_desc.task_list.size() + entries.size() > batch_desc.batch_size) {
-        LOG(ERROR) << "UrmaTransport: Exceed the limitation of current batch's "
+        LOG(ERROR) << "UbTransport: Exceed the limitation of current batch's "
                       "capacity";
         return Status::InvalidArgument(
-            "UrmaTransport: Exceed the limitation of capacity, batch id: " +
+            "UbTransport: Exceed the limitation of capacity, batch id: " +
             std::to_string(batch_id));
     }
     size_t task_id = batch_desc.task_list.size();
@@ -273,10 +273,10 @@ Status UbTransport::submitTransferTask(
                 for (auto& entry : slices_to_post)
                     for (auto s : entry.second) delete s;
                 LOG(ERROR)
-                    << "UrmaTransport: Address not registered by any device(s) "
+                    << "UbTransport: Address not registered by any device(s) "
                     << source_addr;
                 return Status::AddressNotRegistered(
-                    "UrmaTransport: not registered by any device(s), "
+                    "UbTransport: not registered by any device(s), "
                     "address: " +
                     std::to_string(reinterpret_cast<uintptr_t>(source_addr)));
             }
@@ -316,7 +316,7 @@ Status UbTransport::getTransferStatus(BatchID batch_id, size_t task_id,
     const size_t task_count = batch_desc.task_list.size();
     if (task_id >= task_count) {
         return Status::InvalidArgument(
-            "UrmaTransport::getTransportStatus invalid argument, batch id: " +
+            "UbTransport::getTransportStatus invalid argument, batch id: " +
             std::to_string(batch_id));
     }
     auto& task = batch_desc.task_list[task_id];
@@ -428,7 +428,7 @@ int UbTransport::selectDevice(SegmentDesc* desc, uint64_t offset, size_t length,
 
 int UbTransport::initializeUbResources(UbTransport* t) {
     auto ret = init(t);
-    if (ret != URMA_SUCCESS && ret != URMA_EEXIST) {
+    if (ret != 0) {
         LOG(ERROR) << "Failed to init, ret = " << ret;
         return -1;
     }
@@ -457,15 +457,15 @@ int UbTransport::initializeUbResources(UbTransport* t) {
 int UbTransport::init(UbTransport* transport) {
     if (transport->endpoint_type_ == URMA_ENDPOINT) {
         if (!UrmaContext::init()) {
-            LOG(ERROR) << "UrmaEndpoint init failed";
-            return ERR_INVALID_ARGUMENT;
+            LOG(ERROR) << "UrmaContext init failed";
+            return -1;
         }
     } else if (transport->endpoint_type_ == OBMM_ENDPOINT) {
-        LOG(ERROR) << "ObmmEndpoint not support now.";
-        return ERR_INVALID_ARGUMENT;
+        LOG(ERROR) << "ObmmContext not support now.";
+        return -1;
     } else {
         LOG(ERROR) << "invalid endpoint type : " << transport->endpoint_type_;
-        return ERR_INVALID_ARGUMENT;
+        return -1;
     }
     return 0;
 }
@@ -473,10 +473,10 @@ int UbTransport::init(UbTransport* transport) {
 void UbTransport::uninit(UbTransport* transport) {
     if (transport->endpoint_type_ == URMA_ENDPOINT) {
         if (!UrmaContext::uninit()) {
-            LOG(ERROR) << "UrmaEndpoint uninit failed";
+            LOG(ERROR) << "UrmaContext uninit failed";
         }
     } else if (transport->endpoint_type_ == OBMM_ENDPOINT) {
-        LOG(ERROR) << "ObmmEndpoint not support now.";
+        LOG(ERROR) << "ObmmContext not support now.";
     } else {
         LOG(ERROR) << "invalid endpoint type : " << transport->endpoint_type_;
     }
@@ -493,7 +493,7 @@ std::shared_ptr<UbContext> UbTransport::buildContext(
         }
         return context;
     } else if (t->endpoint_type_ == OBMM_ENDPOINT) {
-        LOG(ERROR) << "ObmmEndpoint not support now.";
+        LOG(ERROR) << "ObmmContext not support now.";
         return nullptr;
     } else {
         LOG(ERROR) << "invalid endpoint type : " << t->endpoint_type_;
