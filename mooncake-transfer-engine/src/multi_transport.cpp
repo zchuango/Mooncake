@@ -56,7 +56,7 @@
 #include "transport/efa_transport/efa_transport.h"
 #endif
 #ifdef USE_UB
-#include "transport/ub_transport/ub_transport.h"
+#include "transport/kunpeng_transport/ub_transport.h"
 #endif
 
 #include <cassert>

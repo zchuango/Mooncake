@@ -6,7 +6,7 @@ add_library(transport OBJECT ${XPORT_SOURCES} $<TARGET_OBJECTS:rdma_transport> $
 target_link_libraries(transport PRIVATE JsonCpp::JsonCpp yalantinglibs::yalantinglibs glog::glog pthread)
 
 if(USE_UB)
-  add_subdirectory(ub_transport)
+  add_subdirectory(kunpeng_transport)
   target_sources(transport PUBLIC $<TARGET_OBJECTS:ub_transport>)
 endif()
 

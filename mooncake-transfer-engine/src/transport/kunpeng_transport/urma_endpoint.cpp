@@ -16,7 +16,7 @@
 #include <cassert>
 #include <cstddef>
 #include "config.h"
-#include "transport/ub_transport/urma_endpoint.h"
+#include "transport/kunpeng_transport/urma_endpoint.h"
 
 namespace mooncake {
 static int isNullEid(urma_eid_t* eid) {

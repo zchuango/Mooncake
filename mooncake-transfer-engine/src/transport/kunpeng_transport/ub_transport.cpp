@@ -16,10 +16,10 @@
 #include "config.h"
 #include "memory_location.h"
 #include <cassert>
-#include "transport/ub_transport/ub_context.h"
-#include "transport/ub_transport/ub_transport.h"
-#include "transport/ub_transport/ub_endpoint.h"
-#include "transport/ub_transport/urma_endpoint.h"
+#include "transport/kunpeng_transport/ub_context.h"
+#include "transport/kunpeng_transport/ub_transport.h"
+#include "transport/kunpeng_transport/ub_endpoint.h"
+#include "transport/kunpeng_transport/urma_endpoint.h"
 
 namespace mooncake {
 UbTransport::UbTransport(UB_ENDPOINT_TYPE endpoint_type)

@@ -19,8 +19,8 @@
 #include <cassert>
 #include <sys/epoll.h>
 #include "config.h"
-#include "transport/ub_transport/ub_context.h"
-#include "transport/ub_transport/ub_endpoint.h"
+#include "transport/kunpeng_transport/ub_context.h"
+#include "transport/kunpeng_transport/ub_endpoint.h"
 
 namespace mooncake {
 std::shared_ptr<UbEndPoint> UbSIEVEEndpointStore::getEndpoint(
