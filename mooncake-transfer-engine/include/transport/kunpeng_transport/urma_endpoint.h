@@ -22,8 +22,8 @@
 #include "common.h"
 #include "config.h"
 #include "ub/umdk/urma/urma_api.h"
-#include "transport/ub_transport/ub_context.h"
-#include "transport/ub_transport/ub_endpoint.h"
+#include "transport/kunpeng_transport/ub_context.h"
+#include "transport/kunpeng_transport/ub_endpoint.h"
 
 namespace mooncake {
 struct UrmaJFC {
