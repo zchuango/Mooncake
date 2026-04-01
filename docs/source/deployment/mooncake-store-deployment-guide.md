@@ -8,6 +8,7 @@ This page summarizes useful flags, environment variables, and HTTP endpoints to 
   - `--rpc_port` (int, default 50051): RPC listen port.
   - `--rpc_thread_num` (int, default min(4, CPU cores)): RPC worker threads. If not set, uses `--max_threads` (default 4) capped by CPU cores.
   - `--rpc_address` (str, default `0.0.0.0`): RPC bind address.
+  - `--rpc_interface` (str, default empty): Network interface used to resolve the final RPC address. When set, Mooncake Master resolves the interface's current IPv4 address at startup and uses it as the final `rpc_address`. This overrides `--rpc_address`.
   - `--rpc_conn_timeout_seconds` (int, default `0`): RPC idle connection timeout; `0` disables.
   - `--rpc_enable_tcp_no_delay` (bool, default `true`): Enable TCP_NODELAY.
 
@@ -26,8 +27,8 @@ This page summarizes useful flags, environment variables, and HTTP endpoints to 
     - `free_ratio_first`: Free-ratio-first strategy. Samples multiple candidates and selects those with highest free space ratio for better load balancing.
 
 - Eviction and TTLs
-  - `--default_kv_lease_ttl` (uint64, default `5000` ms): Default lease TTL for KV objects.
-  - `--default_kv_soft_pin_ttl` (uint64, default `1800000` ms): Soft pin TTL (30 minutes).
+  - `--default_kv_lease_ttl` (duration, default `5000` ms): Default lease TTL for KV objects. The default unit is milliseconds, so `5000` means `5000ms`. Duration strings such as `5000ms`, `5s`, `30m`, or `1h` are also supported.
+  - `--default_kv_soft_pin_ttl` (duration, default `1800000` ms): Soft pin TTL (30 minutes). The default unit is milliseconds, so `1800000` means `1800000ms`. Duration strings such as `1800000ms`, `30m`, or `1h` are also supported.
   - `--allow_evict_soft_pinned_objects` (bool, default `true`): Allow evicting soft-pinned objects.
   - `--eviction_ratio` (double, default `0.05`): Fraction evicted when hitting high watermark.
   - `--eviction_high_watermark_ratio` (double, default `0.95`): Usage ratio to trigger eviction.
@@ -74,6 +75,18 @@ mooncake_master \
   --enable_metric_reporting=true
 ```
 
+Example (resolve the master RPC address from a stable interface name in a container):
+
+```bash
+mooncake_master \
+  --rpc_interface=eth0 \
+  --enable_http_metadata_server=true \
+  --http_metadata_server_host=0.0.0.0 \
+  --http_metadata_server_port=8080
+```
+
+This resolves the current IPv4 address of `eth0` at startup and uses it as the final `rpc_address`.
+
 Example (use free-ratio-first allocation strategy for better load balancing):
 
 ```bash
@@ -90,6 +103,13 @@ In addition to command-line flags, the Master also supports configuration via JS
 ```bash
 mooncake_master \
   --config_path=mooncake-store/conf/master.yaml
+```
+
+For config files, the equivalent setting is:
+
+```yaml
+rpc_interface: "eth0"
+rpc_port: 50051
 ```
 
 ## Metrics Endpoints
@@ -138,3 +158,13 @@ Available log levels: trace, debug, info, warn (or warning), error, and critical
 - Scale `--rpc_thread_num` with available CPU cores and workload.
 - Start with default eviction settings; adjust `--eviction_high_watermark_ratio` and `--eviction_ratio` based on memory pressure and object churn.
 - Use `/metrics/summary` during bring-up; integrate `/metrics` with Prometheus/Grafana for production.
+
+
+---
+
+:::{toctree}
+:caption: Advanced Topics
+:maxdepth: 1
+
+ssd-offload
+:::

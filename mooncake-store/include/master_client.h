@@ -224,6 +224,15 @@ class MasterClient {
     [[nodiscard]] tl::expected<long, ErrorCode> RemoveAll(bool force = false);
 
     /**
+     * @brief Batch remove objects and all their replicas
+     * @param keys List of keys to remove
+     * @param force If true, skip lease and replication task checks
+     * @return Vector of expected results for each key
+     */
+    [[nodiscard]] std::vector<tl::expected<void, ErrorCode>> BatchRemove(
+        const std::vector<std::string>& keys, bool force = false);
+
+    /**
      * @brief Registers a segment to master for allocation
      * @param segment Segment to register
      * @return tl::expected<void, ErrorCode> indicating success/failure
@@ -406,6 +415,17 @@ class MasterClient {
      */
     [[nodiscard]] tl::expected<void, ErrorCode> EvictDiskReplica(
         const std::string& key, ReplicaType replica_type);
+
+    /**
+     * @brief Batch notify master that disk replicas were evicted locally.
+     * @param keys The evicted object keys
+     * @param replica_type DISK or LOCAL_DISK
+     * @return Per-key results (RPC_FAIL on transport error, else per-key
+     * status)
+     */
+    [[nodiscard]] std::vector<tl::expected<void, ErrorCode>>
+    BatchEvictDiskReplica(const std::vector<std::string>& keys,
+                          ReplicaType replica_type);
 
    private:
     /**

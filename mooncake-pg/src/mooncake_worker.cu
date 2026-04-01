@@ -108,6 +108,19 @@ __global__ void reduceKernel(scalar_t* dst, const scalar_t* src,
     }
 }
 
+namespace {
+
+template <typename scalar_t>
+void preload_reduce_kernel(const char* name) {
+    cudaFuncAttributes attr{};
+    auto err = cudaFuncGetAttributes(
+        &attr, reinterpret_cast<const void*>(reduceKernel<scalar_t>));
+    TORCH_CHECK(err == cudaSuccess, "Failed to preload kernel ", name, ": ",
+                cudaGetErrorString(err));
+}
+
+}  // namespace
+
 void launchReduceKernel(at::Tensor dst, size_t pos, size_t realSize, void* src,
                         size_t numRanks, c10d::ReduceOp op, bool* activeRanks,
                         cudaStream_t stream) {
@@ -244,7 +257,20 @@ void launchReduceCpu(at::Tensor dst, size_t pos, size_t realSize, void* src,
     }
 }
 
-MooncakeWorker::MooncakeWorker() {
+void preloadReduceKernels() {
+    preload_reduce_kernel<uint8_t>("reduceKernel<uint8_t>");
+    preload_reduce_kernel<int8_t>("reduceKernel<int8_t>");
+    preload_reduce_kernel<int16_t>("reduceKernel<int16_t>");
+    preload_reduce_kernel<int>("reduceKernel<int>");
+    preload_reduce_kernel<int64_t>("reduceKernel<int64_t>");
+    preload_reduce_kernel<float>("reduceKernel<float>");
+    preload_reduce_kernel<double>("reduceKernel<double>");
+    preload_reduce_kernel<bool>("reduceKernel<bool>");
+    preload_reduce_kernel<at::BFloat16>("reduceKernel<BFloat16>");
+}
+
+MooncakeWorker::MooncakeWorker(int cuda_device_index)
+    : cuda_device_index_(cuda_device_index) {
     int deviceCount = 0;
     cudaError err = cudaGetDeviceCount(&deviceCount);
     if (!err && deviceCount > 0) {
@@ -259,18 +285,18 @@ MooncakeWorker::MooncakeWorker() {
     for (size_t i = 0; i < kNumTasks_; ++i) {
         tasks_[i].active = false;
     }
-
-    // Start worker
-    startWorker();
 }
 
 c10::intrusive_ptr<c10d::Work> MooncakeWorker::putTaskCpu(
     c10d::OpType opType, size_t tensorSize, int64_t broadcastRoot,
     const std::shared_ptr<TransferGroupMeta>& meta,
+    const std::shared_ptr<ConnectionContext>& connection_ctx,
     const std::function<void(void* dst, size_t pos, size_t realSize)>&
         tensorToBuffer,
     const std::function<void(void* src, size_t pos, size_t realSize)>&
         bufferToTensor) {
+    connection_ctx->waitUntilNewRanksConnected();
+
     size_t chunkSize = ((kBufferSize - 1) / meta->size) & ~(size_t)7;
     auto future = c10::make_intrusive<c10::ivalue::Future>(
         c10::ListType::create(c10::TensorType::get()));
@@ -339,11 +365,14 @@ c10::intrusive_ptr<c10d::Work> MooncakeWorker::putTaskCpu(
 c10::intrusive_ptr<c10d::Work> MooncakeWorker::putTaskCuda(
     c10d::OpType opType, size_t tensorSize, int64_t broadcastRoot,
     const std::shared_ptr<TransferGroupMeta>& meta,
+    const std::shared_ptr<ConnectionContext>& connection_ctx,
     const at::cuda::CUDAStream& stream,
     const std::function<void(void* dst, size_t pos, size_t realSize)>&
         tensorToBuffer,
     const std::function<void(void* src, size_t pos, size_t realSize)>&
         bufferToTensor) {
+    connection_ctx->waitUntilNewRanksConnected();
+
     // TORCH_CHECK(tensorSize * meta->size < kBufferSize, "Too large!");
     //  Alternately use even-odd items to maintain tasks
     size_t chunkSize = ((kBufferSize - 1) / meta->size) & ~(size_t)7;

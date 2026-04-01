@@ -85,6 +85,9 @@ class WrappedMasterService {
 
     long RemoveAll(bool force = false);
 
+    std::vector<tl::expected<void, ErrorCode>> BatchRemove(
+        const std::vector<std::string>& keys, bool force = false);
+
     tl::expected<void, ErrorCode> MountSegment(const Segment& segment,
                                                const UUID& client_id);
 
@@ -150,6 +153,10 @@ class WrappedMasterService {
     tl::expected<void, ErrorCode> EvictDiskReplica(const UUID& client_id,
                                                    const std::string& key,
                                                    ReplicaType replica_type);
+
+    std::vector<tl::expected<void, ErrorCode>> BatchEvictDiskReplica(
+        const UUID& client_id, const std::vector<std::string>& keys,
+        ReplicaType replica_type);
 
    private:
     MasterService master_service_;

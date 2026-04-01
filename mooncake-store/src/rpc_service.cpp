@@ -683,6 +683,29 @@ long WrappedMasterService::RemoveAll(bool force) {
     return result;
 }
 
+std::vector<tl::expected<void, ErrorCode>> WrappedMasterService::BatchRemove(
+    const std::vector<std::string>& keys, bool force) {
+    ScopedVLogTimer timer(1, "BatchRemove");
+    const size_t total_keys = keys.size();
+    timer.LogRequest("keys_count=", total_keys, ", force=", force);
+    MasterMetricManager::instance().inc_remove_requests(total_keys);
+
+    auto results = master_service_.BatchRemove(keys, force);
+
+    size_t failure_count = 0;
+    for (const auto& result : results) {
+        if (!result.has_value()) {
+            failure_count++;
+        }
+    }
+    if (failure_count > 0) {
+        MasterMetricManager::instance().inc_remove_failures(failure_count);
+    }
+
+    timer.LogResponse("total=", total_keys, ", failures=", failure_count);
+    return results;
+}
+
 tl::expected<void, ErrorCode> WrappedMasterService::MountSegment(
     const Segment& segment, const UUID& client_id) {
     return execute_rpc(
@@ -824,6 +847,38 @@ tl::expected<void, ErrorCode> WrappedMasterService::EvictDiskReplica(
         [] {
             MasterMetricManager::instance().inc_evict_disk_replica_failures();
         });
+}
+
+std::vector<tl::expected<void, ErrorCode>>
+WrappedMasterService::BatchEvictDiskReplica(
+    const UUID& client_id, const std::vector<std::string>& keys,
+    ReplicaType replica_type) {
+    ScopedVLogTimer timer(1, "BatchEvictDiskReplica");
+    const size_t total_keys = keys.size();
+    timer.LogRequest("client_id=", client_id, ", keys_count=", total_keys,
+                     ", replica_type=", replica_type);
+    MasterMetricManager::instance().inc_evict_disk_replica_requests();
+
+    auto results =
+        master_service_.BatchEvictDiskReplica(client_id, keys, replica_type);
+
+    size_t failure_count = 0;
+    for (size_t i = 0; i < results.size(); ++i) {
+        if (!results[i].has_value()) {
+            failure_count++;
+            LOG(WARNING) << "BatchEvictDiskReplica failed for key[" << i
+                         << "] '" << keys[i]
+                         << "': " << toString(results[i].error());
+        }
+    }
+    if (failure_count > 0) {
+        MasterMetricManager::instance().inc_evict_disk_replica_failures();
+    }
+
+    timer.LogResponse("total=", results.size(),
+                      ", success=", results.size() - failure_count,
+                      ", failures=", failure_count);
+    return results;
 }
 
 tl::expected<UUID, ErrorCode> WrappedMasterService::CreateCopyTask(
@@ -999,6 +1054,8 @@ void RegisterRpcService(
         &wrapped_master_service);
     server.register_handler<&mooncake::WrappedMasterService::RemoveAll>(
         &wrapped_master_service);
+    server.register_handler<&mooncake::WrappedMasterService::BatchRemove>(
+        &wrapped_master_service);
     server.register_handler<&mooncake::WrappedMasterService::MountSegment>(
         &wrapped_master_service);
     server.register_handler<&mooncake::WrappedMasterService::ReMountSegment>(
@@ -1037,6 +1094,9 @@ void RegisterRpcService(
     server.register_handler<&mooncake::WrappedMasterService::MoveRevoke>(
         &wrapped_master_service);
     server.register_handler<&mooncake::WrappedMasterService::EvictDiskReplica>(
+        &wrapped_master_service);
+    server.register_handler<
+        &mooncake::WrappedMasterService::BatchEvictDiskReplica>(
         &wrapped_master_service);
     server.register_handler<&mooncake::WrappedMasterService::CreateCopyTask>(
         &wrapped_master_service);
