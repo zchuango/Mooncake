@@ -118,7 +118,7 @@ int UrmaContext::construct(GlobalConfig& config) {
             return ERR_CONTEXT;
         }
         jfc_r_list_[i] = jfc;
-        LOG(INFO) << "create jfc(send) done, jfc id : " << jfc->jfc_id.id;
+        LOG(INFO) << "create jfc(recv) done, jfc id : " << jfc->jfc_id.id;
     }
     jfr_list_.resize(num_jfc_list);
     urma_jfr_cfg_t jfr_cfg[num_jfc_list] = {};

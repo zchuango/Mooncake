@@ -33,8 +33,6 @@ std::shared_ptr<UbEndPoint> UbSIEVEEndpointStore::getEndpoint(
         // because of idempotence
         return iter->second.first;
     }
-    // LOG(INFO) << "Endpoint " << peer_nic_path << " not found in
-    // SIEVEEndpointStore";
     return nullptr;
 }
 
@@ -67,8 +65,6 @@ std::shared_ptr<UbEndPoint> UbSIEVEEndpointStore::insertEndpoint(
 int UbSIEVEEndpointStore::deleteEndpoint(const std::string& peer_nic_path) {
     RWSpinlock::WriteGuard guard(endpoint_map_lock_);
     auto iter = endpoint_map_.find(peer_nic_path);
-    // remove endpoint but leaving it status unchanged
-    // in case it is setting up connection or submitting slice
     if (iter != endpoint_map_.end()) {
         waiting_list_len_++;
         waiting_list_.insert(iter->second.first);
@@ -103,7 +99,6 @@ void UbSIEVEEndpointStore::evictEndpoint() {
     hand_ = (o == fifo_list_.begin() ? --fifo_list_.end() : std::prev(o));
     fifo_list_.erase(o);
     fifo_map_.erase(victim);
-    // LOG(INFO) << victim << " evicted";
     auto victim_instance = endpoint_map_[victim].first;
     victim_instance->set_active(false);
     waiting_list_len_++;
