@@ -64,6 +64,7 @@ struct GlobalConfig {
     // ib_pci_relaxed_ordering_mode: 0: off, 1: on if supported, 2: auto
     int ib_pci_relaxed_ordering_mode = 0;
     bool ascend_use_fabric_mem = false;
+    bool ascend_agent_mode = false;
     // ub config parameters
     size_t num_jfc_per_ctx = 2;
     size_t num_jfce_per_ctx = 2;
@@ -71,7 +72,6 @@ struct GlobalConfig {
     uint64_t max_seg_size = 0x10000000000;
     size_t max_jfc_e = 4096;  // urma暂时使用此默认值
     size_t num_jetty_per_ep = 1;
-    bool ascend_agent_mode = false;
 };
 
 struct RpcCommunicatorConfig {
