@@ -334,15 +334,15 @@ void* UrmaContext::retrieveRemoteSeg(const std::string& remoteSegmentStr) {
     urma_seg_t* handle;
     handle = (urma_seg_t*)malloc(sizeof(urma_seg_t));
     memcpy(handle, output_buffer.data(), sizeof(urma_seg_t));
-    remote_seg_list().push_back(handle);
+    remote_seg_list_.push_back(handle);
     auto import_tseg =
         urma_import_seg(urma_context_, handle, &urma_token, 0, import_flag_);
     if (import_tseg == NULL) {
         LOG(ERROR) << "Import segment Failed With " << remoteSegmentStr;
-        delete handle;
+        free(handle);
         return nullptr;
     }
-    imported_seg_list().push_back(import_tseg);
+    imported_seg_list_.push_back(import_tseg);
     import_tseg_map[remoteSegmentStr] = import_tseg;
     return import_tseg;
 }
@@ -919,7 +919,7 @@ int UrmaEndpoint::doSetupConnection(int jetty_index,
                                     const std::string& peer_eid,
                                     uint32_t peer_jetty_num,
                                     std::string* reply_msg) {
-    if (jetty_index < 0 || jetty_index > (int)jetty_list_.size())
+    if (jetty_index < 0 || jetty_index >= (int)jetty_list_.size())
         return ERR_INVALID_ARGUMENT;
     auto& jetty = jetty_list_[jetty_index];
     urma_eid_t eid;

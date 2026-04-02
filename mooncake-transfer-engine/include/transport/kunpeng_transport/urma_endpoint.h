@@ -87,13 +87,13 @@ class UrmaContext : public UbContext {
 
     urma_target_seg_t* seg(uint64_t addr);
 
-    std::vector<urma_seg_t*> remote_seg_list() { return remote_seg_list_; }
+    std::vector<urma_seg_t*>& remote_seg_list() { return remote_seg_list_; }
 
-    std::vector<urma_target_seg_t*> imported_seg_list() {
+    std::vector<urma_target_seg_t*>& imported_seg_list() {
         return imported_seg_list_;
     }
 
-    std::vector<urma_target_seg_t*> local_tseg_list() {
+    std::vector<urma_target_seg_t*>& local_tseg_list() {
         return local_tseg_list_;
     }
 

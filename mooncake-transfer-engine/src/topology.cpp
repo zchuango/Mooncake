@@ -475,7 +475,6 @@ int Topology::discover(const std::vector<std::string> &filter) {
     matrix_.clear();
 #ifdef USE_UB
     auto all_hca = listUBDevices(filter);
-    // 此处protocol带不进来,使用rdma时重新编译，注释本行，走上面分支
     for (auto &ent : discoverCpuTopology(all_hca)) {
         matrix_[ent.name] = ent;
     }

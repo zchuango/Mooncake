@@ -27,7 +27,6 @@ UbTransport::UbTransport(UB_ENDPOINT_TYPE endpoint_type)
 
 UbTransport::~UbTransport() {
 #ifdef CONFIG_USE_BATCH_DESC_SET
-    for (auto& entry : batch_desc_set_) delete entry.second;
     batch_desc_set_.clear();
 #endif
     metadata_->removeSegmentDesc(local_server_name_);
@@ -271,7 +270,7 @@ Status UbTransport::submitTransferTask(
             if (device_id < 0) {
                 auto source_addr = slice->source_addr;
                 for (auto& entry : slices_to_post)
-                    for (auto s : entry.second) delete s;
+                    for (auto s : entry.second) getSliceCache().deallocate(s);
                 LOG(ERROR)
                     << "UbTransport: Address not registered by any device(s) "
                     << source_addr;

@@ -137,7 +137,7 @@ class UbContext {
           active_(true),
           show_work_request_flushed_error_(false) {}
 
-    ~UbContext() {}
+    virtual ~UbContext() = default;
 
     int doConstruct(GlobalConfig& config) {
         show_work_request_flushed_error_ = globalConfig().trace;
