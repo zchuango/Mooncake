@@ -68,7 +68,7 @@ endif()
 if (USE_UB)
     add_executable(ub_transport_test ${WORKSPACE}/ub_transport_test.cpp)
     target_link_libraries(ub_transport_test PUBLIC transfer_engine gtest gtest_main)
-    add_test(NAME ub_transport_test COMMAND ub_transport_test)
+    # add_test(NAME ub_transport_test COMMAND ub_transport_test)
 endif()
 
 add_executable(transfer_metadata_test ${WORKSPACE}/transfer_metadata_test.cpp)

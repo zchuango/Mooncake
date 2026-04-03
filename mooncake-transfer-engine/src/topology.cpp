@@ -219,6 +219,7 @@ static std::vector<UBDevice> listUBDevices(
     urma_device_t **device_list = urma_get_device_list(&num_devices);
     if (!device_list) {
         LOG(WARNING) << "No UB devices found, check your device installation";
+        urma_uninit();
         return {};
     }
     if (device_list && num_devices <= 0) {

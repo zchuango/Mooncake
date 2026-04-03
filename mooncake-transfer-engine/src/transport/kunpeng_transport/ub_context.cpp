@@ -521,6 +521,5 @@ void UbWorkerPool::monitorWorker() {
 
 int UbWorkerPool::doProcessContextEvents() {
     return context_.doProcessContextEvents();
-    ;
 }
 }  // namespace mooncake

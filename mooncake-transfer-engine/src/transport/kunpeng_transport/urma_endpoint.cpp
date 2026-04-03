@@ -625,15 +625,15 @@ int UrmaEndpoint::construct(GlobalConfig& config) {
 int UrmaEndpoint::deconstruct() {
     int ret = 0;
     for (size_t i = 0; i < jetty_list_.size(); ++i) {
-        auto imported_jetty = imported_jetty_map_[jetty_list_[i]];
+        auto imported_it = imported_jetty_map_.find(jetty_list_[i]);
+        auto imported_jetty = (imported_it != imported_jetty_map_.end())
+                                  ? imported_it->second
+                                  : nullptr;
         ret = urma_unbind_jetty(jetty_list_[i]);
         if (ret) PLOG(ERROR) << "Failed to unbind jetty";
-        ret = urma_unimport_jetty(imported_jetty);
-        if (ret) PLOG(ERROR) << "Failed to unimport jetty";
-
-        if (urma_delete_jetty(jetty_list_[i])) {
-            PLOG(ERROR) << "Failed to destroy jetty";
-            return ERR_ENDPOINT;
+        if (imported_jetty != nullptr) {
+            ret = urma_unimport_jetty(imported_jetty);
+            if (ret) PLOG(ERROR) << "Failed to unimport jetty";
         }
         // After destroying QP, the wr_depth_list_ won't change
         bool displayed = false;
