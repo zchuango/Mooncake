@@ -64,7 +64,9 @@ int UrmaContext::construct(GlobalConfig& config) {
     size_t num_jfces = config.num_jfce_per_ctx;
     int eid_index = config.eid_index;
     size_t max_jfc_e = config.max_jfc_e;
-    // urma:此处num_jfc_list和num_jfces使用相同数值，即一个jfc绑定一个jfce，max_jfc_e使用默认值DEFAULT_DEPTH
+    // urma: Here, num_jfc_list and num_jfces use the same value,
+    // meaning one JFC is bound to one JFCE.
+    // max_jfc_e uses the default value DEFAULT_DEPTH.
     if (openDevice(device_name_, port_, eid_index)) {
         LOG(ERROR) << "Failed to open device : " << device_name_
                    << " with EID index : " << eid_index;

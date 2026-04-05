@@ -27,8 +27,9 @@ void loadGlobalConfig(GlobalConfig &config) {
         int val = atoi(num_cq_per_ctx_env);
         if (val > 0 && val < 256) {
             config.num_cq_per_ctx = val;
+            // In URMA, JFC and JFCE are bound one-to-one.
             config.num_jfc_per_ctx = val;
-            config.num_jfce_per_ctx = val;  // urma中jfc和jfce是一对一绑定的
+            config.num_jfce_per_ctx = val;
         } else
             LOG(WARNING)
                 << "Ignore value from environment variable MC_NUM_CQ_PER_CTX";

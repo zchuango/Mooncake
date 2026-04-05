@@ -116,7 +116,9 @@ class TransferMetadata {
     struct HandShakeDesc {
         std::string local_nic_path;
         std::string peer_nic_path;
+#ifdef USE_UB
         std::vector<uint32_t> jetty_num;  // for ub/urma
+#endif
 #ifdef USE_BAREX
         uint16_t barex_port;
 #endif
