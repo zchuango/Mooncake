@@ -18,15 +18,15 @@ std::map<urma_target_jetty_t *, int> target_jetty_map;
 
 urma_device_attr_t mock_device_attr = {
     .guid = {.raw = {10}},
-    .dev_cap = {.max_jfc = 1024, .max_jetty = 1024},
+    .dev_cap = {},
     .port_cnt = 1,
     .port_attr = {{.max_mtu = URMA_MTU_4096,
                    .state = URMA_PORT_ACTIVE,
                    .active_width = URMA_LINK_X1,
                    .active_speed = URMA_SP_100G,
                    .active_mtu = URMA_MTU_4096}},
-.reserved_jetty_id_min = 0,
-.reserved_jetty_id_max = 1024};
+    .reserved_jetty_id_min = 0,
+    .reserved_jetty_id_max = 1024};
 
 urma_eid_info_t mock_eid_info = {
     .eid = {{0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B,
@@ -122,6 +122,8 @@ urma_status_t urma_query_device(urma_device_t *device,
     if (!device || !attr) {
         return URMA_EINVAL;
     }
+    mock_device_attr.dev_cap.max_jfc = 1024;
+    mock_device_attr.dev_cap.max_jetty = 1024;
     memcpy(attr, &mock_device_attr, sizeof(urma_device_attr_t));
     return URMA_SUCCESS;
 }
