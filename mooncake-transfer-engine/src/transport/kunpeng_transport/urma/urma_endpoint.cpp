@@ -576,9 +576,7 @@ bool UrmaContext::uninit() {
 }
 
 bool UrmaContext::init() {
-    urma_init_attr_t init_attr = {
-        .uasid = 0,
-    };
+    urma_init_attr_t init_attr = {};
     auto ret = urma_init(&init_attr);
     if (ret != URMA_SUCCESS && ret != URMA_EEXIST) {
         LOG(ERROR) << "Failed to urma init, ret = " << ret;

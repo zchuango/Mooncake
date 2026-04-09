@@ -165,7 +165,7 @@ TEST_F(UBTransportTest, MultiWrite) {
         bool completed = false;
         TransferStatus status;
         while (!completed) {
-            Status s = engine->getTransferStatus(batch_id, 0, status);
+            s = engine->getTransferStatus(batch_id, 0, status);
             ASSERT_EQ(s, Status::OK());
             if (status.s == TransferStatusEnum::COMPLETED)
                 completed = true;
@@ -199,7 +199,7 @@ TEST_F(UBTransportTest, MultipleRead) {
         bool completed = false;
         TransferStatus status;
         while (!completed) {
-            Status s = engine->getTransferStatus(batch_id, 0, status);
+            s = engine->getTransferStatus(batch_id, 0, status);
             ASSERT_EQ(s, Status::OK());
             if (status.s == TransferStatusEnum::COMPLETED)
                 completed = true;
@@ -214,7 +214,7 @@ TEST_F(UBTransportTest, MultipleRead) {
     times = 10;
     while (times--) {
         auto batch_id = engine->allocateBatchID(1);
-        int ret = 0;
+
         TransferRequest entry;
         entry.opcode = TransferRequest::READ;
         entry.length = kDataLength;
@@ -227,7 +227,7 @@ TEST_F(UBTransportTest, MultipleRead) {
         bool completed = false;
         TransferStatus status;
         while (!completed) {
-            Status s = engine->getTransferStatus(batch_id, 0, status);
+            s = engine->getTransferStatus(batch_id, 0, status);
             ASSERT_EQ(s, Status::OK());
             if (status.s == TransferStatusEnum::COMPLETED)
                 completed = true;

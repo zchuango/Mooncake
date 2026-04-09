@@ -208,9 +208,7 @@ static std::vector<UBDevice> listUBDevices(
     int num_devices = 0;
     std::vector<UBDevice> devices;
 
-    urma_init_attr_t init_attr = {
-        .uasid = 0,
-    };
+    urma_init_attr_t init_attr = {};
     if (urma_init(&init_attr) != URMA_SUCCESS) {
         LOG(WARNING) << "Failed to urma init";
         return {};
