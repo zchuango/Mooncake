@@ -443,8 +443,8 @@ int UrmaContext::openDevice(const std::string& device_name, uint8_t port,
         }
 
         urma_free_device_list(devices);
-        return 0;
-    }
+    return 0;
+}
 
     urma_free_device_list(devices);
     LOG(ERROR) << "No matched device found: " << device_name;
@@ -505,6 +505,9 @@ int UrmaContext::poll(int num_entries, Transport::Slice** slices,
     Transport::Slice s[nr_poll];
     for (int i = 0; i < nr_poll; ++i) {
         auto slice = (Transport::Slice*)cr[i].user_ctx;
+        if (!slice) {
+            continue;
+        }
         if (cr[i].status == URMA_CR_SUCCESS) {
             slice->markSuccess();
             slices[i] = slice;
@@ -860,7 +863,14 @@ int UrmaEndpoint::submitPostSend(
         wr.next = (i + 1 == wr_count) ? nullptr : &wr_list[i + 1];
         wr.flag.bs.complete_enable = 1;
         wr.flag.bs.inline_flag = 0;
-        wr.tjetty = imported_jetty_map_[jetty_list_[jetty_index]];
+        // Check if the jetty is in the imported_jetty_map_
+        auto it = imported_jetty_map_.find(jetty_list_[jetty_index]);
+        if (it != imported_jetty_map_.end()) {
+            wr.tjetty = it->second;
+        } else {
+            // If not found, use a dummy value
+            wr.tjetty = nullptr;
+        }
         slice->ts = getCurrentTimeInNano();
         slice->status = Transport::Slice::POSTED;
         slice->ub.jetty_depth = &wr_depth_list_[jetty_index];

@@ -27,7 +27,6 @@
 #include <limits.h>
 #include <stdlib.h>
 #include <string.h>
-#include <libgen.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 
@@ -35,7 +34,8 @@
 #include "memory_location.h"
 #include "topology.h"
 #ifdef USE_UB
-#include <ub/umdk/urma/urma_api.h>
+#include <libgen.h>
+#include <urma_api.h>
 #endif
 
 namespace mooncake {

@@ -75,11 +75,19 @@ option(USE_MNNVL "option for using Multi-Node NVLink transport" OFF)
 option(USE_CXL "option for using CXL protocol" OFF)
 option(USE_EFA "option for using AWS EFA transport" OFF)
 option(USE_UB "option for using UB protocol transport" OFF)
+option(URMA_MOCK "option for using URMA api mock support ci/testing" OFF)
 
 if (USE_UB)
   add_compile_definitions(USE_UB)
   message(STATUS "ub transport is enabled")
+  include(${CMAKE_CURRENT_LIST_DIR}/FindUrma.cmake)
 endif()
+
+if (URMA_MOCK)
+    add_compile_definitions(URMA_MOCK)
+    message(STATUS "ub transport urma mock is enabled")
+endif()
+
 if (USE_EFA)
   # Find libfabric headers and library; default to AWS EFA installer path
   find_path(LIBFABRIC_INCLUDE_DIR rdma/fabric.h
