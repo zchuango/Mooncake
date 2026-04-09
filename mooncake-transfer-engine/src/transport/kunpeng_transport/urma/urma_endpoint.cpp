@@ -163,6 +163,21 @@ int UrmaContext::deconstruct() {
     }
     seg_region_list_.clear();
 
+    for (auto& seg : imported_seg_list_) {
+        int ret = urma_unimport_seg(seg);
+        if (ret) {
+            PLOG(ERROR) << "Failed to unimport segment";
+        }
+    }
+    imported_seg_list_.clear();
+
+    for (auto& seg : remote_seg_list_) {
+        free(seg);
+    }
+    remote_seg_list_.clear();
+
+    import_tseg_map.clear();
+
     for (size_t i = 0; i < jfr_list_.size(); i++) {
         if (!jfr_list_[i].native) continue;
 
@@ -640,6 +655,8 @@ int UrmaEndpoint::deconstruct() {
             ret = urma_unimport_jetty(imported_jetty);
             if (ret) PLOG(ERROR) << "Failed to unimport jetty";
         }
+        ret = urma_delete_jetty(jetty_list_[i]);
+        if (ret) PLOG(ERROR) << "Failed to delete jetty";
         // After destroying QP, the wr_depth_list_ won't change
         bool displayed = false;
         if (wr_depth_list_[i] != 0) {
@@ -654,6 +671,7 @@ int UrmaEndpoint::deconstruct() {
     }
     jetty_list_.clear();
     delete[] wr_depth_list_;
+    imported_jetty_map_.clear();
     return 0;
 }
 

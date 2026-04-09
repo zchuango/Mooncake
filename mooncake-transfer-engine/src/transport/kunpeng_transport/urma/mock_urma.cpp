@@ -24,7 +24,9 @@ urma_device_attr_t mock_device_attr = {
                    .state = URMA_PORT_ACTIVE,
                    .active_width = URMA_LINK_X1,
                    .active_speed = URMA_SP_100G,
-                   .active_mtu = URMA_MTU_4096}}};
+                   .active_mtu = URMA_MTU_4096}},
+.reserved_jetty_id_min = 0,
+.reserved_jetty_id_max = 1024};
 
 urma_eid_info_t mock_eid_info = {
     .eid = {{0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B,

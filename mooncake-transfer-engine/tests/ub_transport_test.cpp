@@ -140,6 +140,9 @@ class UBTransportTest : public ::testing::Test {
         google::ShutdownGoogleLogging();
         engine->unregisterLocalMemory(addr);
         freeMemoryPool(addr, ram_buffer_size);
+        if (args) {
+            free(args);
+        }
     }
 };
 
