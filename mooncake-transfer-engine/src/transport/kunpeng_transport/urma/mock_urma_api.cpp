@@ -5,40 +5,32 @@
 #include <mutex>
 
 namespace {
-    std::mutex mock_mutex;
-    bool initialized = false;
-    std::vector<urma_device_t*> device_list;
-    std::map<urma_context_t*, int> context_map;
-    std::map<urma_jfce_t*, int> jfce_map;
-    std::map<urma_jfc_t*, std::vector<uint64_t>> jfc_user_ctx_map;
-    std::map<urma_jfr_t*, int> jfr_map;
-    std::map<urma_target_seg_t*, int> seg_map;
-    std::map<urma_jetty_t*, int> jetty_map;
-    std::map<urma_target_jetty_t*, int> target_jetty_map;
+std::mutex mock_mutex;
+bool initialized = false;
+std::vector<urma_device_t *> device_list;
+std::map<urma_context_t *, int> context_map;
+std::map<urma_jfce_t *, int> jfce_map;
+std::map<urma_jfc_t *, std::vector<uint64_t>> jfc_user_ctx_map;
+std::map<urma_jfr_t *, int> jfr_map;
+std::map<urma_target_seg_t *, int> seg_map;
+std::map<urma_jetty_t *, int> jetty_map;
+std::map<urma_target_jetty_t *, int> target_jetty_map;
 
-    urma_device_attr_t mock_device_attr = {
-        .guid={.raw = {10}},
-        .dev_cap = {
-            .max_jfc = 1024,
-            .max_jetty = 1024
-        },
-        .port_cnt = 1,
-        .port_attr = {
-            {
-                .max_mtu = URMA_MTU_4096,
-                .state = URMA_PORT_ACTIVE,
-                .active_width = URMA_LINK_X1,
-                .active_speed = URMA_SP_100G,
-                .active_mtu = URMA_MTU_4096
-            }
-        }
-    };
+urma_device_attr_t mock_device_attr = {
+    .guid = {.raw = {10}},
+    .dev_cap = {.max_jfc = 1024, .max_jetty = 1024},
+    .port_cnt = 1,
+    .port_attr = {{.max_mtu = URMA_MTU_4096,
+                   .state = URMA_PORT_ACTIVE,
+                   .active_width = URMA_LINK_X1,
+                   .active_speed = URMA_SP_100G,
+                   .active_mtu = URMA_MTU_4096}}};
 
-    urma_eid_info_t mock_eid_info = {
-        .eid = {{0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x10}},
-        .eid_index = 0
-    };
-}
+urma_eid_info_t mock_eid_info = {
+    .eid = {{0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B,
+             0x0C, 0x0D, 0x0E, 0x0F, 0x10}},
+    .eid_index = 0};
+}  // namespace
 
 urma_status_t urma_init(urma_init_attr_t *init_attr) {
     std::lock_guard<std::mutex> lock(mock_mutex);
@@ -84,7 +76,7 @@ urma_device_t **urma_get_device_list(int *num_devices) {
     }
 
     *num_devices = device_list.size();
-    urma_device_t **devices = new urma_device_t*[device_list.size()];
+    urma_device_t **devices = new urma_device_t *[device_list.size()];
     for (size_t i = 0; i < device_list.size(); ++i) {
         devices[i] = device_list[i];
     }
@@ -122,7 +114,8 @@ void urma_free_device_list(urma_device_t **device_list) {
     }
 }
 
-urma_status_t urma_query_device(urma_device_t *device, urma_device_attr_t *attr) {
+urma_status_t urma_query_device(urma_device_t *device,
+                                urma_device_attr_t *attr) {
     std::lock_guard<std::mutex> lock(mock_mutex);
     if (!device || !attr) {
         return URMA_EINVAL;
@@ -175,7 +168,7 @@ urma_jfce_t *urma_create_jfce(urma_context_t *ctx) {
     if (!ctx || context_map.find(ctx) == context_map.end()) {
         return nullptr;
     }
-    urma_jfce_t *jfce = reinterpret_cast<urma_jfce_t*>(new int(1));
+    urma_jfce_t *jfce = reinterpret_cast<urma_jfce_t *>(new int(1));
     jfce_map[jfce] = 1;
     return jfce;
 }
@@ -186,7 +179,7 @@ urma_status_t urma_delete_jfce(urma_jfce_t *jfce) {
         return URMA_EINVAL;
     }
     jfce_map.erase(jfce);
-    delete reinterpret_cast<int*>(jfce);
+    delete reinterpret_cast<int *>(jfce);
     return URMA_SUCCESS;
 }
 
@@ -223,7 +216,7 @@ urma_jfr_t *urma_create_jfr(urma_context_t *ctx, urma_jfr_cfg_t *cfg) {
     if (!ctx || !cfg || context_map.find(ctx) == context_map.end()) {
         return nullptr;
     }
-    urma_jfr_t *jfr = reinterpret_cast<urma_jfr_t*>(new int(1));
+    urma_jfr_t *jfr = reinterpret_cast<urma_jfr_t *>(new int(1));
     jfr_map[jfr] = 1;
     return jfr;
 }
@@ -234,7 +227,7 @@ urma_status_t urma_delete_jfr(urma_jfr_t *jfr) {
         return URMA_EINVAL;
     }
     jfr_map.erase(jfr);
-    delete reinterpret_cast<int*>(jfr);
+    delete reinterpret_cast<int *>(jfr);
     return URMA_SUCCESS;
 }
 
@@ -264,9 +257,12 @@ urma_status_t urma_unregister_seg(urma_target_seg_t *seg) {
     return URMA_SUCCESS;
 }
 
-urma_target_seg_t *urma_import_seg(urma_context_t *ctx, urma_seg_t *seg, urma_token_t *token_value, uint64_t addr, urma_import_seg_flag_t flag) {
+urma_target_seg_t *urma_import_seg(urma_context_t *ctx, urma_seg_t *seg,
+                                   urma_token_t *token_value, uint64_t addr,
+                                   urma_import_seg_flag_t flag) {
     std::lock_guard<std::mutex> lock(mock_mutex);
-    if (!ctx || !seg || !token_value || context_map.find(ctx) == context_map.end()) {
+    if (!ctx || !seg || !token_value ||
+        context_map.find(ctx) == context_map.end()) {
         return nullptr;
     }
     urma_target_seg_t *tseg = new urma_target_seg_t;
@@ -286,7 +282,8 @@ urma_status_t urma_unimport_seg(urma_target_seg_t *tseg) {
     return URMA_SUCCESS;
 }
 
-urma_status_t urma_get_async_event(urma_context_t *ctx, urma_async_event_t *event) {
+urma_status_t urma_get_async_event(urma_context_t *ctx,
+                                   urma_async_event_t *event) {
     std::lock_guard<std::mutex> lock(mock_mutex);
     if (!ctx || !event || context_map.find(ctx) == context_map.end()) {
         return URMA_EINVAL;
@@ -294,8 +291,7 @@ urma_status_t urma_get_async_event(urma_context_t *ctx, urma_async_event_t *even
     return URMA_ETIMEOUT;
 }
 
-void urma_ack_async_event(urma_async_event_t *event) {
-}
+void urma_ack_async_event(urma_async_event_t *event) {}
 
 urma_jetty_t *urma_create_jetty(urma_context_t *ctx, urma_jetty_cfg_t *cfg) {
     std::lock_guard<std::mutex> lock(mock_mutex);
@@ -332,12 +328,16 @@ urma_status_t urma_unbind_jetty(urma_jetty_t *jetty) {
     return URMA_SUCCESS;
 }
 
-urma_target_jetty_t *urma_import_jetty(urma_context_t *ctx, urma_rjetty_t *rjetty, urma_token_t *token_value) {
+urma_target_jetty_t *urma_import_jetty(urma_context_t *ctx,
+                                       urma_rjetty_t *rjetty,
+                                       urma_token_t *token_value) {
     std::lock_guard<std::mutex> lock(mock_mutex);
-    if (!ctx || !rjetty || !token_value || context_map.find(ctx) == context_map.end()) {
+    if (!ctx || !rjetty || !token_value ||
+        context_map.find(ctx) == context_map.end()) {
         return nullptr;
     }
-    urma_target_jetty_t *tjetty = reinterpret_cast<urma_target_jetty_t*>(new int(1));
+    urma_target_jetty_t *tjetty =
+        reinterpret_cast<urma_target_jetty_t *>(new int(1));
     target_jetty_map[tjetty] = 1;
     *token_value = {.token = 1};
     return tjetty;
@@ -349,13 +349,15 @@ urma_status_t urma_unimport_jetty(urma_target_jetty_t *tjetty) {
         return URMA_EINVAL;
     }
     target_jetty_map.erase(tjetty);
-    delete reinterpret_cast<int*>(tjetty);
+    delete reinterpret_cast<int *>(tjetty);
     return URMA_SUCCESS;
 }
 
-urma_status_t urma_bind_jetty(urma_jetty_t *jetty, urma_target_jetty_t *tjetty) {
+urma_status_t urma_bind_jetty(urma_jetty_t *jetty,
+                              urma_target_jetty_t *tjetty) {
     std::lock_guard<std::mutex> lock(mock_mutex);
-    if (!jetty || !tjetty || jetty_map.find(jetty) == jetty_map.end() || target_jetty_map.find(tjetty) == target_jetty_map.end()) {
+    if (!jetty || !tjetty || jetty_map.find(jetty) == jetty_map.end() ||
+        target_jetty_map.find(tjetty) == target_jetty_map.end()) {
         return URMA_EINVAL;
     }
     jetty->remote_jetty = tjetty;
@@ -370,7 +372,8 @@ urma_status_t urma_modify_jetty(urma_jetty_t *jetty, urma_jetty_attr_t *attr) {
     return URMA_SUCCESS;
 }
 
-urma_status_t urma_post_jetty_send_wr(urma_jetty_t *jetty, urma_jfs_wr_t *wr, urma_jfs_wr_t **bad_wr) {
+urma_status_t urma_post_jetty_send_wr(urma_jetty_t *jetty, urma_jfs_wr_t *wr,
+                                      urma_jfs_wr_t **bad_wr) {
     std::lock_guard<std::mutex> lock(mock_mutex);
     if (!jetty || !wr || jetty_map.find(jetty) == jetty_map.end()) {
         if (bad_wr) {
@@ -381,7 +384,8 @@ urma_status_t urma_post_jetty_send_wr(urma_jetty_t *jetty, urma_jfs_wr_t *wr, ur
 
     urma_jfs_wr_t *current_wr = wr;
     while (current_wr) {
-        jfc_user_ctx_map[jetty->jetty_cfg.jfs_cfg.jfc].push_back(current_wr->user_ctx);
+        jfc_user_ctx_map[jetty->jetty_cfg.jfs_cfg.jfc].push_back(
+            current_wr->user_ctx);
         current_wr = current_wr->next;
     }
 
@@ -393,7 +397,8 @@ urma_status_t urma_post_jetty_send_wr(urma_jetty_t *jetty, urma_jfs_wr_t *wr, ur
 
 int urma_poll_jfc(urma_jfc_t *jfc, int num_entries, urma_cr_t *cr_list) {
     std::lock_guard<std::mutex> lock(mock_mutex);
-    if (!jfc || !cr_list || jfc_user_ctx_map.find(jfc) == jfc_user_ctx_map.end()) {
+    if (!jfc || !cr_list ||
+        jfc_user_ctx_map.find(jfc) == jfc_user_ctx_map.end()) {
         return -1;
     }
     int available = jfc_user_ctx_map[jfc].size();
@@ -402,6 +407,7 @@ int urma_poll_jfc(urma_jfc_t *jfc, int num_entries, urma_cr_t *cr_list) {
         cr_list[i].status = URMA_CR_SUCCESS;
         cr_list[i].user_ctx = jfc_user_ctx_map[jfc][i];
     }
-    jfc_user_ctx_map[jfc].erase(jfc_user_ctx_map[jfc].begin(), jfc_user_ctx_map[jfc].begin() + num_completed);
+    jfc_user_ctx_map[jfc].erase(jfc_user_ctx_map[jfc].begin(),
+                                jfc_user_ctx_map[jfc].begin() + num_completed);
     return num_completed;
 }

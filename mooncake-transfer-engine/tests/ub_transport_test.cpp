@@ -132,7 +132,7 @@ class UBTransportTest : public ::testing::Test {
         ASSERT_EQ(rc, 0);
         // For testing purposes, we'll use the local memory address directly
         // instead of trying to open a remote segment
-        segment_id = 0; // Dummy segment ID for testing
+        segment_id = 0;  // Dummy segment ID for testing
         remote_base = (uint64_t)addr;
     }
 

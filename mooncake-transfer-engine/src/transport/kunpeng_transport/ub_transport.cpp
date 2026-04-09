@@ -431,19 +431,19 @@ int UbTransport::initializeUbResources(UbTransport* t) {
         LOG(ERROR) << "Failed to init, ret = " << ret;
         return -1;
     }
-    
+
     std::vector<std::string> hca_list;
     // Try to get device list from topology
     if (t->local_topology_) {
         hca_list = t->local_topology_->getHcaList();
     }
-    
+
     // If no devices from topology, use mock device
     if (hca_list.empty()) {
         hca_list.push_back("mock_urma_device");
         LOG(INFO) << "Using mock_urma_device for testing";
     }
-    
+
     for (auto& device_name : hca_list) {
         auto& config = globalConfig();
         auto max_endpoints = config.max_ep_per_ctx;
@@ -459,12 +459,12 @@ int UbTransport::initializeUbResources(UbTransport* t) {
             LOG(INFO) << "device " << context->deviceName() << " add to list";
         }
     }
-    
+
     if (t->context_list_.empty()) {
         LOG(ERROR) << "UbTransport: No available RNIC";
         return ERR_DEVICE_NOT_FOUND;
     }
-    
+
     LOG(INFO) << "ub resources init success";
     return 0;
 }

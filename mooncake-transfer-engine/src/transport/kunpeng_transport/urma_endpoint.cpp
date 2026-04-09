@@ -443,8 +443,8 @@ int UrmaContext::openDevice(const std::string& device_name, uint8_t port,
         }
 
         urma_free_device_list(devices);
-    return 0;
-}
+        return 0;
+    }
 
     urma_free_device_list(devices);
     LOG(ERROR) << "No matched device found: " << device_name;
