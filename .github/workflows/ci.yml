@@ -105,7 +105,7 @@ jobs:
         sudo bash -x dependencies.sh -y
         mkdir build
         cd build
-        cmake -G Ninja .. -DUSE_HTTP=ON -DUSE_CXL=ON -DUSE_ETCD=ON -DSTORE_USE_ETCD=ON -DENABLE_ASAN=ON -DENABLE_SCCACHE=ON -DCMAKE_BUILD_TYPE=Debug
+        cmake -G Ninja .. -DUSE_HTTP=ON -DUSE_CXL=ON -DUSE_UB -DUSE_ETCD=ON -DSTORE_USE_ETCD=ON -DENABLE_ASAN=ON -DENABLE_SCCACHE=ON -DCMAKE_BUILD_TYPE=Debug
       shell: bash
 
     - name: Build project
@@ -722,12 +722,6 @@ jobs:
     uses: ./.github/workflows/integration-test.yml
     secrets: inherit
 
-  ub-transport-test:
-    needs: [build, check-paths]
-    if: needs.check-paths.outputs.should-run-downstream == 'true'
-    uses: ./.github/workflows/ci_ub.yml
-    secrets: inherit
-
   ci-gate:
     name: CI Gate
     if: always()
@@ -741,7 +735,6 @@ jobs:
       - test-wheel-ubuntu
       - ascend-test
       - integration-test
-      - ub-transport-test
     runs-on: ubuntu-latest
     steps:
       - name: Check required job results

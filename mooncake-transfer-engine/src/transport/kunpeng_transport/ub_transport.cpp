@@ -19,7 +19,7 @@
 #include "transport/kunpeng_transport/ub_context.h"
 #include "transport/kunpeng_transport/ub_transport.h"
 #include "transport/kunpeng_transport/ub_endpoint.h"
-#include "transport/kunpeng_transport/urma_endpoint.h"
+#include "transport/kunpeng_transport/urma/urma_endpoint.h"
 
 namespace mooncake {
 UbTransport::UbTransport(UB_ENDPOINT_TYPE endpoint_type)
