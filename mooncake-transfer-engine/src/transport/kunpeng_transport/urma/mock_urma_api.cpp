@@ -23,6 +23,15 @@ namespace {
             .max_jetty = 1024
         },
         .port_cnt = 1,
+        .port_attr = {
+            {
+                .max_mtu = URMA_MTU_4096,
+                .state = URMA_PORT_ACTIVE,
+                .active_width = URMA_LINK_X1,
+                .active_speed = URMA_SP_100G,
+                .active_mtu = URMA_MTU_4096
+            }
+        }
     };
 
     urma_eid_info_t mock_eid_info = {
