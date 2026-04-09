@@ -1,0 +1,101 @@
+name: 'UB Transport Test'
+
+on:
+  workflow_call: {}
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-22.04
+    env:
+      CI: "true"
+      SCCACHE_GHA_ENABLED: "true"
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python 3.10
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.10'
+
+    - name: Check and start etcd
+      run: |
+        # Check if etcd is already installed
+        if command -v etcd &> /dev/null && command -v etcdctl &> /dev/null; then
+          echo "etcd is already installed"
+          # Check if etcd is running
+          if etcdctl --endpoints=http://127.0.0.1:2379 endpoint health > /dev/null 2>&1; then
+            echo "etcd is already running"
+          else
+            echo "etcd is not running, starting it..."
+            etcd --advertise-client-urls http://127.0.0.1:2379 --listen-client-urls http://127.0.0.1:2379 &
+            sleep 3 # Give etcd time to start
+            etcdctl --endpoints=http://127.0.0.1:2379 endpoint health
+          fi
+        else
+          echo "etcd is not installed, installing..."
+          wget https://github.com/etcd-io/etcd/releases/download/v3.6.1/etcd-v3.6.1-linux-amd64.tar.gz
+          tar xzf etcd-v3.6.1-linux-amd64.tar.gz
+          sudo mv etcd-v3.6.1-linux-amd64/etcd* /usr/local/bin/
+          etcd --advertise-client-urls http://127.0.0.1:2379 --listen-client-urls http://127.0.0.1:2379 &
+          sleep 3 # Give etcd time to start
+          etcdctl --endpoints=http://127.0.0.1:2379 endpoint health
+        fi
+      shell: bash
+
+    - name: Free up disk space
+      run: |
+        sudo rm -rf /usr/share/dotnet
+        sudo rm -rf /opt/ghc
+        sudo rm -rf /opt/hostedtoolcache/CodeQL
+
+    - name: Install build utilities
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y ninja-build
+
+    - name: Run sccache-cache
+      uses: mozilla-actions/sccache-action@v0.0.9
+
+    - name: Configure sccache
+      uses: actions/github-script@v7
+      with:
+        script: |
+          core.exportVariable('ACTIONS_RESULTS_URL', process.env.ACTIONS_RESULTS_URL || '');
+          core.exportVariable('ACTIONS_RUNTIME_TOKEN', process.env.ACTIONS_RUNTIME_TOKEN || '');
+
+    - name: Install dependencies
+      run: |
+        sudo apt update -y
+        sudo bash -x dependencies.sh -y
+      shell: bash
+
+    - name: Configure project with UB support
+      run: |
+        mkdir build
+        cd build
+        cmake -G Ninja .. \
+          -DUSE_UB=ON \
+          -DUSE_ETCD=ON \
+          -DBUILD_UNIT_TESTS=ON \
+          -DBUILD_EXAMPLES=OFF
+      shell: bash
+
+    - name: Build project
+      run: |
+        cd build
+        cmake --build . --target ub_transport_test
+      shell: bash
+
+    - name: Run UB transport tests
+      run: |
+        cd build
+        MC_METADATA_SERVER=http://127.0.0.1:2379 ./mooncake-transfer-engine/tests/ub_transport_test
+      shell: bash
+
+    - name: Test Summary
+      if: always()
+      shell: bash
+      run: |
+        echo "UB Transport Test completed"
