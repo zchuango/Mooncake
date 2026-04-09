@@ -474,20 +474,19 @@ void Topology::clear() {
 
 int Topology::discover(const std::vector<std::string> &filter) {
     matrix_.clear();
-#ifdef USE_UB
-    auto all_hca = listUBDevices(filter);
-    for (auto &ent : discoverCpuTopology(all_hca)) {
-        matrix_[ent.name] = ent;
-    }
-#else
     auto all_hca = listInfiniBandDevices(filter);
     for (auto &ent : discoverCpuTopology(all_hca)) {
         matrix_[ent.name] = ent;
     }
-#endif
 #if defined(USE_CUDA) || defined(USE_MUSA) || defined(USE_HIP) || \
     defined(USE_MLU) || defined(USE_MACA)
     for (auto &ent : discoverCudaTopology(all_hca)) {
+        matrix_[ent.name] = ent;
+    }
+#endif
+#ifdef USE_UB
+    auto ub_all_hca = listUBDevices(filter);
+    for (auto &ent : discoverCpuTopology(ub_all_hca)) {
         matrix_[ent.name] = ent;
     }
 #endif
