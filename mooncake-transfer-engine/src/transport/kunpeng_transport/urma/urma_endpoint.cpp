@@ -364,7 +364,7 @@ void* UrmaContext::retrieveRemoteSeg(const std::string& remoteSegmentStr) {
     return import_tseg;
 }
 
-int UrmaContext::openDevice(const std::string& device_name, uint8_t port,
+int UrmaContext::openDevice(const std::string& device_name, uint8_t por,
                             int& eid_index) {
     int num_devices = 0;
     urma_context_t* context = nullptr;
@@ -419,10 +419,16 @@ int UrmaContext::openDevice(const std::string& device_name, uint8_t port,
             urma_free_device_list(devices);
             return ERR_CONTEXT;
         }
+        for (int p = 0; p < MAX_PORT_CNT; p++) {
+            if (dev_attr_.port_attr[p].state == URMA_PORT_ACTIVE) {
+                port_ = p;
+                break;
+            }
+        }
         if (dev_attr_.port_cnt != 0 &&
-            dev_attr_.port_attr[port].state != URMA_PORT_ACTIVE) {
-            LOG(WARNING) << "Device " << device_name << " port( " << port
-                         << " ) not active";
+            dev_attr_.port_attr[port_].state != URMA_PORT_ACTIVE) {
+            LOG(WARNING) << "Device " << device_name
+                         << " not found active port";
             if (urma_delete_context(context)) {
                 PLOG(ERROR)
                     << "urma_delete_context(" << device_name << ") failed";
@@ -448,10 +454,9 @@ int UrmaContext::openDevice(const std::string& device_name, uint8_t port,
 
         urma_context_ = context;
         eid_index_ = eid_index;
-        port_ = port;
         if (dev_attr_.port_cnt != 0) {
-            active_mtu_ = dev_attr_.port_attr[port].active_mtu;
-            active_speed_ = dev_attr_.port_attr[port].active_speed;
+            active_mtu_ = dev_attr_.port_attr[port_].active_mtu;
+            active_speed_ = dev_attr_.port_attr[port_].active_speed;
         } else {
             active_mtu_ = URMA_MTU_4096;  // default mtu and speed
             active_speed_ = URMA_SP_100G;
