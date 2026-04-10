@@ -65,9 +65,11 @@ if (USE_EFA)
     add_test(NAME efa_transport_test COMMAND efa_transport_test)
 endif()
 
+# UB transport test with URMA endpoint and mock support
 if (USE_UB)
     add_executable(ub_transport_test ${WORKSPACE}/ub_transport_test.cpp)
-    target_link_libraries(ub_transport_test PUBLIC transfer_engine gtest gtest_main)
+    target_link_libraries(ub_transport_test PUBLIC transfer_engine gtest gtest_main glog::glog pthread)
+    target_include_directories(ub_transport_test PRIVATE ${urma_INCLUDE_DIR})
     add_test(NAME ub_transport_test COMMAND ub_transport_test)
 endif()
 

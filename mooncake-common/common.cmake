@@ -79,7 +79,9 @@ option(USE_UB "option for using UB protocol transport" OFF)
 if (USE_UB)
   add_compile_definitions(USE_UB)
   message(STATUS "ub transport is enabled")
+  include(${CMAKE_CURRENT_LIST_DIR}/FindUrma.cmake)
 endif()
+
 if (USE_EFA)
   # Find libfabric headers and library; default to AWS EFA installer path
   find_path(LIBFABRIC_INCLUDE_DIR rdma/fabric.h
