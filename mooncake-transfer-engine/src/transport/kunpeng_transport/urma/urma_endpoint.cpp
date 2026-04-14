@@ -364,7 +364,7 @@ void* UrmaContext::retrieveRemoteSeg(const std::string& remoteSegmentStr) {
     return import_tseg;
 }
 
-int UrmaContext::openDevice(const std::string& device_name, uint8_t por,
+int UrmaContext::openDevice(const std::string& device_name, uint8_t port,
                             int& eid_index) {
     int num_devices = 0;
     urma_context_t* context = nullptr;
