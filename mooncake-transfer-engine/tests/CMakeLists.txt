@@ -71,6 +71,12 @@ if (USE_UB)
     target_link_libraries(ub_transport_test PUBLIC transfer_engine gtest gtest_main glog::glog pthread)
     target_include_directories(ub_transport_test PRIVATE ${urma_INCLUDE_DIR})
     add_test(NAME ub_transport_test COMMAND ub_transport_test)
+    
+    # UB transport test with OBMM endpoint
+    add_executable(ub_transport_obmm_test ${WORKSPACE}/ub_transport_obmm_test.cpp)
+    target_link_libraries(ub_transport_obmm_test PUBLIC transfer_engine gtest gtest_main glog::glog pthread)
+    target_include_directories(ub_transport_obmm_test PRIVATE ${urma_INCLUDE_DIR})
+    add_test(NAME ub_transport_obmm_test COMMAND ub_transport_obmm_test)
 endif()
 
 add_executable(transfer_metadata_test ${WORKSPACE}/transfer_metadata_test.cpp)

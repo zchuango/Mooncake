@@ -277,7 +277,8 @@ Transport* MultiTransport::installTransport(const std::string& proto,
     }
 #ifdef USE_UB
     else if (std::string(proto) == "ub") {
-        transport = new UbTransport();
+        // For testing purposes, we'll use OBMM_ENDPOINT
+        transport = new UbTransport(OBMM_ENDPOINT);
     }
 #endif
 #ifdef USE_BAREX

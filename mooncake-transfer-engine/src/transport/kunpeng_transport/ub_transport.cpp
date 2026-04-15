@@ -20,6 +20,7 @@
 #include "transport/kunpeng_transport/ub_transport.h"
 #include "transport/kunpeng_transport/ub_endpoint.h"
 #include "transport/kunpeng_transport/urma/urma_endpoint.h"
+#include "transport/kunpeng_transport/obmm/obmm_endpoint.h"
 
 namespace mooncake {
 UbTransport::UbTransport(UB_ENDPOINT_TYPE endpoint_type)
@@ -476,8 +477,10 @@ int UbTransport::init(UbTransport* transport) {
             return -1;
         }
     } else if (transport->endpoint_type_ == OBMM_ENDPOINT) {
-        LOG(ERROR) << "ObmmContext not support now.";
-        return -1;
+        if (!ObmmContext::init()) {
+            LOG(ERROR) << "ObmmContext init failed";
+            return -1;
+        }
     } else {
         LOG(ERROR) << "invalid endpoint type : " << transport->endpoint_type_;
         return -1;
@@ -491,7 +494,9 @@ void UbTransport::uninit(UbTransport* transport) {
             LOG(ERROR) << "UrmaContext uninit failed";
         }
     } else if (transport->endpoint_type_ == OBMM_ENDPOINT) {
-        LOG(ERROR) << "ObmmContext not support now.";
+        if (!ObmmContext::uninit()) {
+            LOG(ERROR) << "ObmmContext uninit failed";
+        }
     } else {
         LOG(ERROR) << "invalid endpoint type : " << transport->endpoint_type_;
     }
@@ -500,7 +505,7 @@ void UbTransport::uninit(UbTransport* transport) {
 std::shared_ptr<UbContext> UbTransport::buildContext(
     UbTransport* t, const std::string& device_name, int max_endpoints) {
     if (t->endpoint_type_ == URMA_ENDPOINT) {
-        auto context =
+        auto context = 
             std::make_shared<UrmaContext>(*t, device_name, max_endpoints);
         if (!context) {
             LOG(ERROR) << "UrmaContext build failed";
@@ -508,8 +513,13 @@ std::shared_ptr<UbContext> UbTransport::buildContext(
         }
         return context;
     } else if (t->endpoint_type_ == OBMM_ENDPOINT) {
-        LOG(ERROR) << "ObmmContext not support now.";
-        return nullptr;
+        auto context = 
+            std::make_shared<ObmmContext>(*t, device_name, max_endpoints);
+        if (!context) {
+            LOG(ERROR) << "ObmmContext build failed";
+            return nullptr;
+        }
+        return context;
     } else {
         LOG(ERROR) << "invalid endpoint type : " << t->endpoint_type_;
         return nullptr;
