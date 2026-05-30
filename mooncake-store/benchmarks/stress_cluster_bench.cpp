@@ -1,6 +1,7 @@
 #include <numa.h>
 #include <sched.h>
 #include <algorithm>
+#include <atomic>
 #include <chrono>
 #include <cmath>
 #include <cstring>
@@ -48,6 +49,17 @@ static void bindToSocket(int socket_id) {
         sched_setaffinity(0, sizeof(cpu_set), &cpu_set);
     }
 }
+
+static std::string FormatBytes(size_t bytes) {
+    if (bytes == 0) return "0 B";
+    const char* units[] = {"B", "KB", "MB", "GB", "TB"};
+    int i = static_cast<int>(std::floor(std::log2(bytes) / 10));
+    if (i > 4) i = 4;
+    double val = static_cast<double>(bytes) / std::pow(1024, i);
+    std::ostringstream oss;
+    oss << std::fixed << std::setprecision(2) << val << " " << units[i];
+    return oss.str();
+}
 }  // namespace
 
 DEFINE_string(local_hostname, "localhost",
@@ -64,7 +76,7 @@ DEFINE_string(ssd_offload_path, "", "SSD offload directory path");
 
 DEFINE_string(scenario, "local_memory",
               "Benchmark scenario: local_memory, remote_memory, local_disk, "
-              "remote_disk");
+              "remote_disk, segment_write, segment_read");
 DEFINE_string(role, "writer",
               "Node role: writer (prefill data) or reader (benchmark reads)");
 DEFINE_uint64(value_size, 4 * MB, "Size of each value in bytes");
@@ -78,6 +90,18 @@ DEFINE_bool(verify, true, "Verify data integrity after read");
 DEFINE_uint64(replica_num, 1, "Number of replicas for each object");
 DEFINE_bool(hard_pin, false,
             "Pin objects to prevent eviction during benchmark");
+
+DEFINE_string(segments, "",
+              "Comma-separated segment names for segment_write/segment_read "
+              "scenarios (e.g. seg1,seg2,seg3)");
+DEFINE_uint64(read_segment_nums, 0,
+              "Number of segments to read from in segment_read scenario (0 = "
+              "read from all segments)");
+DEFINE_uint64(duration, 0,
+              "Duration in seconds for continuous reading in segment_read "
+              "scenario (0 = read num_keys once)");
+DEFINE_uint64(statis_interval, 5,
+              "Statistics print interval in seconds for segment_read scenario");
 
 using Clock = std::chrono::steady_clock;
 using Nanos = std::chrono::nanoseconds;
@@ -210,17 +234,6 @@ class BenchmarkStats {
     size_t total_failed() const { return total_failed_; }
 
    private:
-    static std::string FormatBytes(size_t bytes) {
-        if (bytes == 0) return "0 B";
-        const char* units[] = {"B", "KB", "MB", "GB", "TB"};
-        int i = static_cast<int>(std::floor(std::log2(bytes) / 10));
-        if (i > 4) i = 4;
-        double val = static_cast<double>(bytes) / std::pow(1024, i);
-        std::ostringstream oss;
-        oss << std::fixed << std::setprecision(2) << val << " " << units[i];
-        return oss.str();
-    }
-
     std::vector<ThreadResult> thread_results_;
     std::vector<int64_t> merged_latencies_ns_;
     size_t total_bytes_ = 0;
@@ -555,11 +568,366 @@ class StressBenchmark {
         return 0;
     }
 
+    static std::vector<std::string> ParseSegments() {
+        std::vector<std::string> segments;
+        std::istringstream iss(FLAGS_segments);
+        std::string seg;
+        while (std::getline(iss, seg, ',')) {
+            size_t start = seg.find_first_not_of(" \t");
+            size_t end = seg.find_last_not_of(" \t");
+            if (start != std::string::npos && end != std::string::npos) {
+                segments.push_back(seg.substr(start, end - start + 1));
+            }
+        }
+        return segments;
+    }
+
+    static std::string MakeSegmentKey(const std::string& segment,
+                                      size_t idx) {
+        return "seg_" + segment + "_key_" + std::to_string(idx);
+    }
+
+    int RunSegmentWrite() {
+        auto segments = ParseSegments();
+        if (segments.empty()) {
+            LOG(ERROR) << "--segments is required for segment_write scenario";
+            return -1;
+        }
+
+        LOG(INFO) << "=== SEGMENT WRITE MODE ===";
+        LOG(INFO) << "Writing to " << segments.size() << " segments, "
+                  << FLAGS_num_keys << " keys per segment, each "
+                  << FLAGS_value_size / MB << " MB";
+
+        size_t total_written = 0;
+        size_t total_failed = 0;
+
+        for (size_t s = 0; s < segments.size(); ++s) {
+            const auto& segment = segments[s];
+            mooncake::ReplicateConfig config;
+            config.replica_num = FLAGS_replica_num;
+            config.with_hard_pin = FLAGS_hard_pin;
+            config.preferred_segments = {segment};
+
+            LOG(INFO) << "Writing to segment [" << s << "] " << segment
+                      << " (" << FLAGS_num_keys << " keys)...";
+
+            size_t seg_written = 0;
+            size_t seg_failed = 0;
+
+            for (size_t i = 0; i < FLAGS_num_keys; ++i) {
+                std::string key = MakeSegmentKey(segment, i);
+                FillBuffer(i);
+
+                auto t0 = Clock::now();
+                int ret =
+                    client_->put_from(key, buffer_, FLAGS_value_size, config);
+                auto t1 = Clock::now();
+
+                if (ret != 0) {
+                    LOG(ERROR) << "put_from failed for key=" << key
+                               << " segment=" << segment << " ret=" << ret;
+                    ++seg_failed;
+                    continue;
+                }
+                ++seg_written;
+
+                if ((i + 1) % 10 == 0 || i == FLAGS_num_keys - 1) {
+                    double elapsed_us = NanosToUs(ElapsedNanos(t0, t1));
+                    LOG(INFO) << "  Segment [" << s << "] " << segment
+                              << " written " << (i + 1) << "/"
+                              << FLAGS_num_keys
+                              << " last_latency=" << elapsed_us << " us";
+                }
+            }
+
+            total_written += seg_written;
+            total_failed += seg_failed;
+            LOG(INFO) << "Segment [" << s << "] " << segment
+                      << " complete: " << seg_written << " succeeded, "
+                      << seg_failed << " failed";
+        }
+
+        LOG(INFO) << "All segments write complete: " << total_written
+                  << " succeeded, " << total_failed << " failed";
+
+        LOG(INFO) << "Waiting " << FLAGS_wait_seconds
+                  << " seconds for reader to connect...";
+        std::this_thread::sleep_for(std::chrono::seconds(FLAGS_wait_seconds));
+
+        return (total_failed > 0) ? -1 : 0;
+    }
+
+    int RunSegmentRead() {
+        auto segments = ParseSegments();
+        if (segments.empty()) {
+            LOG(ERROR) << "--segments is required for segment_read scenario";
+            return -1;
+        }
+
+        size_t read_segment_nums = FLAGS_read_segment_nums;
+        if (read_segment_nums == 0 || read_segment_nums > segments.size()) {
+            read_segment_nums = segments.size();
+        }
+
+        std::vector<std::string> read_segments(
+            segments.begin(), segments.begin() + read_segment_nums);
+
+        LOG(INFO) << "=== SEGMENT READ MODE ===";
+        LOG(INFO) << "Reading from " << read_segment_nums << " segments ("
+                  << read_segment_nums << " nodes)";
+        for (size_t s = 0; s < read_segments.size(); ++s) {
+            LOG(INFO) << "  Segment [" << s << "]: " << read_segments[s];
+        }
+        LOG(INFO) << "Keys per segment: " << FLAGS_num_keys;
+        LOG(INFO) << "Duration: "
+                  << (FLAGS_duration > 0 ? std::to_string(FLAGS_duration) + "s"
+                                         : "single pass");
+        LOG(INFO) << "Stats interval: " << FLAGS_statis_interval << "s";
+
+        int buf_ret = AllocateThreadBuffers(FLAGS_num_threads);
+        if (buf_ret != 0) return buf_ret;
+
+        if (FLAGS_scenario == "remote_memory" ||
+            FLAGS_scenario == "remote_disk") {
+            LOG(INFO) << "Waiting " << FLAGS_wait_seconds
+                      << " seconds for writer to finish prefill...";
+            std::this_thread::sleep_for(
+                std::chrono::seconds(FLAGS_wait_seconds));
+        }
+
+        std::vector<std::string> all_keys;
+        for (size_t s = 0; s < read_segments.size(); ++s) {
+            for (size_t i = 0; i < FLAGS_num_keys; ++i) {
+                all_keys.push_back(
+                    MakeSegmentKey(read_segments[s], i));
+            }
+        }
+        LOG(INFO) << "Total keys to read: " << all_keys.size();
+
+        size_t warmup_end =
+            std::min(static_cast<size_t>(FLAGS_warmup_keys), all_keys.size());
+        if (warmup_end > 0) {
+            LOG(INFO) << "Warmup: reading " << warmup_end << " keys...";
+            for (size_t i = 0; i < warmup_end; ++i) {
+                int64_t ret =
+                    client_->get_into(all_keys[i], buffer_, FLAGS_value_size);
+                if (ret < 0) {
+                    LOG(WARNING) << "Warmup get_into failed for key="
+                                 << all_keys[i] << " ret=" << ret;
+                }
+            }
+            LOG(INFO) << "Warmup complete";
+        }
+
+        if (FLAGS_duration == 0) {
+            return RunSegmentReadSinglePass(read_segments, all_keys);
+        }
+        return RunSegmentReadDuration(read_segments, all_keys);
+    }
+
+    int RunSegmentReadSinglePass(
+        const std::vector<std::string>& read_segments,
+        const std::vector<std::string>& all_keys) {
+        LOG(INFO) << "Single-pass read with " << FLAGS_num_threads
+                  << " threads";
+
+        BenchmarkStats stats;
+        stats.InitThreads(FLAGS_num_threads, all_keys.size() / FLAGS_num_threads);
+        stats.StartTimer();
+
+        std::latch start_latch(static_cast<ptrdiff_t>(FLAGS_num_threads));
+        std::latch done_latch(static_cast<ptrdiff_t>(FLAGS_num_threads));
+        std::vector<std::thread> threads;
+
+        size_t keys_per_thread = all_keys.size() / FLAGS_num_threads;
+        size_t remainder = all_keys.size() % FLAGS_num_threads;
+
+        for (size_t t = 0; t < FLAGS_num_threads; ++t) {
+            size_t my_keys = keys_per_thread + (t < remainder ? 1 : 0);
+            size_t key_offset = t * keys_per_thread + std::min(t, remainder);
+
+            threads.emplace_back([&, t, my_keys, key_offset]() {
+                SegmentReadWorker(t, my_keys, key_offset, all_keys, stats,
+                                  start_latch, done_latch);
+            });
+        }
+
+        done_latch.wait();
+        stats.StopTimer();
+
+        for (auto& th : threads) {
+            th.join();
+        }
+
+        stats.Finalize();
+
+        std::string title = "SEGMENT READ BENCHMARK [segments=" +
+                            std::to_string(read_segments.size()) + "]";
+        stats.Print(title);
+        return 0;
+    }
+
+    int RunSegmentReadDuration(
+        const std::vector<std::string>& read_segments,
+        const std::vector<std::string>& all_keys) {
+        LOG(INFO) << "Duration-based continuous read with " << FLAGS_num_threads
+                  << " threads for " << FLAGS_duration << "s, stats every "
+                  << FLAGS_statis_interval << "s";
+
+        std::atomic<bool> stop_flag{false};
+        std::atomic<size_t> global_ops{0};
+        std::atomic<size_t> global_bytes{0};
+        std::atomic<size_t> global_failed{0};
+
+        std::latch start_latch(static_cast<ptrdiff_t>(FLAGS_num_threads));
+        std::vector<std::thread> threads;
+
+        for (size_t t = 0; t < FLAGS_num_threads; ++t) {
+            threads.emplace_back([&, t]() {
+                bindToSocket(t % NR_SOCKETS);
+                char* my_buf = thread_buffers_[t].ptr;
+
+                start_latch.arrive_and_wait();
+
+                size_t key_idx = 0;
+                while (!stop_flag.load(std::memory_order_relaxed)) {
+                    const std::string& key = all_keys[key_idx % all_keys.size()];
+                    auto t0 = Clock::now();
+                    int64_t ret =
+                        client_->get_into(key, my_buf, FLAGS_value_size);
+                    auto t1 = Clock::now();
+                    (void)t0;
+                    (void)t1;
+
+                    if (ret < 0) {
+                        global_failed.fetch_add(1, std::memory_order_relaxed);
+                    } else {
+                        global_bytes.fetch_add(static_cast<size_t>(ret),
+                                               std::memory_order_relaxed);
+                    }
+                    global_ops.fetch_add(1, std::memory_order_relaxed);
+                    ++key_idx;
+                }
+            });
+        }
+
+        auto bench_start = Clock::now();
+        auto bench_end =
+            bench_start + std::chrono::seconds(FLAGS_duration);
+        auto next_statis = bench_start + std::chrono::seconds(FLAGS_statis_interval);
+
+        size_t prev_ops = 0;
+        size_t prev_bytes = 0;
+        size_t prev_failed = 0;
+        auto prev_time = bench_start;
+
+        std::cout << "\n";
+        std::cout << "========================================"
+                  << "========================================\n";
+        std::cout << "  SEGMENT READ DURATION BENCHMARK [segments="
+                  << read_segments.size() << "]\n";
+        std::cout << "========================================"
+                  << "========================================\n";
+        std::cout << std::fixed << std::setprecision(2);
+
+        while (Clock::now() < bench_end) {
+            auto now = Clock::now();
+            if (now >= next_statis) {
+                size_t cur_ops = global_ops.load(std::memory_order_relaxed);
+                size_t cur_bytes = global_bytes.load(std::memory_order_relaxed);
+                size_t cur_failed =
+                    global_failed.load(std::memory_order_relaxed);
+
+                double interval_sec = NanosToSec(ElapsedNanos(prev_time, now));
+                size_t interval_ops = cur_ops - prev_ops;
+                size_t interval_bytes = cur_bytes - prev_bytes;
+                size_t interval_failed = cur_failed - prev_failed;
+
+                double interval_throughput_mbps =
+                    (interval_sec > 0)
+                        ? (static_cast<double>(interval_bytes) / MB) /
+                              interval_sec
+                        : 0;
+                double interval_ops_per_sec =
+                    (interval_sec > 0)
+                        ? static_cast<double>(interval_ops) / interval_sec
+                        : 0;
+
+                double total_sec = NanosToSec(ElapsedNanos(bench_start, now));
+                double total_throughput_mbps =
+                    (total_sec > 0)
+                        ? (static_cast<double>(cur_bytes) / MB) / total_sec
+                        : 0;
+                double total_ops_per_sec =
+                    (total_sec > 0)
+                        ? static_cast<double>(cur_ops) / total_sec
+                        : 0;
+
+                std::cout << "  [t=" << std::setw(6) << total_sec << "s]"
+                          << "  interval: " << interval_throughput_mbps
+                          << " MB/s, " << interval_ops_per_sec << " ops/s"
+                          << " (failed=" << interval_failed << ")"
+                          << "  total: " << cur_ops << " ops, "
+                          << total_throughput_mbps << " MB/s, "
+                          << total_ops_per_sec << " ops/s"
+                          << " (failed=" << cur_failed << ")\n";
+
+                prev_ops = cur_ops;
+                prev_bytes = cur_bytes;
+                prev_failed = cur_failed;
+                prev_time = now;
+                next_statis += std::chrono::seconds(FLAGS_statis_interval);
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        }
+
+        stop_flag.store(true, std::memory_order_relaxed);
+        for (auto& th : threads) {
+            th.join();
+        }
+
+        auto final_time = Clock::now();
+        double total_sec = NanosToSec(ElapsedNanos(bench_start, final_time));
+        size_t final_ops = global_ops.load(std::memory_order_relaxed);
+        size_t final_bytes = global_bytes.load(std::memory_order_relaxed);
+        size_t final_failed = global_failed.load(std::memory_order_relaxed);
+
+        double final_throughput_mbps =
+            (total_sec > 0)
+                ? (static_cast<double>(final_bytes) / MB) / total_sec
+                : 0;
+        double final_ops_per_sec =
+            (total_sec > 0) ? static_cast<double>(final_ops) / total_sec : 0;
+
+        std::cout << "\n  FINAL SUMMARY\n";
+        std::cout << "  Total time:       " << total_sec << " s\n";
+        std::cout << "  Total ops:        " << final_ops
+                  << " (failed: " << final_failed << ")\n";
+        std::cout << "  Total data:       " << FormatBytes(final_bytes)
+                  << "\n";
+        std::cout << "  Throughput:       " << final_throughput_mbps
+                  << " MB/s";
+        if (final_throughput_mbps > 1024) {
+            std::cout << " (" << final_throughput_mbps / 1024 << " GB/s)";
+        }
+        std::cout << "\n";
+        std::cout << "  Ops/sec:          " << final_ops_per_sec << "\n";
+        std::cout << "========================================"
+                  << "========================================\n\n";
+
+        return 0;
+    }
+
     int Run() {
         if (FLAGS_scenario == "local_memory") {
             return RunLocalMemory();
         } else if (FLAGS_scenario == "local_disk") {
             return RunLocalDisk();
+        } else if (FLAGS_scenario == "segment_write") {
+            return RunSegmentWrite();
+        } else if (FLAGS_scenario == "segment_read") {
+            return RunSegmentRead();
         } else if (FLAGS_scenario == "remote_memory" ||
                    FLAGS_scenario == "remote_disk") {
             if (FLAGS_role == "writer") {
@@ -708,6 +1076,52 @@ class StressBenchmark {
         done_latch.arrive_and_wait();
     }
 
+    void SegmentReadWorker(size_t tid, size_t my_keys, size_t key_offset,
+                           const std::vector<std::string>& all_keys,
+                           BenchmarkStats& stats,
+                           std::latch& start_latch,
+                           std::latch& done_latch) {
+        bindToSocket(tid % NR_SOCKETS);
+
+        ThreadResult& result = stats.GetThreadResult(tid);
+        result.latencies_ns.reserve(my_keys);
+
+        char* my_buf = thread_buffers_[tid].ptr;
+
+        start_latch.arrive_and_wait();
+
+        size_t ops = 0;
+        size_t failed = 0;
+        size_t bytes = 0;
+
+        for (size_t i = 0; i < my_keys; ++i) {
+            size_t key_idx = key_offset + i;
+            const std::string& key = all_keys[key_idx % all_keys.size()];
+
+            auto t0 = Clock::now();
+            int64_t ret = client_->get_into(key, my_buf, FLAGS_value_size);
+            auto t1 = Clock::now();
+
+            int64_t lat_ns = ElapsedNanos(t0, t1);
+
+            if (ret < 0) {
+                ++failed;
+                LOG_EVERY_N(ERROR, 100)
+                    << "get_into failed key=" << key << " ret=" << ret;
+            } else {
+                bytes += static_cast<size_t>(ret);
+            }
+            result.latencies_ns.push_back(lat_ns);
+            ++ops;
+        }
+
+        result.total_bytes = bytes;
+        result.total_ops = ops;
+        result.failed_ops = failed;
+
+        done_latch.arrive_and_wait();
+    }
+
     int VerifyData() {
         LOG(INFO) << "Verifying data integrity for " << FLAGS_num_keys
                   << " keys...";
@@ -790,6 +1204,12 @@ int main(int argc, char* argv[]) {
     LOG(INFO) << "  Hard pin:       " << (FLAGS_hard_pin ? "yes" : "no");
     LOG(INFO) << "  SSD offload:    "
               << (FLAGS_enable_ssd_offload ? "yes" : "no");
+    if (!FLAGS_segments.empty()) {
+        LOG(INFO) << "  Segments:       " << FLAGS_segments;
+        LOG(INFO) << "  Read seg nums:  " << FLAGS_read_segment_nums;
+        LOG(INFO) << "  Duration:       " << FLAGS_duration << "s";
+        LOG(INFO) << "  Stats interval: " << FLAGS_statis_interval << "s";
+    }
 
     size_t total_data = FLAGS_num_keys * FLAGS_value_size;
     if (total_data > FLAGS_global_segment_size * 9.5 / 10) {
