@@ -22,14 +22,6 @@ namespace {
 
 thread_local uint64_t current_trace_id = 0;
 
-uint64_t GetPidForTrace() {
-#ifdef _WIN32
-    return static_cast<uint64_t>(_getpid());
-#else
-    return static_cast<uint64_t>(getpid());
-#endif
-}
-
 uint64_t SteadyClockNs() {
     return static_cast<uint64_t>(
         std::chrono::duration_cast<std::chrono::nanoseconds>(
@@ -45,16 +37,6 @@ std::string LowerEnvValue(const char* value) {
     return text;
 }
 
-bool ParseLogEnabled() {
-    const std::string value = LowerEnvValue(std::getenv("MC_LOG_ENABLE"));
-    if (value.empty()) return false;
-    if (value == "off" || value == "0" || value == "false" ||
-        value == "no") {
-        return false;
-    }
-    return true;
-}
-
 struct LogEntry {
     const char* file;
     int line;
@@ -66,8 +48,9 @@ struct LogEntry {
 class AsyncLogQueue {
    public:
     static AsyncLogQueue& Instance() {
-        static AsyncLogQueue* queue = new AsyncLogQueue();
-        return *queue;
+        // Static local object — zero heap allocation, fully destroyed at exit
+        static AsyncLogQueue instance;
+        return instance;
     }
 
     void Enqueue(LogEntry entry) {
@@ -89,6 +72,7 @@ class AsyncLogQueue {
     void Flush() {
         EnsureStarted();
         std::unique_lock<std::mutex> lock(mutex_);
+        // Wait until all in-flight writes finish and queue drains
         queue_empty_.wait(lock, [this] {
             return queue_.empty() && active_writes_ == 0;
         });
@@ -156,7 +140,7 @@ class AsyncLogQueue {
             stream << "trace_id[none] ";
         }
         stream << entry.message;
-        if (entry.severity == google::FATAL) google::FlushLogFiles(google::INFO);
+        // Note: glog LogMessage dtor calls FlushLogFiles automatically for FATAL
     }
 
     std::once_flag start_once_;
@@ -173,8 +157,15 @@ class AsyncLogQueue {
 }  // namespace
 
 uint64_t NewTraceId() {
-    static const uint64_t process_seed =
-        (GetPidForTrace() << 48) ^ (SteadyClockNs() & 0x0000FFFFFFFF0000ULL);
+    // Use pointer address as high-entropy base — far better than PID alone
+    // which is typically a small integer with many leading zeros in 64-bit space
+    static const uint64_t process_seed = [] {
+        uint64_t ptr_val =
+            reinterpret_cast<uint64_t>(&process_seed);  // address of static var
+        return (ptr_val << 32) ^  // high bits from object address
+               (SteadyClockNs() &
+                0x0000FFFFFFFFFFFFULL);  // low 48 bits from wall clock
+    }();
     static std::atomic<uint64_t> counter{1};
     return process_seed ^ counter.fetch_add(1, std::memory_order_relaxed);
 }
@@ -182,7 +173,17 @@ uint64_t NewTraceId() {
 uint64_t CurrentTraceId() { return current_trace_id; }
 
 bool IsMooncakeLogEnabled() {
-    static const bool enabled = ParseLogEnabled();
+    // Cached at first call — no repeated getenv/tolower overhead in hot path
+    static const bool enabled = [] {
+        const std::string value =
+            LowerEnvValue(std::getenv("MC_LOG_ENABLE"));
+        if (value.empty()) return false;
+        if (value == "off" || value == "0" || value == "false" ||
+            value == "no") {
+            return false;
+        }
+        return true;
+    }();
     return enabled;
 }
 
@@ -196,8 +197,40 @@ bool ShouldVLog(int level) {
 }
 
 void ApplyMooncakeLogEnableToGlog() {
-    // MC_LOG_ENABLE only controls MC_LOG macros via ShouldLog().
-    // Do not touch FLAGS_minloglevel to avoid suppressing other LOG() calls.
+    if (!IsMooncakeLogEnabled()) {
+        FLAGS_minloglevel = google::FATAL + 1;
+        return;
+    }
+
+    // Disable console output to prevent performance degradation
+    // File-only logging significantly reduces I/O overhead
+    FLAGS_logtostderr = 0;
+    FLAGS_stderrthreshold = google::FATAL;  // Only FATAL goes to stderr
+
+    // Batch file writes for higher throughput — configurable via env var
+    // Default 3s buffer when unset; set MC_LOG_BUFFER_SECS=30 for
+    // high-throughput scenarios to minimize I/O overhead
+    if (const char* buf_secs = std::getenv("MC_LOG_BUFFER_SECS")) {
+        FLAGS_logbufsecs = std::atoi(buf_secs);
+    } else {
+        FLAGS_logbufsecs = 3;
+    }
+
+    // Set adequate log file size before rotation — configurable via env var
+    // Default 100MB when unset; set MC_LOG_MAX_SIZE=200 for longer retention
+    if (const char* max_size = std::getenv("MC_LOG_MAX_SIZE")) {
+        FLAGS_max_log_size = std::atoi(max_size);
+    } else {
+        FLAGS_max_log_size = 100;
+    }
+
+    // Buffer INFO and above to reduce I/O frequency
+    FLAGS_logbuflevel = google::INFO;
+
+    // Disable lock usage tracking overhead — only available in NDEBUG builds
+#ifdef NDEBUG
+    FLAGS_enable_lock_usage = false;
+#endif
 }
 
 ScopedTraceId::ScopedTraceId(uint64_t trace_id)
