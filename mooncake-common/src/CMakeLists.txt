@@ -1,5 +1,7 @@
 find_package(yaml-cpp REQUIRED)
 
+find_package(spdlog REQUIRED)
+
 find_package(asio QUIET)
 
 if(asio_FOUND)
@@ -51,9 +53,7 @@ set_target_properties(asio_shared PROPERTIES
 
 target_link_libraries(asio_shared PUBLIC pthread)
 
-add_library(mooncake_common
-    ${MOONCAKE_COMMON_SOURCES}
-)
+add_library(mooncake_common ${MOONCAKE_COMMON_SOURCES})
 
 target_include_directories(mooncake_common PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../include>
@@ -65,6 +65,7 @@ target_link_libraries(mooncake_common PUBLIC
     jsoncpp
     glog::glog
     gflags::gflags
+    spdlog::spdlog
 )
 
 if (BUILD_SHARED_LIBS)
