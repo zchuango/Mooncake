@@ -51,13 +51,33 @@ void FlushAsyncLogs();
 
 }  // namespace mooncake::logging
 
+// NoOpStream: dummy stream that discards everything when logging is disabled
+class NoOpStream {
+   public:
+    template <typename T>
+    NoOpStream& operator<<(const T&) {
+        return *this;
+    }
+};
+
 #define MC_LOG(severity)                                                      \
-    mooncake::logging::AsyncLogMessage(                                       \
-        __FILE__, __LINE__, google::severity,                                 \
-        mooncake::logging::ShouldLog(google::severity))                       \
-        .stream()
+    ([&]() -> std::ostream& {                                                \
+        if (!mooncake::logging::ShouldLog(google::severity)) {               \
+            static NoOpStream dev_null;                                       \
+            return dev_null;                                                 \
+        }                                                                    \
+        static mooncake::logging::AsyncLogMessage __msg__(                    \
+            __FILE__, __LINE__, google::severity, true);                     \
+        return __msg__.stream();                                              \
+    }())
 
 #define MC_VLOG(level)                                                        \
-    mooncake::logging::AsyncLogMessage(                                       \
-        __FILE__, __LINE__, google::INFO, mooncake::logging::ShouldVLog(level)) \
-        .stream()
+    ([&]() -> std::ostream& {                                                \
+        if (!mooncake::logging::ShouldVLog(level)) {                         \
+            static NoOpStream dev_null;                                       \
+            return dev_null;                                                 \
+        }                                                                    \
+        static mooncake::logging::AsyncLogMessage __msg__(                    \
+            __FILE__, __LINE__, google::INFO, true);                          \
+        return __msg__.stream();                                              \
+    }())

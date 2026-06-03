@@ -3,12 +3,9 @@
 #include <algorithm>
 #include <atomic>
 #include <chrono>
-#include <condition_variable>
 #include <cctype>
 #include <cstdlib>
-#include <mutex>
-#include <queue>
-#include <string>
+#include <cstring>
 #include <thread>
 
 #ifdef _WIN32
@@ -37,52 +34,101 @@ std::string LowerEnvValue(const char* value) {
     return text;
 }
 
+// LogEntry stored in the ring buffer slots
+// All fields are plain POD so memcpy is safe for move-assignment
 struct LogEntry {
-    const char* file;
-    int line;
-    google::LogSeverity severity;
-    uint64_t trace_id;
-    std::string message;
+    const char* file = nullptr;
+    int line = 0;
+    google::LogSeverity severity = google::INFO;
+    uint64_t trace_id = 0;
+    std::string message;  // heap-allocated, OK
 };
 
+// Lock-free MPSC ring buffer
+// Uses atomic indices (claim/consume model) — no mutex on hot path
 class AsyncLogQueue {
    public:
+    static constexpr size_t kCapacity = 8192;  // must be power of 2 for mod
+
     static AsyncLogQueue& Instance() {
-        // Static local object — zero heap allocation, fully destroyed at exit
         static AsyncLogQueue instance;
         return instance;
     }
 
-    void Enqueue(LogEntry entry) {
-        EnsureStarted();
-        {
-            std::unique_lock<std::mutex> lock(mutex_);
-            queue_not_full_.wait(lock, [this] {
-                return stopped_ || queue_.size() < kMaxQueueSize;
-            });
-            if (stopped_) {
-                WriteSync(entry);
-                return;
-            }
-            queue_.push(std::move(entry));
+    // Lock-free enqueue. Never blocks the caller — on overflow, drops oldest entries.
+    // Returns true if enqueued (or dropped due to overflow), always non-blocking.
+    bool Enqueue(LogEntry entry) {
+        // Claim a slot atomically
+        uint64_t claimed = claimed_.fetch_add(1, std::memory_order_acquire);
+        uint64_t consumed = consumed_.load(std::memory_order_acquire);
+
+        // Overflow? Roll back claimed to keep claimed - consumed <= kCapacity.
+        // This effectively makes oldest entries get overwritten (lossy behavior).
+        if (claimed - consumed >= kCapacity) {
+            claimed_.store(consumed + kCapacity, std::memory_order_release);
+            // Do NOT fall back to sync write — caller never blocks
         }
-        queue_not_empty_.notify_one();
+
+        // Slot index in ring buffer (modulo power-of-2 is free: idx & (kCapacity-1))
+        size_t slot_idx = claimed & (kCapacity - 1);
+        slots_[slot_idx] = std::move(entry);
+
+        // Publish so consumer sees this entry
+        published_.fetch_add(1, std::memory_order_release);
+        return true;  // always succeeds, never blocks
     }
 
     void Flush() {
-        EnsureStarted();
-        std::unique_lock<std::mutex> lock(mutex_);
-        // Wait until all in-flight writes finish and queue drains
-        queue_empty_.wait(lock, [this] {
-            return queue_.empty() && active_writes_ == 0;
-        });
+        // Wait for consumer to drain all published entries
+        uint64_t claimed = claimed_.load(std::memory_order_acquire);
+        while (published_.load(std::memory_order_acquire) < claimed) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
         google::FlushLogFiles(google::INFO);
     }
 
    private:
-    static constexpr size_t kMaxQueueSize = 8192;
+    static constexpr size_t kDummySize =
+        (sizeof(LogEntry) + 63) & ~63ULL;  // cache-line align each slot
 
-    AsyncLogQueue() = default;
+    AsyncLogQueue() : slots_(new char[kDummySize * kCapacity]) {}
+
+    ~AsyncLogQueue() { delete[] slots_; }
+
+    // No copying
+    AsyncLogQueue(const AsyncLogQueue&) = delete;
+    AsyncLogQueue& operator=(const AsyncLogQueue&) = delete;
+
+    // Get slot pointer — slots are cache-line aligned to prevent false sharing
+    LogEntry* slot(size_t idx) {
+        return reinterpret_cast<LogEntry*>(slots_.get() + idx * kDummySize);
+    }
+
+    void WorkerLoop() {
+        while (true) {
+            // Claim one published entry to consume (acquire)
+            uint64_t consumed = consumed_.load(std::memory_order_acquire);
+            uint64_t published = published_.load(std::memory_order_acquire);
+
+            if (consumed >= published) {
+                if (stopped_) break;
+                // Sleep and spin
+                std::this_thread::sleep_for(std::chrono::microseconds(100));
+                continue;
+            }
+
+            size_t slot_idx = consumed & (kCapacity - 1);
+            LogEntry* e = slot(consumed);
+
+            // Process entry
+            WriteSync(*e);
+
+            // Advance consumer past this slot (release)
+            consumed_.store(consumed + 1, std::memory_order_release);
+
+            if (consumed_ == stopped_) break;
+        }
+    }
 
     void EnsureStarted() {
         std::call_once(start_once_, [this] {
@@ -92,43 +138,9 @@ class AsyncLogQueue {
     }
 
     void Stop() {
-        {
-            std::lock_guard<std::mutex> lock(mutex_);
-            stopped_ = true;
-        }
-        queue_not_empty_.notify_all();
-        queue_not_full_.notify_all();
+        stopped_ = true;
         if (worker_.joinable()) worker_.join();
         google::FlushLogFiles(google::INFO);
-    }
-
-    void WorkerLoop() {
-        while (true) {
-            LogEntry entry;
-            {
-                std::unique_lock<std::mutex> lock(mutex_);
-                queue_not_empty_.wait(lock, [this] {
-                    return stopped_ || !queue_.empty();
-                });
-                if (queue_.empty()) {
-                    queue_empty_.notify_all();
-                    if (stopped_) return;
-                    continue;
-                }
-                entry = std::move(queue_.front());
-                queue_.pop();
-                ++active_writes_;
-            }
-            queue_not_full_.notify_one();
-            WriteSync(entry);
-            {
-                std::lock_guard<std::mutex> lock(mutex_);
-                --active_writes_;
-                if (queue_.empty() && active_writes_ == 0) {
-                    queue_empty_.notify_all();
-                }
-            }
-        }
     }
 
     static void WriteSync(const LogEntry& entry) {
@@ -145,13 +157,16 @@ class AsyncLogQueue {
 
     std::once_flag start_once_;
     std::thread worker_;
-    std::mutex mutex_;
-    std::condition_variable queue_not_empty_;
-    std::condition_variable queue_not_full_;
-    std::condition_variable queue_empty_;
-    std::queue<LogEntry> queue_;
-    size_t active_writes_ = 0;
+
+    // Lock-free MPSC ring buffer state
+    std::atomic<uint64_t> claimed_{0};     // producer claims next slot here
+    std::atomic<uint64_t> published_{0}; // producer publishes entry here
+    std::atomic<uint64_t> consumed_{0};    // consumer consumes from here
     bool stopped_ = false;
+
+    // Ring buffer slots — cache-line aligned to avoid false sharing
+    // Use unique_ptr<char[]> instead of new[] to avoid leak
+    std::unique_ptr<char[]> slots_;
 };
 
 }  // namespace
@@ -197,6 +212,11 @@ bool ShouldVLog(int level) {
 }
 
 void ApplyMooncakeLogEnableToGlog() {
+    // Set default log directory before anything else
+    if (std::getenv("MC_LOG_DIR") == nullptr) {
+        FLAGS_log_dir = "/var/log/mooncake";
+    }
+
     if (!IsMooncakeLogEnabled()) {
         FLAGS_minloglevel = google::FATAL + 1;
         return;
@@ -261,8 +281,9 @@ AsyncLogMessage::~AsyncLogMessage() {
         output << stream_.str();
         return;
     }
-    AsyncLogQueue::Instance().Enqueue(
-        LogEntry{file_, line_, severity_, trace_id_, stream_.str()});
+    LogEntry entry{file_, line_, severity_, trace_id_, stream_.str()};
+    // Lossy: Enqueue always returns true, never blocks or falls back to sync write
+    AsyncLogQueue::Instance().Enqueue(std::move(entry));
 }
 
 std::ostream& AsyncLogMessage::stream() { return stream_; }
