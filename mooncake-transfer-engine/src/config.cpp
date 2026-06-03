@@ -297,7 +297,14 @@ void loadGlobalConfig(GlobalConfig& config) {
         } else {
             FLAGS_log_dir = log_dir_path;
             FLAGS_logtostderr = 0;
+            FLAGS_stderrthreshold = google::FATAL;
+            FLAGS_logbufsecs = 3;      // Batch writes for throughput
+            FLAGS_max_log_size = 100;  // 100MB per file
+            FLAGS_logbuflevel = google::INFO;
             FLAGS_stop_logging_if_full_disk = true;
+#ifdef NDEBUG
+            FLAGS_enable_lock_usage = false;
+#endif
         }
     }
 
