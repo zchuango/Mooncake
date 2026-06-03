@@ -422,9 +422,11 @@ void UbWorkerPool::performPoll(int thread_id) {
                     redispatch_counter_++;
                 }
             } else {
-                // slice->markSuccess();
                 processed_slice_count++;
                 success_nr_polls++;
+                // Publish completion only after this worker has finished all
+                // local accounting that reads fields from the slice.
+                slice->markSuccess();
             }
         }
         if (nr_poll)
