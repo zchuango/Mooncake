@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <memory>
 #include <sstream>
+#include <streambuf>
 
 #include <glog/logging.h>
 
@@ -49,35 +50,42 @@ class AsyncLogMessage {
 
 void FlushAsyncLogs();
 
-}  // namespace mooncake::logging
+// NoOpStream: dummy std::ostream that discards all output.
+// Used by MC_LOG macro when logging is disabled — returns as std::ostream&.
+class NoOpStream : public std::ostream {
+    struct DevNullBuf : public std::streambuf {
+        int overflow(int c) override { return c; }
+    };
 
-// NoOpStream: dummy stream that discards everything when logging is disabled
-class NoOpStream {
    public:
-    template <typename T>
-    NoOpStream& operator<<(const T&) {
-        return *this;
+    NoOpStream() : std::ostream(new DevNullBuf()) {
+        this->setstate(std::ios::badbit);  // mark stream as unusable but safe
     }
+    // NoOpStream does NOT own the buffer — streambuf is static, no leak
+    ~NoOpStream() { delete rdbuf(); }
 };
 
+}  // namespace mooncake::logging
+
+// MC_LOG / MC_VLOG: return std::ostream& — NoOpStream when disabled, real stream when enabled
 #define MC_LOG(severity)                                                      \
-    ([&]() -> std::ostream& {                                                \
-        if (!mooncake::logging::ShouldLog(google::severity)) {               \
-            static NoOpStream dev_null;                                       \
-            return dev_null;                                                 \
-        }                                                                    \
-        static mooncake::logging::AsyncLogMessage __msg__(                    \
-            __FILE__, __LINE__, google::severity, true);                     \
-        return __msg__.stream();                                              \
+    ([&]() -> std::ostream& {                                                 \
+        if (!::mooncake::logging::ShouldLog(google::severity)) {             \
+            static ::mooncake::logging::NoOpStream dev_null;                  \
+            return dev_null;                                                  \
+        }                                                                     \
+        static ::mooncake::logging::AsyncLogMessage __msg__(                  \
+            __FILE__, __LINE__, google::severity, true);                      \
+        return __msg__.stream();                                               \
     }())
 
-#define MC_VLOG(level)                                                        \
-    ([&]() -> std::ostream& {                                                \
-        if (!mooncake::logging::ShouldVLog(level)) {                         \
-            static NoOpStream dev_null;                                       \
-            return dev_null;                                                 \
-        }                                                                    \
-        static mooncake::logging::AsyncLogMessage __msg__(                    \
+#define MC_VLOG(level)                                                         \
+    ([&]() -> std::ostream& {                                                 \
+        if (!::mooncake::logging::ShouldVLog(level)) {                         \
+            static ::mooncake::logging::NoOpStream dev_null;                  \
+            return dev_null;                                                  \
+        }                                                                     \
+        static ::mooncake::logging::AsyncLogMessage __msg__(                  \
             __FILE__, __LINE__, google::INFO, true);                          \
-        return __msg__.stream();                                              \
+        return __msg__.stream();                                               \
     }())
