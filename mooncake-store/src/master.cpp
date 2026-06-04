@@ -12,6 +12,7 @@
 #include "duration_utils.h"
 #include "ha/leadership/master_service_supervisor.h"
 #include "http_metadata_server.h"
+#include "logger.h"
 #include "mooncake_logging.h"
 #include "rpc_service.h"
 #include "types.h"
@@ -966,7 +967,9 @@ int main(int argc, char* argv[]) {
     if (!FLAGS_log_dir.empty()) {
         google::InitGoogleLogging(argv[0]);
     }
-    mooncake::logging::ApplyMooncakeLogEnableToGlog();
+    // Initialize the spdlog async logger that backs LOG_* macros. Flush/shutdown
+    // is handled automatically by the Logger singleton destructor at exit.
+    mooncake::Logger::Instance().Init(mooncake::LogConfigFromEnv());
 
     // Initialize the master configuration
     mooncake::MasterConfig master_config;

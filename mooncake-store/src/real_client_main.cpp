@@ -4,6 +4,7 @@
 
 #include "client_service.h"
 #include "config.h"
+#include "logger.h"
 #include "mooncake_logging.h"
 #include "real_client.h"
 
@@ -101,7 +102,8 @@ int main(int argc, char *argv[]) {
     if (!FLAGS_log_dir.empty()) {
         google::InitGoogleLogging(argv[0]);
     }
-    mooncake::logging::ApplyMooncakeLogEnableToGlog();
+    // Initialize the spdlog async logger that backs LOG_* macros.
+    mooncake::Logger::Instance().Init(mooncake::LogConfigFromEnv());
 
     size_t global_segment_size = string_to_byte_size(FLAGS_global_segment_size);
 #ifdef USE_ASCEND_DIRECT

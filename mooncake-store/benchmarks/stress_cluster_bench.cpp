@@ -19,6 +19,7 @@
 
 #include "gflags/gflags.h"
 #include "glog/logging.h"
+#include "logger.h"
 #include "mooncake_logging.h"
 #include "real_client.h"
 
@@ -1441,7 +1442,8 @@ int main(int argc, char* argv[]) {
     if (std::getenv("MC_LOG_DIR") == nullptr) {
         FLAGS_logtostderr = true;
     }
-    mooncake::logging::ApplyMooncakeLogEnableToGlog();
+    // Initialize the spdlog async logger that backs LOG_* macros.
+    mooncake::Logger::Instance().Init(mooncake::LogConfigFromEnv());
 
     LOG(INFO) << "Mooncake Stress Cluster Benchmark";
     LOG(INFO) << "  Scenario:       " << FLAGS_scenario;

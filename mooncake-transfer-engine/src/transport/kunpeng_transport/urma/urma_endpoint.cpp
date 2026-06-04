@@ -18,6 +18,7 @@
 #include <cstddef>
 #include "config.h"
 #include "mooncake_logging.h"
+#include "log_macros.h"
 #include "transport/kunpeng_transport/urma/urma_endpoint.h"
 #define UBDIAG_PERF_DEF_FILE "mooncake_perf_points.def"
 #define UBDIAG_PROGRAM_NAME "mooncake_store"
@@ -689,7 +690,7 @@ int UrmaEndpoint::construct(GlobalConfig& config) {
         pt_create.End(jetty_list_[i] ? 0 : -1);
         if (!jetty_list_[i]) {
             PLOG(ERROR) << "Failed to create jetty";
-            MC_LOG(INFO) << "urma_create_jetty_breakdown index[" << i
+            LOG_INFO << "urma_create_jetty_breakdown index[" << i
                          << "] create_us[" << create_us << "] status[-1]";
             pt_construct.End(-1);
             return ERR_ENDPOINT;
@@ -698,7 +699,7 @@ int UrmaEndpoint::construct(GlobalConfig& config) {
                      << jetty_list_[i]->jetty_id.id << " ,jetty jfc id = "
                      << jetty_list_[i]->jetty_cfg.jfs_cfg.jfc->jfc_id.id
                      << " : " << jfc->jfc_id.id;
-        MC_LOG(INFO) << "urma_create_jetty_breakdown index[" << i
+        LOG_INFO << "urma_create_jetty_breakdown index[" << i
                      << "] jetty_id[" << jetty_list_[i]->jetty_id.id
                      << "] jfc_id["
                      << jetty_list_[i]->jetty_cfg.jfs_cfg.jfc->jfc_id.id
@@ -709,7 +710,7 @@ int UrmaEndpoint::construct(GlobalConfig& config) {
     auto construct_us = std::chrono::duration_cast<std::chrono::microseconds>(
                             std::chrono::steady_clock::now() - t0)
                             .count();
-    MC_LOG(INFO) << "urma_endpoint_construct_breakdown local_nic["
+    LOG_INFO << "urma_endpoint_construct_breakdown local_nic["
                  << context_->nicPath() << "] jetty_count[" << num_jetty_list
                  << "] construct_us[" << construct_us << "] status[0]";
     pt_construct.End(0);
@@ -792,7 +793,7 @@ int UrmaEndpoint::setupConnectionsByActive() {
                         std::chrono::duration_cast<std::chrono::microseconds>(
                             std::chrono::steady_clock::now() - t0)
                             .count();
-                    MC_LOG(INFO)
+                    LOG_INFO
                         << "urma_active_setup_breakdown local_nic["
                         << context_->nicPath() << "] peer_nic["
                         << peer_nic_path_ << "] local_peer[1]"
@@ -839,7 +840,7 @@ int UrmaEndpoint::setupConnectionsByActive() {
         auto total_us = std::chrono::duration_cast<std::chrono::microseconds>(
                             std::chrono::steady_clock::now() - t0)
                             .count();
-        MC_LOG(INFO) << "urma_active_setup_breakdown local_nic["
+        LOG_INFO << "urma_active_setup_breakdown local_nic["
                      << context_->nicPath() << "] peer_nic[" << peer_nic_path_
                      << "] local_peer[0] handshake_us[" << handshake_us
                      << "] do_setup_us[0] total_us[" << total_us << "] status["
@@ -880,7 +881,7 @@ int UrmaEndpoint::setupConnectionsByActive() {
                     std::chrono::duration_cast<std::chrono::microseconds>(
                         std::chrono::steady_clock::now() - t0)
                         .count();
-                MC_LOG(INFO) << "urma_active_setup_breakdown local_nic["
+                LOG_INFO << "urma_active_setup_breakdown local_nic["
                              << context_->nicPath() << "] peer_nic["
                              << peer_nic_path_ << "] local_peer[0]"
                              << " handshake_us[" << handshake_us
@@ -976,7 +977,7 @@ int UrmaEndpoint::setupConnectionsByPassive(const HandShakeDesc& peer_desc,
                     std::chrono::duration_cast<std::chrono::microseconds>(
                         std::chrono::steady_clock::now() - t0)
                         .count();
-                MC_LOG(INFO) << "urma_passive_setup_breakdown local_nic["
+                LOG_INFO << "urma_passive_setup_breakdown local_nic["
                              << context_->nicPath() << "] peer_nic["
                              << peer_nic_path_ << "] total_us[" << total_us
                              << "] status[" << rc << "]";
@@ -1115,7 +1116,7 @@ int UrmaEndpoint::doSetupConnection(const std::string& peer_eid,
     auto total_us = std::chrono::duration_cast<std::chrono::microseconds>(
                         std::chrono::steady_clock::now() - t0)
                         .count();
-    MC_LOG(INFO) << "urma_do_setup_all_breakdown local_nic["
+    LOG_INFO << "urma_do_setup_all_breakdown local_nic["
                  << context_->nicPath() << "] peer_nic[" << peer_nic_path_
                  << "] jetty_count[" << jetty_list_.size() << "] total_us["
                  << total_us << "] status[0]";
@@ -1154,7 +1155,7 @@ int UrmaEndpoint::doSetupConnection(int jetty_index,
                 std::chrono::steady_clock::now() - t_import_start)
                 .count();
     pt_import.End(imported_jetty ? 0 : -1);
-    MC_LOG(INFO) << "urma_import_jetty_breakdown index[" << jetty_index
+    LOG_INFO << "urma_import_jetty_breakdown index[" << jetty_index
                  << "] peer_jetty_id[" << peer_jetty_num << "] import_us["
                  << import_us << "] status[" << (imported_jetty ? 0 : -1)
                  << "]";
@@ -1186,7 +1187,7 @@ int UrmaEndpoint::doSetupConnection(int jetty_index,
                     << "] bind_us[" << bind_us;
     }
     imported_jetty_map_[jetty] = imported_jetty;
-    MC_LOG(INFO) << "urma_bind_jetty_breakdown index[" << jetty_index
+    LOG_INFO << "urma_bind_jetty_breakdown index[" << jetty_index
                  << "] local_jetty_id[" << jetty->jetty_id.id
                  << "] peer_jetty_id[" << peer_jetty_num << "] status[0]";
 

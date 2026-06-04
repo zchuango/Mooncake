@@ -1,16 +1,16 @@
 #include "mooncake_logging.h"
+#include "logger.h"
+#include "log_macros.h"
+#include "log_config.h"
 
-#include <dirent.h>
 #include <cstdlib>
 #include <fstream>
-#include <iostream>
 #include <sstream>
 #include <string>
-#include <vector>
 
 #include <gtest/gtest.h>
 
-namespace mooncake::logging {
+namespace mooncake {
 namespace {
 
 void setenv_test(const char* key, const char* val) {
@@ -21,22 +21,6 @@ void setenv_test(const char* key, const char* val) {
     }
 }
 
-// List glog files in directory (glog creates files like mooncake.INFO.12345)
-std::vector<std::string> list_glog_files(const std::string& dir) {
-    std::vector<std::string> files;
-    DIR* d = opendir(dir.c_str());
-    if (!d) return files;
-    struct dirent* entry;
-    while ((entry = readdir(d))) {
-        std::string name(entry->d_name);
-        if (name.find("mooncake.") == 0) {
-            files.push_back(dir + "/" + name);
-        }
-    }
-    closedir(d);
-    return files;
-}
-
 std::string read_file(const std::string& path) {
     std::ifstream f(path);
     if (!f) return "";
@@ -45,52 +29,28 @@ std::string read_file(const std::string& path) {
     return ss.str();
 }
 
-// ===========================================================================
-// Test: IsMooncakeLogEnabled parsing logic
-// ===========================================================================
-TEST(LoggingIsEnabled, ParseOff) {
-    setenv_test("MC_LOG_ENABLE", "off");
-    // Force re-init by clearing static — call a different entry point
-    EXPECT_FALSE(IsMooncakeLogEnabled());
-}
+// Initialize the spdlog logger against a clean temp directory and return the
+// path to the log file it writes to.
+std::string init_logger_to(const std::string& dir, const std::string& level) {
+    std::string cmd = "rm -rf " + dir + " && mkdir -p " + dir;
+    (void)system(cmd.c_str());
 
-TEST(LoggingIsEnabled, ParseFalse) {
-    setenv_test("MC_LOG_ENABLE", "false");
-    EXPECT_FALSE(IsMooncakeLogEnabled());
-}
-
-TEST(LoggingIsEnabled, ParseZero) {
-    setenv_test("MC_LOG_ENABLE", "0");
-    EXPECT_FALSE(IsMooncakeLogEnabled());
-}
-
-TEST(LoggingIsEnabled, ParseNo) {
-    setenv_test("MC_LOG_ENABLE", "no");
-    EXPECT_FALSE(IsMooncakeLogEnabled());
-}
-
-TEST(LoggingIsEnabled, ParseOn) {
-    setenv_test("MC_LOG_ENABLE", "on");
-    EXPECT_TRUE(IsMooncakeLogEnabled());
-}
-
-TEST(LoggingIsEnabled, Parse1) {
-    setenv_test("MC_LOG_ENABLE", "1");
-    EXPECT_TRUE(IsMooncakeLogEnabled());
-}
-
-TEST(LoggingIsEnabled, ParseEmpty) {
-    setenv_test("MC_LOG_ENABLE", nullptr);
-    EXPECT_FALSE(IsMooncakeLogEnabled());
+    LogConfig config;
+    config.logDir = dir;
+    config.level = level;
+    config.fileName = "app";
+    config.flushIntervalSecs = 0;  // no background flush; we flush explicitly
+    Logger::Instance().Init(config);
+    return dir + "/app.log";
 }
 
 // ===========================================================================
-// Test: TraceId generation
+// Trace-id helpers (the only survivors of mooncake_logging.cpp)
 // ===========================================================================
 TEST(LoggingTraceId, UniqueIds) {
-    uint64_t id1 = NewTraceId();
-    uint64_t id2 = NewTraceId();
-    uint64_t id3 = NewTraceId();
+    uint64_t id1 = logging::NewTraceId();
+    uint64_t id2 = logging::NewTraceId();
+    uint64_t id3 = logging::NewTraceId();
     EXPECT_NE(id1, id2);
     EXPECT_NE(id2, id3);
     EXPECT_NE(id1, id3);
@@ -98,87 +58,92 @@ TEST(LoggingTraceId, UniqueIds) {
 }
 
 TEST(LoggingTraceId, ScopedTraceId) {
-    EXPECT_EQ(CurrentTraceId(), 0u);
-    uint64_t tid = NewTraceId();
+    EXPECT_EQ(logging::CurrentTraceId(), 0u);
+    uint64_t tid = logging::NewTraceId();
     {
-        ScopedTraceId _(tid);
-        EXPECT_EQ(CurrentTraceId(), tid);
+        logging::ScopedTraceId _(tid);
+        EXPECT_EQ(logging::CurrentTraceId(), tid);
     }
-    EXPECT_EQ(CurrentTraceId(), 0u);
+    EXPECT_EQ(logging::CurrentTraceId(), 0u);
 }
 
 // ===========================================================================
-// Test: FATAL always logged regardless of MC_LOG_ENABLE
+// LogConfigFromEnv: legacy MC_LOG_* knobs map onto LogConfig
 // ===========================================================================
-TEST(LoggingFatal, AlwaysLogged) {
-    EXPECT_TRUE(ShouldLog(google::FATAL));
-}
-
-// ===========================================================================
-// Test: Direct glog file output (no async, no worker thread)
-// ===========================================================================
-TEST(LoggingGlogFile, DirectGlogWritesFile) {
+TEST(LogConfigEnv, MapsKnobs) {
     setenv_test("MC_LOG_ENABLE", "on");
-    setenv_test("MC_LOG_DIR", "/tmp/mooncake_ut_glog");
-    // Ensure directory exists BEFORE glog init
-    system("rm -rf /tmp/mooncake_ut_glog && mkdir -p /tmp/mooncake_ut_glog");
+    setenv_test("MC_LOG_DIR", "/tmp/mooncake_ut_cfg");
+    setenv_test("MC_LOG_LEVEL", "warning");
+    setenv_test("MC_LOG_MAX_SIZE", "42");
+    setenv_test("MC_LOG_BUFFER_SECS", "7");
 
-    // Init glog directly
-    FLAGS_log_dir = "/tmp/mooncake_ut_glog";
-    FLAGS_minloglevel = 0;
-    google::InitGoogleLogging("test");
-
-    LOG(INFO) << "direct_glog_marker_abc";
-    google::FlushLogFiles(google::INFO);
-
-    auto files = list_glog_files("/tmp/mooncake_ut_glog");
-    ASSERT_FALSE(files.empty()) << "glog should create a file in /tmp/mooncake_ut_glog";
-    std::string content = read_file(files[0]);
-    EXPECT_NE(content.find("direct_glog_marker_abc"), std::string::npos)
-        << "glog file should contain our marker";
+    LogConfig config = LogConfigFromEnv();
+    EXPECT_EQ(config.logDir, "/tmp/mooncake_ut_cfg");
+    EXPECT_EQ(config.level, "WARNING");  // upper-cased for the level map
+    EXPECT_EQ(config.maxSizeMB, 42u);
+    EXPECT_EQ(config.flushIntervalSecs, 7);
 }
 
-TEST(LoggingGlogFile, ApplyEnablesGlog) {
-    setenv_test("MC_LOG_ENABLE", "on");
-    setenv_test("MC_LOG_DIR", "/tmp/mooncake_ut_apply");
-    system("rm -rf /tmp/mooncake_ut_apply && mkdir -p /tmp/mooncake_ut_apply");
+TEST(LogConfigEnv, DisabledForcesOff) {
+    setenv_test("MC_LOG_ENABLE", "off");
+    setenv_test("MC_LOG_DIR", nullptr);
+    setenv_test("MC_LOG_LEVEL", nullptr);
+    EXPECT_EQ(LogConfigFromEnv().level, "OFF");
+}
 
-    ApplyMooncakeLogEnableToGlog();
-
-    LOG(INFO) << "apply_glog_marker_xyz";
-    google::FlushLogFiles(google::INFO);
-
-    auto files = list_glog_files("/tmp/mooncake_ut_apply");
-    ASSERT_FALSE(files.empty()) << "glog should create a file after ApplyMooncakeLogEnableToGlog";
-    std::string content = read_file(files[0]);
-    EXPECT_NE(content.find("apply_glog_marker_xyz"), std::string::npos)
-        << "glog file should contain marker from ApplyMooncakeLogEnableToGlog path";
+TEST(LogConfigEnv, DefaultDisabledWhenUnset) {
+    setenv_test("MC_LOG_ENABLE", nullptr);
+    // MC_LOG_ENABLE defaults to off → level OFF (legacy behavior preserved).
+    EXPECT_EQ(LogConfigFromEnv().level, "OFF");
 }
 
 // ===========================================================================
-// Test: MC_LOG macro produces output (sync path via Enqueue)
-// Note: Worker thread may not be alive in unit test context, but Enqueue
-// should still work — FlushAsyncLogs will drain via DrainAll
+// spdlog file output carries the trace_id prefix
 // ===========================================================================
-TEST(LoggingMCLog, MCLogMacroOutput) {
-    setenv_test("MC_LOG_ENABLE", "on");
-    setenv_test("MC_LOG_DIR", "/tmp/mooncake_ut_mclog");
-    system("rm -rf /tmp/mooncake_ut_mclog && mkdir -p /tmp/mooncake_ut_mclog");
+TEST(LoggingOutput, WritesFileWithTraceId) {
+    std::string path = init_logger_to("/tmp/mooncake_ut_out", "INFO");
 
-    ApplyMooncakeLogEnableToGlog();
-
-    MC_LOG(INFO) << "mc_log_marker_sync";
-
-    // FlushAsyncLogs calls DrainAll which consumes from ring buffer
-    FlushAsyncLogs();
-
-    auto files = list_glog_files("/tmp/mooncake_ut_mclog");
-    if (!files.empty()) {
-        std::string content = read_file(files[0]);
-        EXPECT_NE(content.find("mc_log_marker_sync"), std::string::npos)
-            << "MC_LOG should produce output via Enqueue";
+    uint64_t tid = logging::NewTraceId();
+    {
+        logging::ScopedTraceId _(tid);
+        LOG_INFO << "spdlog_marker_hello";
     }
+    Logger::Instance().Shutdown();  // flush + join worker → file is durable
+
+    std::string content = read_file(path);
+    EXPECT_NE(content.find("spdlog_marker_hello"), std::string::npos)
+        << "log file should contain the message";
+    EXPECT_NE(content.find("trace_id[" + std::to_string(tid) + "]"),
+              std::string::npos)
+        << "log line should be stamped with the current trace id";
+}
+
+TEST(LoggingOutput, NoTraceIdShowsNone) {
+    std::string path = init_logger_to("/tmp/mooncake_ut_none", "INFO");
+    LOG_INFO << "no_trace_marker";
+    Logger::Instance().Shutdown();
+
+    std::string content = read_file(path);
+    EXPECT_NE(content.find("trace_id[none]"), std::string::npos);
+}
+
+TEST(LoggingOutput, LevelGateDropsDebugWhenInfo) {
+    std::string path = init_logger_to("/tmp/mooncake_ut_lvl", "INFO");
+    LOG_DEBUG << "debug_should_be_dropped";
+    LOG_ERROR << "error_should_pass";
+    Logger::Instance().Shutdown();
+
+    std::string content = read_file(path);
+    EXPECT_EQ(content.find("debug_should_be_dropped"), std::string::npos);
+    EXPECT_NE(content.find("error_should_pass"), std::string::npos);
+}
+
+// ===========================================================================
+// LOG_FATAL terminates the process (glog LOG(FATAL) parity)
+// ===========================================================================
+TEST(LoggingFatal, Aborts) {
+    EXPECT_DEATH({ LOG_FATAL << "fatal_boom"; }, "");
 }
 
 }  // namespace
-}  // namespace mooncake::logging
+}  // namespace mooncake

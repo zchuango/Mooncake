@@ -28,6 +28,9 @@ set(MOONCAKE_COMMON_SOURCES
     default_config.cpp
     environ.cpp
     mooncake_logging.cpp
+    logger.cpp
+    trace.cpp
+    rate_limiter.cpp
 )
 
 add_library(asio_shared SHARED asio_impl.cpp)

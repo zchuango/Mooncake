@@ -27,6 +27,13 @@ class logger;
 namespace mooncake {
 
 /**
+ * @brief Build a LogConfig from environment variables, preserving the legacy
+ *        MC_LOG_* operational knobs (MC_LOG_ENABLE / MC_LOG_DIR / MC_LOG_LEVEL /
+ *        MC_LOG_MAX_SIZE / MC_LOG_BUFFER_SECS). MC_LOG_ENABLE defaults to off.
+ */
+LogConfig LogConfigFromEnv();
+
+/**
  * @brief Logger singleton for mooncake async logging.
  *
  * Initializes spdlog async logger with rotating file sink.

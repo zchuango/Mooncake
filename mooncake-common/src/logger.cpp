@@ -15,7 +15,6 @@
  */
 
 #include "logger.h"
-#include "config.h"
 #include "rate_limiter.h"
 
 #include <spdlog/spdlog.h>
@@ -24,14 +23,22 @@
 #include <stdexcept>
 #include <map>
 #include <filesystem>
+#include <algorithm>
+#include <cctype>
+#include <chrono>
+#include <cstdlib>
 
 namespace mooncake {
 
 static std::map<std::string, spdlog::level::level_enum> LEVEL_MAP = {
+    { "TRACE", spdlog::level::trace },
     { "DEBUG", spdlog::level::debug },
     { "INFO", spdlog::level::info },
     { "WARNING", spdlog::level::warn },
-    { "ERROR", spdlog::level::err }
+    { "ERROR", spdlog::level::err },
+    { "CRITICAL", spdlog::level::critical },
+    { "FATAL", spdlog::level::critical },
+    { "OFF", spdlog::level::off }
 };
 
 class Logger::Impl {
@@ -74,6 +81,11 @@ public:
 
         // Set as default logger
         spdlog::set_default_logger(logger_);
+
+        // Periodic background flush (the field was previously unused).
+        if (config.flushIntervalSecs > 0) {
+            spdlog::flush_every(std::chrono::seconds(config.flushIntervalSecs));
+        }
 
         // Configure rate limiter
         RateLimiter::Instance().SetRate(config.rateLimit);
@@ -154,6 +166,66 @@ void Logger::SetLevel(const std::string &level)
 bool Logger::IsInitialized() const
 {
     return pImpl_->IsInitialized();
+}
+
+namespace {
+
+std::string UpperString(const char *value)
+{
+    std::string text(value ? value : "");
+    std::transform(text.begin(), text.end(), text.begin(),
+                   [](unsigned char ch) { return std::toupper(ch); });
+    return text;
+}
+
+// MC_LOG_ENABLE semantics preserved from the legacy glog path: default OFF;
+// only an explicit truthy value turns logging on.
+bool LogEnabledFromEnv()
+{
+    const char *value = std::getenv("MC_LOG_ENABLE");
+    if (value == nullptr || *value == '\0') {
+        return false;
+    }
+    std::string lowered(value);
+    std::transform(lowered.begin(), lowered.end(), lowered.begin(),
+                   [](unsigned char ch) { return std::tolower(ch); });
+    return !(lowered == "off" || lowered == "0" || lowered == "false" ||
+             lowered == "no");
+}
+
+}  // namespace
+
+LogConfig LogConfigFromEnv()
+{
+    LogConfig config;
+
+    // Directory: honor MC_LOG_DIR, else match the legacy glog default.
+    if (const char *dir = std::getenv("MC_LOG_DIR")) {
+        config.logDir = dir;
+    } else {
+        config.logDir = "/var/log/mooncake";
+    }
+
+    if (const char *level = std::getenv("MC_LOG_LEVEL")) {
+        config.level = UpperString(level);
+    }
+
+    if (const char *maxSize = std::getenv("MC_LOG_MAX_SIZE")) {
+        config.maxSizeMB = static_cast<uint32_t>(std::atoi(maxSize));
+    }
+
+    if (const char *bufSecs = std::getenv("MC_LOG_BUFFER_SECS")) {
+        config.flushIntervalSecs = std::atoi(bufSecs);
+    } else {
+        config.flushIntervalSecs = 3;  // legacy FLAGS_logbufsecs default
+    }
+
+    // Total kill switch: when disabled, set level OFF so spdlog drops all logs.
+    if (!LogEnabledFromEnv()) {
+        config.level = "OFF";
+    }
+
+    return config;
 }
 
 }  // namespace mooncake
