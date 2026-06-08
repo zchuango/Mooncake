@@ -1,6 +1,6 @@
 #pragma once
 
-#include <glog/logging.h>
+
 
 #include <chrono>
 #include <sstream>
@@ -9,6 +9,7 @@
 #include <type_traits>  // Required for std::true_type, std::false_type
 #include <utility>
 
+#include "log_macros.h"
 #include "types.h"
 #include "utils.h"
 #include "ylt/struct_json/json_reader.h"
@@ -31,7 +32,7 @@ class ScopedVLogTimer {
     ScopedVLogTimer(int level, std::string_view function_name)
         : level_(level),
           function_name_(function_name),
-          active_(VLOG_IS_ON(level_)) {
+          active_(mooncake::ShouldLog(mooncake::LogLevel::kDebug)) {
         if (active_) {
             start_time_ = std::chrono::steady_clock::now();
         }
@@ -43,7 +44,7 @@ class ScopedVLogTimer {
         if (active_) {
             std::ostringstream oss;
             static_cast<void>((oss << ... << std::forward<Args>(args)));
-            VLOG(level_) << function_name_ << " request: " << oss.str();
+            LOG_DEBUG << function_name_ << " request: " << oss.str();
         }
     }
 
@@ -60,7 +61,7 @@ class ScopedVLogTimer {
             std::ostringstream oss;
             (oss << ... << std::forward<Args>(args));
 
-            VLOG(level_) << function_name_ << " response: " << oss.str()
+            LOG_DEBUG << function_name_ << " response: " << oss.str()
                          << ", latency=" << latency.count() << "us";
             logged_response_ = true;
         }
@@ -87,7 +88,7 @@ class ScopedVLogTimer {
 
             std::ostringstream oss;
             oss << expected_to_str(expected);
-            VLOG(level_) << function_name_ << " response: " << oss.str()
+            LOG_DEBUG << function_name_ << " response: " << oss.str()
                          << ", latency=" << latency.count() << "us";
             logged_response_ = true;
         }
@@ -105,7 +106,7 @@ class ScopedVLogTimer {
             std::string json;
             struct_json::to_json(obj, json);
 
-            VLOG(level_) << function_name_ << " response: " << json
+            LOG_DEBUG << function_name_ << " response: " << json
                          << ", latency=" << latency.count() << "us";
             logged_response_ = true;
         }
@@ -118,7 +119,7 @@ class ScopedVLogTimer {
             auto latency =
                 std::chrono::duration_cast<std::chrono::microseconds>(
                     end_time - start_time_);
-            VLOG(level_) << function_name_
+            LOG_DEBUG << function_name_
                          << " finished, latency=" << latency.count() << "us";
         }
     }

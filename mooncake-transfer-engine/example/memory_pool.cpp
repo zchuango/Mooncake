@@ -13,7 +13,8 @@
 // limitations under the License.
 
 #include <gflags/gflags.h>
-#include <glog/logging.h>
+#include "log_macros.h"
+
 #include <sys/time.h>
 
 #include <cstdlib>
@@ -42,7 +43,7 @@ static void *allocateMemoryPool(size_t size, int socket_id) {
     start_addr = mmap((void *)BASE_ADDRESS_HINT, size, PROT_READ | PROT_WRITE,
                       MAP_ANON | MAP_PRIVATE, -1, 0);
     if (start_addr != (void *)BASE_ADDRESS_HINT) {
-        PLOG(ERROR) << "Failed to allocate memory on specified address";
+        PLOG_ERROR << "Failed to allocate memory on specified address";
         exit(1);
     }
     return start_addr;

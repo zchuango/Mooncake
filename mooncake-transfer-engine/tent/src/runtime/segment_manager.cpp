@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include "tent/runtime/segment_manager.h"
+#include "log_macros.h"
 
 #include <cassert>
 #include <filesystem>
@@ -43,7 +44,7 @@ Status SegmentManager::openRemote(SegmentID &handle,
         handle = next_id_.fetch_add(1, std::memory_order_relaxed);
         name_to_id_map_[segment_name] = handle;
         id_to_name_map_[handle] = segment_name;
-        LOG(INFO) << "Opened segment #" << handle << ": " << segment_name;
+        LOG_INFO << "Opened segment #" << handle << ": " << segment_name;
         version_.fetch_add(1, std::memory_order_relaxed);
     }
     return Status::OK();
@@ -86,7 +87,7 @@ Status SegmentManager::getRemoteCached(SegmentDesc *&desc, SegmentID handle) {
             ControlClient::subscribeSegmentUpdateAsync(peer_rpc_addr,
                                                        local_rpc_addr);
         } else {
-            LOG(ERROR) << "Unexpected empty RPC address, peer: '"
+            LOG_ERROR << "Unexpected empty RPC address, peer: '"
                        << peer_rpc_addr << "', local: '" << local_rpc_addr
                        << "'.";
         }

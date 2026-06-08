@@ -2,9 +2,10 @@
 #include <string>
 #include <sys/uio.h>
 #include <unistd.h>
-#include <glog/logging.h>
+
 
 #include "file_interface.h"
+#include "log_macros.h"
 
 namespace mooncake {
 PosixFile::PosixFile(const std::string &filename, int fd)
@@ -17,15 +18,15 @@ PosixFile::PosixFile(const std::string &filename, int fd)
 PosixFile::~PosixFile() {
     if (fd_ >= 0) {
         if (close(fd_) != 0) {
-            LOG(WARNING) << "Failed to close file: " << filename_;
+            LOG_WARNING << "Failed to close file: " << filename_;
         }
         // If the file was opened with an error code indicating a write failure,
         // attempt to delete the file to prevent corruption.
         if (error_code_ == ErrorCode::FILE_WRITE_FAIL) {
             if (::unlink(filename_.c_str()) == -1) {
-                LOG(ERROR) << "Failed to delete corrupted file: " << filename_;
+                LOG_ERROR << "Failed to delete corrupted file: " << filename_;
             } else {
-                LOG(INFO) << "Deleted corrupted file: " << filename_;
+                LOG_INFO << "Deleted corrupted file: " << filename_;
             }
         }
     }

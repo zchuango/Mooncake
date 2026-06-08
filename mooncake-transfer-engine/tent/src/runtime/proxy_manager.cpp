@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include "tent/runtime/proxy_manager.h"
+#include "log_macros.h"
 #include "tent/runtime/transfer_engine_impl.h"
 #include <algorithm>
 #include <cstring>
@@ -158,7 +159,7 @@ struct StageBufferCache {
         uint64_t addr = 0;
         auto status = mgr.pinStageBuffer(location, addr);
         if (!status.ok()) {
-            LOG(FATAL) << "Failed to pin local stage buffer: " << status
+            LOG_FATAL << "Failed to pin local stage buffer: " << status
                        << ", location " << location;
             return 0;
         }
@@ -176,7 +177,7 @@ struct StageBufferCache {
         auto status =
             ControlClient::pinStageBuffer(server_addr, location, addr);
         if (!status.ok()) {
-            LOG(FATAL) << "Failed to pin remote stage buffer: " << status
+            LOG_FATAL << "Failed to pin remote stage buffer: " << status
                        << ", location " << location;
             return 0;
         }

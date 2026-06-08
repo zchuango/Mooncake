@@ -15,7 +15,8 @@
  */
 
 #include <gflags/gflags.h>
-#include <glog/logging.h>
+#include "log_macros.h"
+
 #include <gtest/gtest.h>
 
 #include <memory>
@@ -192,7 +193,7 @@ class IPv6ClientTest : public ::testing::Test {
         if (getenv("SERVER_ADDRESS"))
             FLAGS_server_address = getenv("SERVER_ADDRESS");
 
-        LOG(INFO) << "Protocol: " << FLAGS_protocol
+        LOG_INFO << "Protocol: " << FLAGS_protocol
                   << ", Device name: " << FLAGS_device_name
                   << ", Server address: " << FLAGS_server_address
                   << ", Metadata: P2PHANDSHAKE";
@@ -224,14 +225,14 @@ TEST_F(IPv6ClientTest, BasicPutGetOverIPv6Loopback) {
     ASSERT_TRUE(master_.Start(InProcMasterConfigBuilder().build()))
         << "Failed to start in-proc master";
     master_address_ = master_.master_address();
-    LOG(INFO) << "Started in-proc master at " << master_address_;
+    LOG_INFO << "Started in-proc master at " << master_address_;
 
     // Setup the client with IPv6 address
     const std::string rdma_devices = (FLAGS_protocol == std::string("rdma"))
                                          ? FLAGS_device_name
                                          : std::string("");
 
-    LOG(INFO) << "Setting up client with server address: "
+    LOG_INFO << "Setting up client with server address: "
               << FLAGS_server_address;
 
     ASSERT_EQ(
@@ -287,13 +288,13 @@ TEST_F(IPv6ClientTest, BasicPutGetOverLinkLocalIPv6) {
     }
 
     std::string server_address = ll_addr;
-    LOG(INFO) << "Testing with link-local address: " << server_address;
+    LOG_INFO << "Testing with link-local address: " << server_address;
 
     // Start in-proc master
     ASSERT_TRUE(master_.Start(InProcMasterConfigBuilder().build()))
         << "Failed to start in-proc master";
     master_address_ = master_.master_address();
-    LOG(INFO) << "Started in-proc master at " << master_address_;
+    LOG_INFO << "Started in-proc master at " << master_address_;
 
     // Setup client with link-local address
     const std::string rdma_devices = (FLAGS_protocol == std::string("rdma"))

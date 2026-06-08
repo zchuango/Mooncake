@@ -1,6 +1,6 @@
 #pragma once
 
-#include <glog/logging.h>
+
 #include <string>
 #include <vector>
 

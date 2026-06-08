@@ -26,7 +26,7 @@
 #include <unistd.h>
 #include <vector>
 #include "tent/common/utils/prefault.h"
-#include <glog/logging.h>
+
 #include <tang_runtime_api.h>
 
 namespace mooncake {

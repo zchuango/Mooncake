@@ -1,5 +1,6 @@
 #include <gflags/gflags.h>
-#include <glog/logging.h>
+#include "log_macros.h"
+
 #include <gtest/gtest.h>
 #include <thread>
 #include <memory>
@@ -25,7 +26,7 @@ DEFINE_int32(gpu_id, 0, "GPU ID to use");
 
 static void checkCudaError(cudaError_t result, const char* message) {
     if (result != cudaSuccess) {
-        LOG(ERROR) << message << " (Error code: " << result << " - "
+        LOG_ERROR << message << " (Error code: " << result << " - "
                    << cudaGetErrorString(result) << ")";
         exit(EXIT_FAILURE);
     }

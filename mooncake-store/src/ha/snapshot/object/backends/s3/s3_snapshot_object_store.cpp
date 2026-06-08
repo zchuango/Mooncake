@@ -1,4 +1,5 @@
 #include "ha/snapshot/object/backends/s3/s3_snapshot_object_store.h"
+#include "log_macros.h"
 
 #ifdef HAVE_AWS_SDK
 
@@ -6,7 +7,7 @@
 #include <cctype>
 #include <string_view>
 
-#include <glog/logging.h>
+
 
 #include "utils/s3_helper.h"
 
@@ -48,7 +49,7 @@ S3SnapshotObjectStore::~S3SnapshotObjectStore() = default;
 
 S3SnapshotObjectStore::S3SnapshotObjectStore()
     : impl_(std::make_unique<Impl>()) {
-    LOG(INFO) << "S3SnapshotObjectStore initialized";
+    LOG_INFO << "S3SnapshotObjectStore initialized";
 }
 
 tl::expected<void, std::string> S3SnapshotObjectStore::UploadBuffer(

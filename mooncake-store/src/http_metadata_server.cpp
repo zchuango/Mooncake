@@ -2,10 +2,12 @@
 
 #include <csignal>
 #include <ylt/coro_http/coro_http_server.hpp>
-#include <glog/logging.h>
+
 
 #include <mutex>
 #include <string>
+
+#include "log_macros.h"
 
 namespace mooncake {
 
@@ -106,7 +108,7 @@ bool HttpMetadataServer::start() {
 
     server_->async_start();
     running_ = true;
-    LOG(INFO) << "HTTP metadata server started on " << host_ << ":" << port_;
+    LOG_INFO << "HTTP metadata server started on " << host_ << ":" << port_;
     return true;
 }
 
@@ -117,7 +119,7 @@ void HttpMetadataServer::stop() {
 
     server_->stop();
     running_ = false;
-    LOG(INFO) << "HTTP metadata server stopped";
+    LOG_INFO << "HTTP metadata server stopped";
 }
 
 KVPoll HttpMetadataServer::poll() const {

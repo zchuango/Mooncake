@@ -15,8 +15,9 @@
 #ifndef TENT_OS_H
 #define TENT_OS_H
 
-#include <glog/logging.h>
+
 #include <numa.h>
+#include "log_macros.h"
 #include <sys/mman.h>
 #include <sys/time.h>
 #include <unistd.h>
@@ -43,7 +44,7 @@ namespace mooncake {
 namespace tent {
 static inline int bindToSocket(int socket_id) {
     if (numa_available() < 0) {
-        LOG(WARNING) << "The platform does not support NUMA";
+        LOG_WARNING << "The platform does not support NUMA";
         return -1;
     }
     cpu_set_t cpu_set;
@@ -64,7 +65,7 @@ static inline int bindToSocket(int socket_id) {
     numa_free_cpumask(cpu_list);
     if (nr_cpus == 0) return 0;
     if (pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpu_set)) {
-        LOG(ERROR) << "bindToSocket: pthread_setaffinity_np failed";
+        LOG_ERROR << "bindToSocket: pthread_setaffinity_np failed";
         return -1;
     }
     return 0;
@@ -74,7 +75,7 @@ static inline int64_t getCurrentTimeInNano() {
     const int64_t kNanosPerSecond = 1000 * 1000 * 1000;
     struct timespec ts;
     if (clock_gettime(CLOCK_REALTIME, &ts)) {
-        PLOG(ERROR) << "getCurrentTimeInNano: clock_gettime failed";
+        PLOG_ERROR << "getCurrentTimeInNano: clock_gettime failed";
         return -1;
     }
     return (int64_t{ts.tv_sec} * kNanosPerSecond + int64_t{ts.tv_nsec});

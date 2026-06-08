@@ -1,4 +1,5 @@
 #include "master_service_test_for_snapshot_base.h"
+#include "log_macros.h"
 
 #include <atomic>
 #include <random>
@@ -1013,7 +1014,7 @@ TEST_F(MasterServiceSnapshotTest, ConcurrentWriteAndRemoveAll) {
     //     std::this_thread::sleep_for(
     //         std::chrono::milliseconds(50));  // Let some writes start
     //     long removed = service_->RemoveAll();
-    //     LOG(INFO) << "Removed " << removed
+    //     LOG_INFO << "Removed " << removed
     //               << " objects during concurrent writes";
     //     ASSERT_GT(removed, 0);
     //     remove_all_done = true;
@@ -1033,7 +1034,7 @@ TEST_F(MasterServiceSnapshotTest, ConcurrentWriteAndRemoveAll) {
 
     // // Final RemoveAll to ensure clean state
     // long final_removed = service_->RemoveAll();
-    // LOG(INFO) << "Final RemoveAll removed " << final_removed << " objects";
+    // LOG_INFO << "Final RemoveAll removed " << final_removed << " objects";
     // ASSERT_GT(final_removed, 0);
     // total_removed.fetch_add(final_removed);
     // ASSERT_EQ(total_removed, num_threads * objects_per_thread);
@@ -1096,7 +1097,7 @@ TEST_F(MasterServiceSnapshotTest, ConcurrentReadAndRemoveAll) {
     //     std::this_thread::sleep_for(
     //         std::chrono::milliseconds(10));  // Let some reads start
     //     long removed = service_->RemoveAll();
-    //     LOG(INFO) << "Removed " << removed
+    //     LOG_INFO << "Removed " << removed
     //               << " objects during concurrent reads";
     //     remove_all_done = true;
     // });
@@ -1118,7 +1119,7 @@ TEST_F(MasterServiceSnapshotTest, ConcurrentReadAndRemoveAll) {
     // // wait for all the lease to expire
     // std::this_thread::sleep_for(std::chrono::milliseconds(kv_lease_ttl));
     // long removed = service_->RemoveAll();
-    // LOG(INFO) << "Removed " << removed << " objects after kv lease expired";
+    // LOG_INFO << "Removed " << removed << " objects after kv lease expired";
     //
     // // Verify all objects were removed
     // for (int i = 0; i < num_objects; ++i) {
@@ -1162,7 +1163,7 @@ TEST_F(MasterServiceSnapshotTest, ConcurrentRemoveAllOperations) {
     // for (int i = 0; i < 2; ++i) {
     //     remove_threads.emplace_back([&]() {
     //         long removed = service_->RemoveAll();
-    //         LOG(INFO) << "RemoveAll removed " << removed << " objects";
+    //         LOG_INFO << "RemoveAll removed " << removed << " objects";
     //         remove_all_count += removed;
     //     });
     // }
@@ -2351,7 +2352,7 @@ TEST_F(MasterServiceSnapshotTest, OffloadObjectHeartbeat) {
     }
     auto res = service_->OffloadObjectHeartbeat(client_id, true);
     if (!res) {
-        LOG(ERROR) << "OffloadObjectHeartbeat failed with error: "
+        LOG_ERROR << "OffloadObjectHeartbeat failed with error: "
                    << res.error();
         ASSERT_TRUE(res);
     }
@@ -2363,7 +2364,7 @@ TEST_F(MasterServiceSnapshotTest, OffloadObjectHeartbeat) {
     }
     res = service_->OffloadObjectHeartbeat(client_id, true);
     if (!res) {
-        LOG(ERROR) << "OffloadObjectHeartbeat failed with error: "
+        LOG_ERROR << "OffloadObjectHeartbeat failed with error: "
                    << res.error();
         ASSERT_TRUE(res);
     }
@@ -2380,7 +2381,7 @@ TEST_F(MasterServiceSnapshotTest, OffloadObjectHeartbeat) {
     }
     res = service_->OffloadObjectHeartbeat(client_id, true);
     if (!res) {
-        LOG(ERROR) << "OffloadObjectHeartbeat failed with error: "
+        LOG_ERROR << "OffloadObjectHeartbeat failed with error: "
                    << res.error();
         ASSERT_TRUE(res);
     }

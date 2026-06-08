@@ -15,11 +15,12 @@
 #ifndef COMMON_H
 #define COMMON_H
 
-#include <glog/logging.h>
+
 #include <numa.h>
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include <sys/mman.h>
+#include "log_macros.h"
 #include <sys/time.h>
 #include <unistd.h>
 
@@ -68,7 +69,7 @@ enum class HandShakeRequestType {
 static inline std::string getHostname() {
     char hostname[256];
     if (gethostname(hostname, 256)) {
-        PLOG(ERROR) << "Failed to get hostname";
+        LOG_ERROR << "Failed to get hostname";
         return "";
     }
     return hostname;
@@ -76,7 +77,7 @@ static inline std::string getHostname() {
 
 static inline int bindToSocket(int socket_id) {
     if (unlikely(numa_available() < 0)) {
-        LOG(WARNING) << "The platform does not support NUMA";
+        LOG_WARNING << "The platform does not support NUMA";
         return ERR_NUMA;
     }
     cpu_set_t cpu_set;
@@ -97,7 +98,7 @@ static inline int bindToSocket(int socket_id) {
     numa_free_cpumask(cpu_list);
     if (nr_cpus == 0) return 0;
     if (pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpu_set)) {
-        LOG(ERROR) << "bindToSocket: pthread_setaffinity_np failed";
+        LOG_ERROR << "bindToSocket: pthread_setaffinity_np failed";
         return ERR_NUMA;
     }
     return 0;
@@ -107,7 +108,7 @@ static inline int64_t getCurrentTimeInNano() {
     const int64_t kNanosPerSecond = 1000 * 1000 * 1000;
     struct timespec ts;
     if (clock_gettime(CLOCK_REALTIME, &ts)) {
-        PLOG(ERROR) << "getCurrentTimeInNano: clock_gettime failed";
+        LOG_ERROR << "getCurrentTimeInNano: clock_gettime failed";
         return ERR_CLOCK;
     }
     return (int64_t{ts.tv_sec} * kNanosPerSecond + int64_t{ts.tv_nsec});
@@ -149,7 +150,7 @@ static inline uint16_t getPortFromString(std::string_view port_string,
     if (port.has_value()) {
         return *port;
     }
-    LOG(WARNING) << "Illegal port number in " << port_string
+    LOG_WARNING << "Illegal port number in " << port_string
                  << ". Use default port " << default_port << " instead";
     return default_port;
 }
@@ -317,10 +318,10 @@ static inline ssize_t writeFully(int fd, const void *buf, size_t len) {
         if (rc < 0 && (errno == EAGAIN || errno == EINTR))
             continue;
         else if (rc < 0) {
-            PLOG(ERROR) << "Socket write failed";
+            LOG_ERROR << "Socket write failed";
             return rc;
         } else if (rc == 0) {
-            LOG(WARNING) << "Socket write incompleted: expected " << len
+            LOG_WARNING << "Socket write incompleted: expected " << len
                          << " bytes, actual " << len - nbytes << " bytes";
             return len - nbytes;
         }
@@ -342,10 +343,10 @@ static inline ssize_t readFully(int fd, void *buf, size_t len) {
         if (rc < 0 && (errno == EAGAIN || errno == EINTR))
             continue;
         else if (rc < 0) {
-            PLOG(ERROR) << "Socket read failed";
+            LOG_ERROR << "Socket read failed";
             return rc;
         } else if (rc == 0) {
-            LOG(WARNING) << "Socket read incompleted: expected " << len
+            LOG_WARNING << "Socket read incompleted: expected " << len
                          << " bytes, actual " << len - nbytes << " bytes";
             return len - nbytes;
         }
@@ -353,7 +354,7 @@ static inline ssize_t readFully(int fd, void *buf, size_t len) {
         nbytes -= rc;
     }
     if (nbytes != 0) {
-        LOG(WARNING) << "Socket read timed out, timeout: "
+        LOG_WARNING << "Socket read timed out, timeout: "
                      << kReadTimeout.count()
                      << ", deadline: " << deadline.time_since_epoch().count()
                      << ", read " << len - nbytes << " out of " << len
@@ -365,7 +366,7 @@ static inline ssize_t readFully(int fd, void *buf, size_t len) {
 static inline int writeString(int fd, const HandShakeRequestType type,
                               const std::string &str) {
     uint8_t byte = static_cast<uint8_t>(type);
-    // LOG(INFO) << "writeString: type " << (int)byte << ", str(" << str.size()
+    // LOG_INFO << "writeString: type " << (int)byte << ", str(" << str.size()
     //           << "): " << str;
     uint64_t length =
         str.size() +
@@ -396,11 +397,11 @@ static inline size_t loadHandshakeMaxLength() {
         if (ec == std::errc() && ptr == env_sv.data() + env_sv.size() &&
             val >= kDefaultHandshakeMaxLength &&
             val <= kMaxHandshakeMaxLength) {
-            LOG(INFO) << "MC_HANDSHAKE_MAX_LENGTH set to " << val << " bytes ("
+            LOG_INFO << "MC_HANDSHAKE_MAX_LENGTH set to " << val << " bytes ("
                       << (val >> 20) << " MB)";
             return val;
         }
-        LOG(WARNING) << "Invalid MC_HANDSHAKE_MAX_LENGTH value: " << env
+        LOG_WARNING << "Invalid MC_HANDSHAKE_MAX_LENGTH value: " << env
                      << ", valid range: " << kDefaultHandshakeMaxLength
                      << " to " << kMaxHandshakeMaxLength << ", using default "
                      << (kDefaultHandshakeMaxLength >> 20) << "MB";
@@ -422,12 +423,12 @@ static inline std::pair<HandShakeRequestType, std::string> readString(int fd) {
     uint64_t length = 0;
     ssize_t n = readFully(fd, &length, sizeof(length));
     if (n != (ssize_t)sizeof(length)) {
-        LOG(ERROR) << "readString: failed to read length, got: " << n;
+        LOG_ERROR << "readString: failed to read length, got: " << n;
         return {type, ""};
     }
 
     if (length > kMaxLength) {
-        LOG(ERROR) << "readString: too large length from socket: " << length;
+        LOG_ERROR << "readString: too large length from socket: " << length;
         return {type, ""};
     }
 
@@ -435,7 +436,7 @@ static inline std::pair<HandShakeRequestType, std::string> readString(int fd) {
     std::vector<char> buffer(length);
     n = readFully(fd, buffer.data(), length);
     if (n != (ssize_t)length) {
-        LOG(ERROR) << "readString: unexpected length, got: " << n
+        LOG_ERROR << "readString: unexpected length, got: " << n
                    << ", expected: " << length;
         return {type, ""};
     }

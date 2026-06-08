@@ -13,8 +13,9 @@
 // limitations under the License.
 
 #include "tent/transport/rdma/endpoint_store.h"
+#include "log_macros.h"
 
-#include <glog/logging.h>
+
 
 #include <atomic>
 #include <cassert>
@@ -71,7 +72,7 @@ std::shared_ptr<RdmaEndPoint> FIFOEndpointStore::getOrInsert(
     endpoint = std::make_shared<RdmaEndPoint>();
     int ret = endpoint->construct(&context_, &context_.params().endpoint, key);
     if (ret) {
-        LOG(ERROR) << "Failed to construct endpoint for key " << key;
+        LOG_ERROR << "Failed to construct endpoint for key " << key;
         return nullptr;
     }
     while (this->size() >= max_size_) evictOne();
@@ -116,7 +117,7 @@ void FIFOEndpointStore::evictOne() {
     victim_endpoint->beginDestroy();
     waiting_list_.insert(victim_endpoint);
     endpoint_map_.erase(victim);
-    LOG(INFO) << victim << " evicted from FIFOEndpointStore";
+    LOG_INFO << victim << " evicted from FIFOEndpointStore";
 }
 
 void FIFOEndpointStore::reclaim() {
@@ -194,7 +195,7 @@ std::shared_ptr<RdmaEndPoint> SIEVEEndpointStore::getOrInsert(
     int ret = endpoint->construct(&context_, &context_.params().endpoint, key,
                                   &endpoints_count_);
     if (ret) {
-        LOG(ERROR) << "Failed to construct endpoint for key " << key;
+        LOG_ERROR << "Failed to construct endpoint for key " << key;
         return nullptr;
     }
     endpoints_count_.fetch_add(1, std::memory_order_relaxed);
@@ -259,7 +260,7 @@ void SIEVEEndpointStore::evictOne() {
     waiting_list_len_++;
     waiting_list_.insert(victim_instance);
     endpoint_map_.erase(victim);
-    LOG(INFO) << "Endpoint " << victim << " has been evicted";
+    LOG_INFO << "Endpoint " << victim << " has been evicted";
     return;
 }
 
@@ -295,7 +296,7 @@ void SIEVEEndpointStore::clear() {
     int retries = 0;
     while (endpoints_count_.load(std::memory_order_relaxed) > 0) {
         if (++retries > max_retries) {
-            LOG(ERROR) << "Some endpoints not cleared after 5 seconds";
+            LOG_ERROR << "Some endpoints not cleared after 5 seconds";
             break;
         }
         usleep(1000);

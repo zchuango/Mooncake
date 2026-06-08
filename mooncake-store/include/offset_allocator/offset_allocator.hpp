@@ -5,7 +5,7 @@
 #include <memory>
 #include <optional>
 #include <vector>
-#include <glog/logging.h>
+#include <iostream>
 
 #include "mutex.h"
 #include "serialize/serializer.hpp"
@@ -305,8 +305,8 @@ OffsetAllocator::OffsetAllocator(T& serializer) {
         serializer.read(&m_allocated_num, sizeof(m_allocated_num));
         m_allocator = std::make_unique<__Allocator>(serializer);
     } catch (const std::exception& e) {
-        LOG(ERROR) << "Deserializing OffsetAllocator failed, error="
-                   << e.what();
+        std::cerr << "Deserializing OffsetAllocator failed, error=" << e.what()
+                  << std::endl;
         throw std::runtime_error("Deserializing OffsetAllocator failed");
     }
 }
@@ -357,7 +357,8 @@ __Allocator::__Allocator(T& serializer) {
         serializer.read(m_freeNodes.data(),
                         m_current_capacity * sizeof(NodeIndex));
     } catch (const std::exception& e) {
-        LOG(ERROR) << "Deserializing __Allocator failed, error=" << e.what();
+        std::cerr << "Deserializing __Allocator failed, error=" << e.what()
+                  << std::endl;
         throw std::runtime_error("Deserializing __Allocator failed");
     }
 }

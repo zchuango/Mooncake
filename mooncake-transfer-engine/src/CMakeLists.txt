@@ -54,7 +54,6 @@ target_link_libraries(
          rdma_transport
          mooncake_common
          ibverbs
-         glog::glog
          gflags::gflags
          pthread
          JsonCpp::JsonCpp

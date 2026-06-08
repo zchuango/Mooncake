@@ -17,6 +17,7 @@
 #define HETEROGENEOUS_RDMA_TRANSPORT_H_
 
 #include "transport/rdma_transport/rdma_transport.h"
+#include "log_macros.h"
 #include "acl/acl.h"
 #include <atomic>
 #include <new>
@@ -95,7 +96,7 @@ class HeterogeneousRdmaTransport : public Transport {
                 block_queue_.pop();
                 return block;
             } else {
-                LOG(INFO)
+                LOG_INFO
                     << "HeterogeneousRdmaTransport: acquireBlock time out, idx:"
                     << i;
             }
@@ -124,7 +125,7 @@ class HeterogeneousRdmaTransport : public Transport {
                 transfer_queue_.pop();
                 return info;
             } else {
-                // LOG(INFO) << "HeterogeneousRdmaTransport: getTransfer time
+                // LOG_INFO << "HeterogeneousRdmaTransport: getTransfer time
                 // out, idx:" << i;
             }
         }

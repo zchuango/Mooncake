@@ -13,6 +13,7 @@
 #include "allocator.h"  // Contains BufferAllocator declaration
 #include "replica.h"
 #include "types.h"
+#include "log_macros.h"
 
 namespace mooncake {
 
@@ -778,13 +779,13 @@ class CxlAllocationStrategy : public AllocationStrategy {
         }
 
         if (preferred_segments.empty()) {
-            LOG(ERROR) << "Preferred_segments is empty.";
+            LOG_ERROR << "Preferred_segments is empty.";
             return tl::make_unexpected(ErrorCode::INVALID_PARAMS);
         }
 
         const std::string& cxl_segment_name = preferred_segments[0];
 
-        VLOG(1) << "Do cxl allocate, overwritten segment=" << cxl_segment_name;
+        LOG_INFO << "Do cxl allocate, overwritten segment=" << cxl_segment_name;
 
         const auto cxl_allocators =
             allocator_manager.getAllocators(cxl_segment_name);
@@ -795,7 +796,7 @@ class CxlAllocationStrategy : public AllocationStrategy {
         std::shared_ptr<BufferAllocatorBase> cxl_allocator =
             (*cxl_allocators)[0];
         if (!cxl_allocator) {
-            LOG(ERROR) << "No CXL allocator in preferred_segment";
+            LOG_ERROR << "No CXL allocator in preferred_segment";
             return tl::make_unexpected(ErrorCode::NO_AVAILABLE_HANDLE);
         }
 
@@ -811,7 +812,7 @@ class CxlAllocationStrategy : public AllocationStrategy {
         replicas.emplace_back(std::move(buffer), ReplicaStatus::PROCESSING,
                               replica_type);
 
-        VLOG(1) << "Successfully allocated " << replicas.size()
+        LOG_INFO << "Successfully allocated " << replicas.size()
                 << " CXL replica.";
         return replicas;
     }

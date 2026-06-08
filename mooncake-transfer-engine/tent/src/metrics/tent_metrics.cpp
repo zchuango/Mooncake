@@ -13,8 +13,9 @@
 // limitations under the License.
 
 #include "tent/metrics/tent_metrics.h"
+#include "log_macros.h"
 
-#include <glog/logging.h>
+
 #include <tent/thirdparty/nlohmann/json.h>
 #include <sstream>
 #include <iomanip>
@@ -83,7 +84,7 @@ Status TentMetrics::initialize(const MetricsConfig& config) {
         metric_report_thread_ = std::thread([this]() {
             while (metric_report_running_) {
                 std::string summary = getSummaryString();
-                LOG(INFO) << "TENT Metrics: " << summary;
+                LOG_INFO << "TENT Metrics: " << summary;
 
                 // Use condition variable for interruptible sleep
                 std::unique_lock<std::mutex> lock(metric_report_mutex_);
@@ -94,7 +95,7 @@ Status TentMetrics::initialize(const MetricsConfig& config) {
         });
     }
 
-    LOG(INFO)
+    LOG_INFO
         << "TENT metrics initialized successfully, HTTP server listening on "
         << config_.http_host << ":" << config_.http_port
         << ", runtime_enabled=" << (runtime_enabled_.load() ? "true" : "false");
@@ -167,7 +168,7 @@ void TentMetrics::shutdown() {
     histogram_boundaries_.clear();
 
     initialized_ = false;
-    LOG(INFO) << "TENT metrics shutdown complete";
+    LOG_INFO << "TENT metrics shutdown complete";
 }
 
 void TentMetrics::registerMetrics() {
@@ -274,7 +275,7 @@ std::string TentMetrics::getPrometheusMetrics() {
 
         return result;
     } catch (const std::exception& e) {
-        LOG(ERROR) << "Failed to serialize Prometheus metrics: " << e.what();
+        LOG_ERROR << "Failed to serialize Prometheus metrics: " << e.what();
         return "";
     }
 }
@@ -319,7 +320,7 @@ std::string TentMetrics::getJsonMetrics() {
 
         return root.dump(2);  // Pretty print with 2-space indent
     } catch (const std::exception& e) {
-        LOG(ERROR) << "Failed to serialize JSON metrics: " << e.what();
+        LOG_ERROR << "Failed to serialize JSON metrics: " << e.what();
         return R"({"error": "Failed to serialize metrics"})";
     }
 }
@@ -372,7 +373,7 @@ std::string TentMetrics::getSummaryString() {
 Status TentMetrics::initialize(const MetricsConfig& config) {
     config_ = config;
     initialized_ = true;
-    LOG(INFO)
+    LOG_INFO
         << "TENT metrics disabled at compile time (TENT_METRICS_ENABLED=0)";
     return Status::OK();
 }

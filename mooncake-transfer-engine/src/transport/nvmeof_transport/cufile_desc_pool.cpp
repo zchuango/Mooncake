@@ -13,8 +13,9 @@
 // limitations under the License.
 
 #include "transport/nvmeof_transport/cufile_desc_pool.h"
+#include "log_macros.h"
 
-#include <glog/logging.h>
+
 
 #include <cstddef>
 #include <mutex>
@@ -54,7 +55,7 @@ CUFileDescPool::~CUFileDescPool() {
 
 int CUFileDescPool::allocCUfileDesc(size_t batch_size) {
     if (batch_size > max_batch_size_) {
-        LOG(ERROR) << "Batch Size " << batch_size
+        LOG_ERROR << "Batch Size " << batch_size
                    << " Exceeds Max CUFile Batch Size " << max_batch_size_;
         return -1;
     }
@@ -71,7 +72,7 @@ int CUFileDescPool::allocCUfileDesc(size_t batch_size) {
     }
 
     if (idx < 0) {
-        LOG(ERROR) << "No Batch Descriptor Available";
+        LOG_ERROR << "No Batch Descriptor Available";
         return -1;
     }
 
@@ -128,13 +129,13 @@ int CUFileDescPool::allocCUfileDesc(size_t batch_size) {
 int CUFileDescPool::pushParams(int idx, const CUfileIOParams_t& io_params) {
     RWSpinlock::WriteGuard guard(mutex_);
     if (idx < 0 || idx >= (int)MAX_NR_DESC || descs_[idx] == nullptr) {
-        LOG(ERROR) << "Invalid descriptor index: " << idx;
+        LOG_ERROR << "Invalid descriptor index: " << idx;
         return -1;
     }
 
     auto* desc = descs_[idx];
     if (desc->io_params.size() >= desc->io_params.capacity()) {
-        LOG(ERROR) << "Descriptor " << idx << " is full";
+        LOG_ERROR << "Descriptor " << idx << " is full";
         return -1;
     }
 
@@ -145,13 +146,13 @@ int CUFileDescPool::pushParams(int idx, const CUfileIOParams_t& io_params) {
 int CUFileDescPool::submitBatch(int idx) {
     RWSpinlock::WriteGuard guard(mutex_);
     if (idx < 0 || idx >= (int)MAX_NR_DESC || descs_[idx] == nullptr) {
-        LOG(ERROR) << "Invalid descriptor index: " << idx;
+        LOG_ERROR << "Invalid descriptor index: " << idx;
         return -1;
     }
 
     auto* desc = descs_[idx];
     if (desc->io_params.empty()) {
-        LOG(WARNING) << "Submitting empty batch for descriptor " << idx;
+        LOG_WARNING << "Submitting empty batch for descriptor " << idx;
         return 0;
     }
 
@@ -165,7 +166,7 @@ int CUFileDescPool::submitBatch(int idx) {
 CUfileIOEvents_t CUFileDescPool::getTransferStatus(int idx, int slice_id) {
     RWSpinlock::WriteGuard guard(mutex_);
     if (idx < 0 || idx >= (int)MAX_NR_DESC || descs_[idx] == nullptr) {
-        LOG(ERROR) << "Invalid descriptor index: " << idx;
+        LOG_ERROR << "Invalid descriptor index: " << idx;
         CUfileIOEvents_t event;
         event.status = CUFILE_FAILED;
         event.ret = -1;
@@ -174,7 +175,7 @@ CUfileIOEvents_t CUFileDescPool::getTransferStatus(int idx, int slice_id) {
 
     auto* desc = descs_[idx];
     if (slice_id < 0 || slice_id >= (int)desc->io_params.size()) {
-        LOG(ERROR) << "Invalid slice_id " << slice_id << " for descriptor "
+        LOG_ERROR << "Invalid slice_id " << slice_id << " for descriptor "
                    << idx << " (size: " << desc->io_params.size() << ")";
         CUfileIOEvents_t event;
         event.status = CUFILE_FAILED;
@@ -192,7 +193,7 @@ CUfileIOEvents_t CUFileDescPool::getTransferStatus(int idx, int slice_id) {
 int CUFileDescPool::getSliceNum(int idx) {
     RWSpinlock::ReadGuard guard(mutex_);
     if (idx < 0 || idx >= (int)MAX_NR_DESC || descs_[idx] == nullptr) {
-        LOG(ERROR) << "Invalid descriptor index: " << idx;
+        LOG_ERROR << "Invalid descriptor index: " << idx;
         return -1;
     }
 
@@ -202,7 +203,7 @@ int CUFileDescPool::getSliceNum(int idx) {
 int CUFileDescPool::freeCUfileDesc(int idx) {
     RWSpinlock::WriteGuard guard(mutex_);
     if (idx < 0 || idx >= (int)MAX_NR_DESC || descs_[idx] == nullptr) {
-        LOG(ERROR) << "Invalid descriptor index: " << idx;
+        LOG_ERROR << "Invalid descriptor index: " << idx;
         return -1;
     }
 

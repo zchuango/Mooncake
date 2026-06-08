@@ -14,6 +14,7 @@
 // limitations under the License.
 
 #include <cassert>
+#include "log_macros.h"
 #include <iostream>
 #include <fstream>
 #include <unistd.h>
@@ -63,12 +64,12 @@ void HcclTransport::initiatorLoop(int deviceLogicId, int selfIdx) {
     aclrtStream stream;
     int ret = aclrtSetDevice(deviceLogicId);
     if (ret) {
-        LOG(ERROR) << "HcclTransport: aclrtSetDevice error, ret: " << ret;
+        LOG_ERROR << "HcclTransport: aclrtSetDevice error, ret: " << ret;
     }
 
     ret = aclrtCreateStream(&stream);
     if (ret) {
-        LOG(ERROR) << "HcclTransport: aclrtCreateStream error, ret: " << ret;
+        LOG_ERROR << "HcclTransport: aclrtCreateStream error, ret: " << ret;
     }
 
     int transfer_max_retry_cnt = getTransferMaxRetryCnt();
@@ -89,12 +90,12 @@ void HcclTransport::initiatorLoop(int deviceLogicId, int selfIdx) {
         allReqQueues_[selfIdx].pop();
         lock.unlock();
         if (slice_list.empty()) {
-            LOG(ERROR) << "HcclTransport: empty transfer request batch";
+            LOG_ERROR << "HcclTransport: empty transfer request batch";
         }
         auto segment_desc =
             metadata_->getSegmentDescByID(slice_list[0]->target_id);
         if (!segment_desc) {
-            LOG(ERROR) << "Unable to get target segment ID, please recheck, "
+            LOG_ERROR << "Unable to get target segment ID, please recheck, "
                           "segment ID: "
                        << slice_list[0]->target_id;
             for (auto slice : slice_list) {
@@ -124,7 +125,7 @@ void HcclTransport::initiatorLoop(int deviceLogicId, int selfIdx) {
                                      slice->opcode, slice->hccl.dest_addr,
                                      slice->length, slice->source_addr, stream);
                 if (ret) {
-                    LOG(ERROR)
+                    LOG_ERROR
                         << "HcclTransport: transportMemTask error, local "
                            "devicePhyId: "
                         << local_rank_info_.devicePhyId
@@ -141,7 +142,7 @@ void HcclTransport::initiatorLoop(int deviceLogicId, int selfIdx) {
             auto mid = std::chrono::high_resolution_clock::now();
             ret = transportMemAddOpFence(&remote_rank_info_, stream);
             if (ret) {
-                LOG(ERROR)
+                LOG_ERROR
                     << "transportMemAddOpFence failed, local devicePhyId: "
                     << local_rank_info_.devicePhyId
                     << ", remote devicePhyId: " << remote_rank_info_.devicePhyId
@@ -155,7 +156,7 @@ void HcclTransport::initiatorLoop(int deviceLogicId, int selfIdx) {
             ret =
                 aclrtSynchronizeStreamWithTimeout(stream, transfer_timeout_ms);
             if (ret) {
-                LOG(ERROR)
+                LOG_ERROR
                     << "aclrtSynchronizeStream failed, local devicePhyId: "
                     << local_rank_info_.devicePhyId
                     << ", remote devicePhyId: " << remote_rank_info_.devicePhyId
@@ -165,8 +166,8 @@ void HcclTransport::initiatorLoop(int deviceLogicId, int selfIdx) {
                 aclrtSynchronizeStream(stream);
 
                 if (loop < transfer_max_retry_cnt) {
-                    LOG(INFO) << "Hccl transport failed. Retry ...";
-                    LOG(INFO) << "Clear transport mem to trigger reconnect to "
+                    LOG_INFO << "Hccl transport failed. Retry ...";
+                    LOG_INFO << "Clear transport mem to trigger reconnect to "
                                  "the remote. Remote hostIp: "
                               << inet_ntoa(remote_rank_info_.hostIp)
                               << ", remote devicePhyId: "
@@ -178,7 +179,7 @@ void HcclTransport::initiatorLoop(int deviceLogicId, int selfIdx) {
                     }
                     continue;
                 }
-                LOG(ERROR) << "Hccl transport failed after "
+                LOG_ERROR << "Hccl transport failed after "
                            << transfer_max_retry_cnt << " retries.";
                 for (auto slice : slice_list) {
                     slice->markFailed();
@@ -200,7 +201,7 @@ void HcclTransport::initiatorLoop(int deviceLogicId, int selfIdx) {
                 auto duration_sync =
                     std::chrono::duration_cast<std::chrono::microseconds>(
                         stop - addOpfence);
-                LOG(INFO) << "pid: " << pid << ", target hostIp: "
+                LOG_INFO << "pid: " << pid << ", target hostIp: "
                           << segment_desc->rank_info.hostIp.c_str()
                           << ", local devicePhyId: "
                           << local_rank_info_.devicePhyId
@@ -235,12 +236,12 @@ void HcclTransport::initiatorLoop(int deviceLogicId, int selfIdx) {
 void HcclTransport::acceptLoop(int deviceLogicId) {
     int ret = aclrtSetDevice(deviceLogicId);
     if (ret) {
-        LOG(ERROR) << "HcclTransport: aclrtSetDevice failed ret: " << ret;
+        LOG_ERROR << "HcclTransport: aclrtSetDevice failed ret: " << ret;
     }
     while (running_) {
         ret = transportMemAccept(&local_rank_info_);
         if (ret) {
-            LOG(ERROR) << "HcclTransport: transportMemAccept failed ret: "
+            LOG_ERROR << "HcclTransport: transportMemAccept failed ret: "
                        << ret;
         }
     }
@@ -252,7 +253,7 @@ int HcclTransport::initPdThread() {
     int deviceLogicId;
     ret = aclrtGetDevice(&deviceLogicId);
     if (ret) {
-        LOG(ERROR) << "HcclTransport: aclrtGetDevice failed, ret: " << ret;
+        LOG_ERROR << "HcclTransport: aclrtGetDevice failed, ret: " << ret;
         return ret;
     }
 
@@ -263,7 +264,7 @@ int HcclTransport::initPdThread() {
             std::thread(&HcclTransport::acceptLoop, this, deviceLogicId);
     }
 
-    LOG(INFO) << "HcclTransport: initPdThread, pid: " << pid << ";" << "init "
+    LOG_INFO << "HcclTransport: initPdThread, pid: " << pid << ";" << "init "
               << THREAD_NUM
               << " initiator threads and accept threads, deviceLogicId: "
               << deviceLogicId;
@@ -276,14 +277,14 @@ int HcclTransport::getDevIdAndIpPortFromServerName(std::string &identifier,
                                                    int &port, int &npuId) {
     size_t firstColon = identifier.find(":");
     if (firstColon == std::string::npos) {
-        LOG(ERROR) << "HcclTransport: getDevIdAndIpPortFromServerName failed, "
+        LOG_ERROR << "HcclTransport: getDevIdAndIpPortFromServerName failed, "
                       "identifier is empty";
         return -1;
     }
 
     size_t secondColon = identifier.find(":", firstColon + 1);
     if (secondColon == std::string::npos) {
-        LOG(ERROR) << "HcclTransport: getDevIdAndIpPortFromServerName failed, "
+        LOG_ERROR << "HcclTransport: getDevIdAndIpPortFromServerName failed, "
                       "second colon missing";
         return -1;
     }
@@ -295,20 +296,20 @@ int HcclTransport::getDevIdAndIpPortFromServerName(std::string &identifier,
     try {
         port = std::stoi(portStr);
     } catch (const std::exception &e) {
-        LOG(ERROR) << "Invalid Port Number";
+        LOG_ERROR << "Invalid Port Number";
         return -1;
     }
 
     std::string npuStr = identifier.substr(secondColon + 1);
     if (npuStr.find("npu_") != 0) {
-        LOG(ERROR) << "Invalid npu number format - should start with 'npu_'";
+        LOG_ERROR << "Invalid npu number format - should start with 'npu_'";
         return -1;
     }
 
     try {
         npuId = std::stoi(npuStr.substr(4));
     } catch (const std::exception &e) {
-        LOG(ERROR) << "Invalid device_id ID";
+        LOG_ERROR << "Invalid device_id ID";
         return -1;
     }
 
@@ -320,14 +321,14 @@ int HcclTransport::rankInfoParse(int devicePhyId, std::string hostIp) {
     int deviceLogicId = 0;
     ret = aclrtGetDevice(&deviceLogicId);
     if (ret) {
-        LOG(ERROR) << "HcclTransport: aclrtGetDevice failed, ret: " << ret;
+        LOG_ERROR << "HcclTransport: aclrtGetDevice failed, ret: " << ret;
         return ret;
     }
 
     // Default configuration file path for HCCL
     std::ifstream fin("/etc/hccn.conf");
     if (!fin) {
-        LOG(ERROR) << "can't open conf 文件：/etc/hccn.conf";
+        LOG_ERROR << "can't open conf 文件：/etc/hccn.conf";
         return -1;
     }
 
@@ -357,7 +358,7 @@ int HcclTransport::rankInfoParse(int devicePhyId, std::string hostIp) {
 
                     if (inet_pton(AF_INET, hostIp.c_str(),
                                   &local_rank_info_.hostIp) != 1) {
-                        LOG(ERROR) << "HcclTransport: Invalid Host IP format: "
+                        LOG_ERROR << "HcclTransport: Invalid Host IP format: "
                                    << hostIp;
                         return -1;
                     }
@@ -371,12 +372,12 @@ int HcclTransport::rankInfoParse(int devicePhyId, std::string hostIp) {
                     local_rank_info_.pid = 0;
                     if (inet_pton(AF_INET, deviceIp.c_str(),
                                   &local_rank_info_.deviceIp) != 1) {
-                        LOG(ERROR)
+                        LOG_ERROR
                             << "HcclTransport: Invalid Device IP format: "
                             << deviceIp;
                         return -1;
                     }
-                    LOG(INFO)
+                    LOG_INFO
                         << "rankInfoParse Success, hostIp: " << hostIp
                         << ", rankId: " << local_rank_info_.rankId
                         << ", serverIdx: " << local_rank_info_.serverIdx
@@ -407,40 +408,40 @@ int HcclTransport::install(std::string &local_server_name,
     ret = getDevIdAndIpPortFromServerName(local_server_name, hostIp, port,
                                           devicePhyId);
     if (ret) {
-        LOG(ERROR)
+        LOG_ERROR
             << "HcclTransport: getDevIdAndIpPortFromServerName failed, ret: "
             << ret;
         return ret;
     }
 
     local_server_name_ = hostIp + ":" + std::to_string(port);
-    LOG(INFO)
+    LOG_INFO
         << "HcclTransport: begin to install transport, local devicePhyId: "
         << devicePhyId << ", local_server_name: " << local_server_name;
 
     // add to local_rank_info_
     ret = rankInfoParse(devicePhyId, hostIp);
     if (ret) {
-        LOG(ERROR) << "HcclTransport: rankInfoParse failed, ret: " << ret;
+        LOG_ERROR << "HcclTransport: rankInfoParse failed, ret: " << ret;
         return ret;
     }
 
     ret = initTransportMem(&local_rank_info_);
     if (ret) {
-        LOG(ERROR) << "HcclTransport: initTransportMem failed, ret: " << ret;
+        LOG_ERROR << "HcclTransport: initTransportMem failed, ret: " << ret;
         return ret;
     }
 
     ret = allocateLocalSegmentID();
     if (ret) {
-        LOG(ERROR) << "HcclTransport: cannot allocate local segment, ret: "
+        LOG_ERROR << "HcclTransport: cannot allocate local segment, ret: "
                    << ret;
         return ret;
     }
 
     ret = metadata_->updateLocalSegmentDesc();
     if (ret) {
-        LOG(ERROR) << "HcclTransport: cannot publish segments, "
+        LOG_ERROR << "HcclTransport: cannot publish segments, "
                       "check the availability of metadata storage, ret: "
                    << ret;
         return ret;
@@ -448,7 +449,7 @@ int HcclTransport::install(std::string &local_server_name,
 
     ret = initPdThread();
     if (ret) {
-        LOG(ERROR) << "HcclTransport: initPdThread failed, ret: " << ret;
+        LOG_ERROR << "HcclTransport: initPdThread failed, ret: " << ret;
         return ret;
     }
 
@@ -459,7 +460,7 @@ Status HcclTransport::submitTransfer(
     BatchID batch_id, const std::vector<TransferRequest> &entries) {
     auto &batch_desc = *((BatchDesc *)(batch_id));
     if (batch_desc.task_list.size() + entries.size() > batch_desc.batch_size) {
-        LOG(ERROR) << "HcclTransport: Exceed the limitation of current batch's "
+        LOG_ERROR << "HcclTransport: Exceed the limitation of current batch's "
                       "capacity";
         return Status::InvalidArgument(
             "HcclTransport: Exceed the limitation of capacity, batch id: " +
@@ -567,13 +568,13 @@ int HcclTransport::registerLocalMemory(void *addr, size_t length,
     int ret;
     ret = regLocalRmaMem(addr, (uint64_t)length);
     if (ret) {
-        LOG(ERROR) << "HcclTransport: reglocalRmaMem failed, ret: " << ret;
+        LOG_ERROR << "HcclTransport: reglocalRmaMem failed, ret: " << ret;
         return ret;
     }
 
     ret = metadata_->addLocalMemoryBuffer(buffer_desc, update_metadata);
     if (ret) {
-        LOG(ERROR) << "HcclTransport: addLocalMemoryBuffer failed, ret: "
+        LOG_ERROR << "HcclTransport: addLocalMemoryBuffer failed, ret: "
                    << ret;
         return ret;
     }

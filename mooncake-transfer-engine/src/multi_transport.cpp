@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include "multi_transport.h"
+#include "log_macros.h"
 #include <algorithm>
 #include <sstream>
 #include <string>
@@ -137,7 +138,7 @@ Status MultiTransport::submitTransfer(
     for (auto& entry : submit_tasks) {
         auto status = entry.first->submitTransferTask(entry.second);
         if (!status.ok()) {
-            // LOG(ERROR) << "Failed to submit transfer task to "
+            // LOG_ERROR << "Failed to submit transfer task to "
             //            << entry.first->getName();
             overall_status = status;
         }
@@ -179,7 +180,7 @@ Status MultiTransport::mp_submitTransfer(
     for (auto& entry : submit_tasks) {
         auto status = entry.first->submitTransferTask(entry.second);
         if (!status.ok()) {
-            // LOG(ERROR) << "Failed to submit transfer task to "
+            // LOG_ERROR << "Failed to submit transfer task to "
             //            << entry.first->getName();
             overall_status = status;
         }
@@ -208,7 +209,7 @@ Status MultiTransport::getTransferStatus(BatchID batch_id, size_t task_id,
             auto ts = slice->ts;
             if (ts > 0 && current_ts > ts &&
                 current_ts - ts > kPacketDeliveryTimeout) {
-                LOG(INFO) << "Slice timeout detected";
+                LOG_INFO << "Slice timeout detected";
                 return true;
             }
         }
@@ -382,7 +383,7 @@ Transport* MultiTransport::installTransport(const std::string& proto,
 #endif
 
     if (!transport) {
-        LOG(ERROR) << "Unsupported transport " << proto
+        LOG_ERROR << "Unsupported transport " << proto
                    << ", please rebuild Mooncake";
         return nullptr;
     }
@@ -416,7 +417,7 @@ Transport* MultiTransport::installTransport(const std::string& proto,
         }
 
         if (!nics.empty()) {
-            LOG(INFO) << "ACCL_USE_NICS is set to " << nics;
+            LOG_INFO << "ACCL_USE_NICS is set to " << nics;
             setenv("ACCL_USE_NICS", nics.c_str(), 1);
         }
     }

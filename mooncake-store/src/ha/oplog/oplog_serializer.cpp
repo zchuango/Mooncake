@@ -1,6 +1,7 @@
 #include "ha/oplog/oplog_serializer.h"
+#include "log_macros.h"
 
-#include <glog/logging.h>
+
 #include <sstream>
 
 #if __has_include(<jsoncpp/json/json.h>)
@@ -41,7 +42,7 @@ bool DeserializeOpLogEntry(const std::string& json_str, OpLogEntry& entry) {
 
     if (!reader->parse(json_str.data(), json_str.data() + json_str.size(),
                        &root, &errors)) {
-        LOG(ERROR) << "Failed to parse JSON: " << errors;
+        LOG_ERROR << "Failed to parse JSON: " << errors;
         return false;
     }
 
@@ -55,13 +56,13 @@ bool DeserializeOpLogEntry(const std::string& json_str, OpLogEntry& entry) {
         entry.checksum = root["checksum"].asUInt();
         entry.prefix_hash = root["prefix_hash"].asUInt();
     } catch (const std::exception& e) {
-        LOG(ERROR) << "Failed to deserialize OpLogEntry: " << e.what();
+        LOG_ERROR << "Failed to deserialize OpLogEntry: " << e.what();
         return false;
     }
 
     std::string size_reason;
     if (!OpLogManager::ValidateEntrySize(entry, &size_reason)) {
-        LOG(ERROR) << "OpLogSerializer: entry size rejected, sequence_id="
+        LOG_ERROR << "OpLogSerializer: entry size rejected, sequence_id="
                    << entry.sequence_id << ", key=" << entry.object_key
                    << ", reason=" << size_reason;
         return false;

@@ -17,7 +17,7 @@
 
 #include <cufile.h>
 #include <fcntl.h>
-#include <glog/logging.h>
+
 #include <unistd.h>
 
 #include <cassert>

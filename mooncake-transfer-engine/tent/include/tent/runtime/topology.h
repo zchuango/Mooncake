@@ -15,7 +15,7 @@
 #ifndef TOPOLOGY_H
 #define TOPOLOGY_H
 
-#include <glog/logging.h>
+
 #include <netdb.h>
 
 #include <atomic>

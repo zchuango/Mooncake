@@ -1,12 +1,12 @@
 #include "aligned_client_buffer.hpp"
 
-#include <glog/logging.h>
 #include <sys/mman.h>
 #include <cstdlib>
 #include <cstring>
 #include <string_view>
 
 #include "utils.h"
+#include "log_macros.h"
 
 namespace mooncake {
 namespace {
@@ -34,7 +34,7 @@ void* AllocateProtocolAlignedBuffer(size_t aligned_size,
         aligned_size, protocol,
         AlignedClientBufferAllocator::kDirectIOAlignment);
     if (!aligned_buffer) {
-        LOG(ERROR) << "AlignedClientBufferAllocator: failed to allocate "
+        LOG_ERROR << "AlignedClientBufferAllocator: failed to allocate "
                    << "protocol-aware memory of size " << aligned_size
                    << " for protocol " << protocol;
     }
@@ -45,7 +45,7 @@ void* AllocateHugepageAlignedBuffer(size_t aligned_size) {
     void* aligned_buffer = allocate_buffer_mmap_memory(
         aligned_size, AlignedClientBufferAllocator::kDirectIOAlignment);
     if (!aligned_buffer) {
-        LOG(ERROR) << "AlignedClientBufferAllocator: failed to allocate "
+        LOG_ERROR << "AlignedClientBufferAllocator: failed to allocate "
                    << "hugepage memory of size " << aligned_size;
     }
     return aligned_buffer;
@@ -57,7 +57,7 @@ void* AllocatePosixAlignedBuffer(size_t aligned_size) {
                              AlignedClientBufferAllocator::kDirectIOAlignment,
                              aligned_size);
     if (ret != 0) {
-        LOG(ERROR) << "AlignedClientBufferAllocator: posix_memalign failed "
+        LOG_ERROR << "AlignedClientBufferAllocator: posix_memalign failed "
                    << "with error " << ret << " (" << strerror(ret) << ")";
         return nullptr;
     }
@@ -81,7 +81,7 @@ std::shared_ptr<AlignedClientBufferAllocator>
 AlignedClientBufferAllocator::create(size_t size, const std::string& protocol,
                                      bool use_hugepage) {
     if (size == 0) {
-        LOG(ERROR)
+        LOG_ERROR
             << "AlignedClientBufferAllocator: size must be greater than 0";
         return nullptr;
     }
@@ -99,14 +99,14 @@ AlignedClientBufferAllocator::create(size_t size, const std::string& protocol,
 
     // Verify alignment
     if (reinterpret_cast<uintptr_t>(aligned_buffer) % kDirectIOAlignment != 0) {
-        LOG(ERROR) << "AlignedClientBufferAllocator: allocated buffer is not "
+        LOG_ERROR << "AlignedClientBufferAllocator: allocated buffer is not "
                    << "aligned to " << kDirectIOAlignment << " bytes";
         FreeAlignedBuffer(aligned_buffer, aligned_size, protocol,
                           use_mmap_hugepage);
         return nullptr;
     }
 
-    LOG(INFO) << "AlignedClientBufferAllocator: allocated " << aligned_size
+    LOG_INFO << "AlignedClientBufferAllocator: allocated " << aligned_size
               << " bytes at address " << aligned_buffer << " (aligned to "
               << kDirectIOAlignment << " bytes)";
 
@@ -134,13 +134,13 @@ AlignedClientBufferAllocator::~AlignedClientBufferAllocator() {
     // is set to true
     if (owns_memory_ && buffer_) {
         if (use_hugepage_) {
-            LOG(INFO)
+            LOG_INFO
                 << "AlignedClientBufferAllocator: freeing hugepage memory "
                 << "at " << buffer_ << " (" << allocated_size_ << " bytes)";
             FreeAlignedBuffer(buffer_, allocated_size_, protocol_,
                               use_hugepage_);
         } else {
-            LOG(INFO) << "AlignedClientBufferAllocator: freeing aligned memory "
+            LOG_INFO << "AlignedClientBufferAllocator: freeing aligned memory "
                       << "at " << buffer_ << " (" << allocated_size_
                       << " bytes)";
             FreeAlignedBuffer(buffer_, allocated_size_, protocol_,

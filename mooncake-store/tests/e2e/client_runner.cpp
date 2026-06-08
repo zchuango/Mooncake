@@ -1,5 +1,6 @@
 #include <gflags/gflags.h>
-#include <glog/logging.h>
+#include "log_macros.h"
+
 
 #include <string>
 #include <vector>
@@ -74,7 +75,7 @@ class ClientRunner {
         }
 
         client_ = client_opt.value();
-        LOG(INFO) << "Successfully created client";
+        LOG_INFO << "Successfully created client";
         return true;
     }
 
@@ -134,11 +135,11 @@ class ClientRunner {
         ErrorCode error_code = client_->Put(key, value);
 
         if (error_code != ErrorCode::OK) {
-            LOG(INFO) << TEST_PUT_FAILURE_STR << " key=" << key
+            LOG_INFO << TEST_PUT_FAILURE_STR << " key=" << key
                       << " value=" << value
                       << " error=" << toString(error_code);
         } else {
-            LOG(INFO) << TEST_PUT_SUCCESS_STR << " key=" << key
+            LOG_INFO << TEST_PUT_SUCCESS_STR << " key=" << key
                       << " value=" << value;
         }
     }
@@ -151,17 +152,17 @@ class ClientRunner {
         ErrorCode error_code = client_->Get(key, value);
 
         if (error_code != ErrorCode::OK) {
-            LOG(INFO) << TEST_GET_FAILURE_STR << " key=" << key
+            LOG_INFO << TEST_GET_FAILURE_STR << " key=" << key
                       << " error=" << toString(error_code);
             return;
         }
 
         if (!verify_kv(key, value)) {
-            LOG(ERROR) << TEST_ERROR_STR << " key=" << key
+            LOG_ERROR << TEST_ERROR_STR << " key=" << key
                        << " value=" << value;
             return;
         } else {
-            LOG(INFO) << TEST_GET_SUCCESS_STR << " key=" << key
+            LOG_INFO << TEST_GET_SUCCESS_STR << " key=" << key
                       << " value=" << value;
         }
     }
@@ -174,12 +175,12 @@ class ClientRunner {
         void* buffer;
         ErrorCode error_code = client_->Mount(kSegmentSize, buffer);
         if (error_code != ErrorCode::OK) {
-            LOG(INFO) << TEST_MOUNT_FAILURE_STR
+            LOG_INFO << TEST_MOUNT_FAILURE_STR
                       << " error=" << toString(error_code);
             return;
         } else {
             segments_.emplace_back(buffer);
-            LOG(INFO) << TEST_MOUNT_SUCCESS_STR << " buffer=" << buffer
+            LOG_INFO << TEST_MOUNT_SUCCESS_STR << " buffer=" << buffer
                       << " size=" << kSegmentSize;
         }
     }
@@ -192,11 +193,11 @@ class ClientRunner {
         void* base = segments_[index];
         ErrorCode error_code = client_->Unmount(base);
         if (error_code != ErrorCode::OK) {
-            LOG(INFO) << TEST_UNMOUNT_FAILURE_STR
+            LOG_INFO << TEST_UNMOUNT_FAILURE_STR
                       << " error=" << toString(error_code);
         } else {
             segments_.erase(segments_.begin() + index);
-            LOG(INFO) << TEST_UNMOUNT_SUCCESS_STR << " buffer=" << base;
+            LOG_INFO << TEST_UNMOUNT_SUCCESS_STR << " buffer=" << base;
         }
     }
 

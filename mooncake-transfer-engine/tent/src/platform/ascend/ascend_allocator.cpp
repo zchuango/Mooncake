@@ -17,7 +17,7 @@
 #include "tent/common/status.h"
 
 #include <numa.h>
-#include <glog/logging.h>
+
 #include <acl/acl.h>
 
 namespace mooncake {

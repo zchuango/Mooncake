@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include "tent/runtime/topology.h"
+#include "log_macros.h"
 
 #include <fstream>
 #include <iostream>
@@ -72,18 +73,18 @@ std::string Topology::toString() const {
 }
 
 void Topology::print() const {
-    LOG(INFO) << "NIC: ";
+    LOG_INFO << "NIC: ";
     int id = 0;
     for (auto& entry : nic_list_) {
-        LOG(INFO) << "[" << id << "] " << entry.name << " (type " << entry.type
+        LOG_INFO << "[" << id << "] " << entry.name << " (type " << entry.type
                   << ") " << entry.pci_bus_id << " on NUMA " << entry.numa_node;
         id++;
     }
 
-    LOG(INFO) << "MEMORY: ";
+    LOG_INFO << "MEMORY: ";
     id = 0;
     for (auto& entry : mem_list_) {
-        LOG(INFO) << "[" << id << "] " << entry.name << " (type " << entry.type
+        LOG_INFO << "[" << id << "] " << entry.name << " (type " << entry.type
                   << ") " << entry.pci_bus_id << " on NUMA " << entry.numa_node;
         for (size_t rank = 0; rank < DevicePriorityRanks; rank++) {
             std::stringstream ss;
@@ -92,7 +93,7 @@ void Topology::print() const {
             for (auto& id : entry.device_list[rank]) {
                 ss << nic_list_[id].name << " ";
             }
-            LOG(INFO) << ss.str();
+            LOG_INFO << ss.str();
         }
         id++;
     }

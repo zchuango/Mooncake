@@ -1,4 +1,5 @@
 #include "rpc_service.h"
+#include "log_macros.h"
 #include <csignal>
 
 #include <ylt/struct_json/json_reader.h>
@@ -232,7 +233,7 @@ bool MasterAdminServer::Start() {
 
     auto ec = http_server_.async_start();
     if (ec.hasResult()) {
-        MC_LOG(ERROR) << "Failed to start master admin server on port "
+        MC_LOG_ERROR << "Failed to start master admin server on port "
                    << http_port_;
         return false;
     }
@@ -263,14 +264,14 @@ bool MasterAdminServer::Start() {
                         << ", view_version="
                         << snapshot.leader_view->view_version;
                 }
-                MC_LOG(INFO) << log_stream.str();
+                MC_LOG_INFO << log_stream.str();
                 std::this_thread::sleep_for(
                     std::chrono::seconds(kMetricReportIntervalSeconds));
             }
         });
     }
 
-    LOG(INFO) << "Master admin server started on port " << http_server_.port();
+    LOG_INFO << "Master admin server started on port " << http_server_.port();
     return true;
 }
 
@@ -740,7 +741,7 @@ void MasterAdminServer::InitHttpServer() {
 
             body += "}}";
             if (results.size() != keys.size()) {
-                MC_LOG(WARNING)
+                MC_LOG_WARNING
                     << "BatchGetReplicaList size mismatch: keys=" << keys.size()
                     << " results=" << results.size();
             }
@@ -777,7 +778,7 @@ std::vector<tl::expected<bool, ErrorCode>> WrappedMasterService::BatchExistKey(
         if (!result[i].has_value()) {
             failure_count++;
             auto error = result[i].error();
-            MC_LOG(ERROR) << "BatchExistKey failed for key[" << i << "] '"
+            MC_LOG_ERROR << "BatchExistKey failed for key[" << i << "] '"
                        << keys[i] << "': " << toString(error);
         }
     }
@@ -816,7 +817,7 @@ WrappedMasterService::BatchQueryIp(const std::vector<UUID>& client_ids) {
             const auto& client_id = client_ids[i];
             if (result.value().find(client_id) == result.value().end()) {
                 failure_count++;
-                MC_VLOG(1) << "BatchQueryIp failed for client_id[" << i << "] '"
+                MC_LOG_INFO << "BatchQueryIp failed for client_id[" << i << "] '"
                         << client_id << "': not found in results";
             }
         }
@@ -854,7 +855,7 @@ WrappedMasterService::BatchReplicaClear(
     size_t failure_count = 0;
     if (!result.has_value()) {
         failure_count = total_keys;
-        MC_LOG(WARNING) << "BatchReplicaClear failed: "
+        MC_LOG_WARNING << "BatchReplicaClear failed: "
                      << toString(result.error());
     } else {
         const size_t cleared_count = result.value().size();
@@ -942,10 +943,10 @@ WrappedMasterService::BatchGetReplicaList(
             auto error = results[i].error();
             if (error == ErrorCode::OBJECT_NOT_FOUND ||
                 error == ErrorCode::REPLICA_IS_NOT_READY) {
-                MC_VLOG(1) << "BatchGetReplicaList failed for key[" << i << "] '"
+                MC_LOG_INFO << "BatchGetReplicaList failed for key[" << i << "] '"
                         << keys[i] << "': " << toString(error);
             } else {
-                MC_LOG(ERROR) << "BatchGetReplicaList failed for key[" << i
+                MC_LOG_ERROR << "BatchGetReplicaList failed for key[" << i
                            << "] '" << keys[i] << "': " << toString(error);
             }
         }
@@ -1046,13 +1047,13 @@ WrappedMasterService::BatchPutStart(const UUID& client_id,
     results.reserve(keys.size());
 
     if (keys.size() != slice_lengths.size()) {
-        MC_LOG(ERROR) << "BatchPutStart: keys.size()=" << keys.size()
+        MC_LOG_ERROR << "BatchPutStart: keys.size()=" << keys.size()
                    << " != slice_lengths.size()=" << slice_lengths.size();
         results.assign(keys.size(),
                        tl::make_unexpected(ErrorCode::INVALID_PARAMS));
     } else if (config.group_ids.has_value() &&
                config.group_ids->size() != keys.size()) {
-        MC_LOG(ERROR) << "BatchPutStart: group_ids.size()="
+        MC_LOG_ERROR << "BatchPutStart: group_ids.size()="
                    << config.group_ids->size()
                    << " != keys.size()=" << keys.size();
         results.assign(keys.size(),
@@ -1095,19 +1096,19 @@ WrappedMasterService::BatchPutStart(const UUID& client_id,
             failure_count++;
             auto error = results[i].error();
             if (error == ErrorCode::OBJECT_ALREADY_EXISTS) {
-                MC_VLOG(1) << "BatchPutStart failed for key[" << i << "] '"
+                MC_LOG_INFO << "BatchPutStart failed for key[" << i << "] '"
                         << keys[i] << "': " << toString(error);
             } else if (error == ErrorCode::NO_AVAILABLE_HANDLE) {
                 no_available_handle_count++;
             } else {
-                MC_LOG(ERROR) << "BatchPutStart failed for key[" << i << "] '"
+                MC_LOG_ERROR << "BatchPutStart failed for key[" << i << "] '"
                            << keys[i] << "': " << toString(error);
             }
         }
     }
 
     if (no_available_handle_count > 0) {
-        MC_LOG(WARNING) << "BatchPutStart failed for " << no_available_handle_count
+        MC_LOG_WARNING << "BatchPutStart failed for " << no_available_handle_count
                      << " keys" << PUT_NO_SPACE_HELPER_STR;
     }
 
@@ -1155,7 +1156,7 @@ std::vector<tl::expected<void, ErrorCode>> WrappedMasterService::BatchPutEnd(
         if (!results[i].has_value()) {
             failure_count++;
             auto error = results[i].error();
-            MC_LOG(ERROR) << "BatchPutEnd failed for key[" << i << "] '" << keys[i]
+            MC_LOG_ERROR << "BatchPutEnd failed for key[" << i << "] '" << keys[i]
                        << "': " << toString(error);
         }
     }
@@ -1199,7 +1200,7 @@ std::vector<tl::expected<void, ErrorCode>> WrappedMasterService::BatchPutRevoke(
         if (!results[i].has_value()) {
             failure_count++;
             auto error = results[i].error();
-            MC_LOG(ERROR) << "BatchPutRevoke failed for key[" << i << "] '"
+            MC_LOG_ERROR << "BatchPutRevoke failed for key[" << i << "] '"
                        << keys[i] << "': " << toString(error);
         }
     }
@@ -1282,7 +1283,7 @@ WrappedMasterService::BatchUpsertStart(
         if (!results[i].has_value()) {
             failure_count++;
             auto error = results[i].error();
-            MC_LOG(ERROR) << "BatchUpsertStart failed for key[" << i << "] '"
+            MC_LOG_ERROR << "BatchUpsertStart failed for key[" << i << "] '"
                        << keys[i] << "': " << toString(error);
         }
     }
@@ -1315,7 +1316,7 @@ std::vector<tl::expected<void, ErrorCode>> WrappedMasterService::BatchUpsertEnd(
         if (!results[i].has_value()) {
             failure_count++;
             auto error = results[i].error();
-            MC_LOG(ERROR) << "BatchUpsertEnd failed for key[" << i << "] '"
+            MC_LOG_ERROR << "BatchUpsertEnd failed for key[" << i << "] '"
                        << keys[i] << "': " << toString(error);
         }
     }
@@ -1349,7 +1350,7 @@ WrappedMasterService::BatchUpsertRevoke(const UUID& client_id,
         if (!results[i].has_value()) {
             failure_count++;
             auto error = results[i].error();
-            MC_LOG(ERROR) << "BatchUpsertRevoke failed for key[" << i << "] '"
+            MC_LOG_ERROR << "BatchUpsertRevoke failed for key[" << i << "] '"
                        << keys[i] << "': " << toString(error);
         }
     }
@@ -1679,7 +1680,7 @@ WrappedMasterService::BatchEvictDiskReplica(
     for (size_t i = 0; i < results.size(); ++i) {
         if (!results[i].has_value()) {
             failure_count++;
-            MC_LOG(WARNING) << "BatchEvictDiskReplica failed for key[" << i
+            MC_LOG_WARNING << "BatchEvictDiskReplica failed for key[" << i
                          << "] '" << keys[i]
                          << "': " << toString(results[i].error());
         }
@@ -1815,7 +1816,7 @@ tl::expected<void, ErrorCode> WrappedMasterService::MountLocalDiskSegment(
     const UUID& client_id, bool enable_offloading) {
     ScopedVLogTimer timer(1, "MountLocalDiskSegment");
     timer.LogRequest("action=mount_local_disk_segment");
-    LOG(INFO) << "Mount local disk segment with client id is : " << client_id
+    LOG_INFO << "Mount local disk segment with client id is : " << client_id
               << ", enable offloading is: " << enable_offloading;
     auto result =
         master_service_.MountLocalDiskSegment(client_id, enable_offloading);

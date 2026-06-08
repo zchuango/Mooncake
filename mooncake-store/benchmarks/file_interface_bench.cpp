@@ -13,7 +13,7 @@
 #include <limits>
 #include <fcntl.h>
 #include <unistd.h>
-#include <glog/logging.h>
+
 
 #include "file_interface.h"
 

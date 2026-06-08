@@ -64,6 +64,7 @@
  */
 
 #include <algorithm>
+#include "log_macros.h"
 #include <atomic>
 #include <cerrno>
 #include <chrono>
@@ -91,7 +92,7 @@
 #endif
 
 #include "gflags/gflags.h"
-#include "glog/logging.h"
+
 #include "storage_backend.h"
 
 namespace fs = std::filesystem;
@@ -206,7 +207,7 @@ CacheMode StringToCacheMode(const std::string& str) {
     if (str == "direct") return CacheMode::DIRECT;
     if (str == "fadvise_dontneed") return CacheMode::FADVISE_DONTNEED;
     if (str == "drop_cache_external") return CacheMode::DROP_CACHE_EXTERNAL;
-    LOG(WARNING) << "Unknown cache mode: " << str << ", using buffered";
+    LOG_WARNING << "Unknown cache mode: " << str << ", using buffered";
     return CacheMode::BUFFERED;
 }
 
@@ -234,7 +235,7 @@ AccessPattern StringToAccessPattern(const std::string& str) {
     if (str == "sequential") return AccessPattern::SEQUENTIAL;
     if (str == "uniform") return AccessPattern::UNIFORM;
     if (str == "zipf") return AccessPattern::ZIPF;
-    LOG(WARNING) << "Unknown pattern: " << str << ", using uniform";
+    LOG_WARNING << "Unknown pattern: " << str << ", using uniform";
     return AccessPattern::UNIFORM;
 }
 
@@ -260,7 +261,7 @@ BackendType StringToBackendType(const std::string& str) {
     if (str == "offset_allocator") return BackendType::OFFSET_ALLOCATOR;
     if (str == "bucket") return BackendType::BUCKET;
     if (str == "file_per_key") return BackendType::FILE_PER_KEY;
-    LOG(FATAL) << "Unknown backend type: " << str;
+    LOG_FATAL << "Unknown backend type: " << str;
     return BackendType::OFFSET_ALLOCATOR;
 }
 
@@ -571,7 +572,7 @@ class BufferPool {
             void* ptr = nullptr;
             int ret = posix_memalign(&ptr, kAlignment, buffer_size_);
             if (ret != 0 || ptr == nullptr) {
-                LOG(FATAL) << "Failed to allocate aligned buffer of size "
+                LOG_FATAL << "Failed to allocate aligned buffer of size "
                            << buffer_size_;
             }
             buf = AlignedBuffer(static_cast<char*>(ptr));
@@ -844,7 +845,7 @@ void CleanupStoragePath(const std::string& path) {
         std::error_code ec;
         fs::remove_all(path, ec);
         if (ec) {
-            LOG(WARNING) << "Failed to cleanup " << path << ": "
+            LOG_WARNING << "Failed to cleanup " << path << ": "
                          << ec.message();
         }
     }
@@ -966,10 +967,10 @@ void PrintHeader(const std::string& test_name, BackendType backend_type,
 bool CheckVerification(size_t checksum_failures, const std::string& context) {
     if (checksum_failures > 0) {
         g_total_checksum_failures.fetch_add(checksum_failures);
-        LOG(ERROR) << "*** DATA CORRUPTION DETECTED: " << checksum_failures
+        LOG_ERROR << "*** DATA CORRUPTION DETECTED: " << checksum_failures
                    << " checksum failures in " << context << " ***";
         if (FLAGS_fail_fast) {
-            LOG(FATAL) << "Exiting due to --fail_fast=true";
+            LOG_FATAL << "Exiting due to --fail_fast=true";
         }
         return false;
     }
@@ -998,7 +999,7 @@ double BenchInit(BackendType type, const std::string& storage_path,
 
     auto backend = CreateBackend(type, storage_path, capacity);
     if (!backend) {
-        LOG(ERROR) << "Failed to create backend";
+        LOG_ERROR << "Failed to create backend";
         return -1;
     }
 
@@ -1010,7 +1011,7 @@ double BenchInit(BackendType type, const std::string& storage_path,
         std::chrono::duration<double, std::milli>(end - start).count();
 
     if (!result) {
-        LOG(ERROR) << "Init failed with error: "
+        LOG_ERROR << "Init failed with error: "
                    << static_cast<int>(result.error());
         return -1;
     }
@@ -1034,13 +1035,13 @@ void BenchBatchOffload(BackendType type, const std::string& storage_path,
 
     auto backend = CreateBackend(type, storage_path, capacity);
     if (!backend) {
-        LOG(ERROR) << "Failed to create backend";
+        LOG_ERROR << "Failed to create backend";
         return;
     }
 
     auto init_result = backend->Init();
     if (!init_result) {
-        LOG(ERROR) << "Init failed";
+        LOG_ERROR << "Init failed";
         return;
     }
 
@@ -1186,7 +1187,7 @@ void BenchBatchOffload(BackendType type, const std::string& storage_path,
                                           base_key + i)) {
                         verification_failures++;
                         if (FLAGS_fail_fast) {
-                            LOG(FATAL)
+                            LOG_FATAL
                                 << "Write verification failed for key "
                                 << (base_key + i)
                                 << " (data was written but readback differs)";
@@ -1195,13 +1196,13 @@ void BenchBatchOffload(BackendType type, const std::string& storage_path,
                 }
                 verified_keys += batch_size;
             } else {
-                LOG(WARNING)
+                LOG_WARNING
                     << "Readback failed for batch starting at key " << base_key;
             }
         }
 
         if (verification_failures > 0) {
-            LOG(ERROR) << "Write verification: " << verification_failures
+            LOG_ERROR << "Write verification: " << verification_failures
                        << " checksum failures out of " << verified_keys
                        << " verified";
         } else {
@@ -1227,13 +1228,13 @@ void BenchBatchLoad(BackendType type, const std::string& storage_path,
 
     auto backend = CreateBackend(type, storage_path, capacity);
     if (!backend) {
-        LOG(ERROR) << "Failed to create backend";
+        LOG_ERROR << "Failed to create backend";
         return;
     }
 
     auto init_result = backend->Init();
     if (!init_result) {
-        LOG(ERROR) << "Init failed";
+        LOG_ERROR << "Init failed";
         return;
     }
 
@@ -1286,7 +1287,7 @@ void BenchBatchLoad(BackendType type, const std::string& storage_path,
             });
 
         if (!result) {
-            LOG(ERROR) << "Pre-population failed at key " << key_idx;
+            LOG_ERROR << "Pre-population failed at key " << key_idx;
             return;
         }
     }
@@ -1371,7 +1372,7 @@ void BenchBatchLoad(BackendType type, const std::string& storage_path,
                         if (!gen.VerifyBuffer(read_buffers.Get(i), value_size,
                                               batch.key_indices[i])) {
                             thread_stats.RecordChecksumFailure();
-                            LOG(ERROR) << "Checksum mismatch for key "
+                            LOG_ERROR << "Checksum mismatch for key "
                                        << batch.key_indices[i];
                             if (FLAGS_fail_fast) {
                                 CheckVerification(1, "BatchLoad");
@@ -1388,7 +1389,7 @@ void BenchBatchLoad(BackendType type, const std::string& storage_path,
                 for (size_t i = 0; i < batch_size; ++i) {
                     if (!gen.VerifyBuffer(read_buffers.Get(i), value_size,
                                           batch.key_indices[i])) {
-                        LOG(ERROR) << "Warmup verification failed for key "
+                        LOG_ERROR << "Warmup verification failed for key "
                                    << batch.key_indices[i];
                         if (FLAGS_fail_fast) {
                             CheckVerification(1, "BatchLoad warmup");
@@ -1422,13 +1423,13 @@ void BenchConcurrentLoad(BackendType type, const std::string& storage_path,
 
     auto backend = CreateBackend(type, storage_path, capacity);
     if (!backend) {
-        LOG(ERROR) << "Failed to create backend";
+        LOG_ERROR << "Failed to create backend";
         return;
     }
 
     auto init_result = backend->Init();
     if (!init_result) {
-        LOG(ERROR) << "Init failed";
+        LOG_ERROR << "Init failed";
         return;
     }
 
@@ -1590,13 +1591,13 @@ void BenchIsExist(BackendType type, const std::string& storage_path,
 
     auto backend = CreateBackend(type, storage_path, capacity);
     if (!backend) {
-        LOG(ERROR) << "Failed to create backend";
+        LOG_ERROR << "Failed to create backend";
         return;
     }
 
     auto init_result = backend->Init();
     if (!init_result) {
-        LOG(ERROR) << "Init failed";
+        LOG_ERROR << "Init failed";
         return;
     }
 
@@ -1668,7 +1669,7 @@ void BenchIsExist(BackendType type, const std::string& storage_path,
         // Verify it actually existed
         if (!result || !result.value()) {
             hit_thread_stats.RecordError();
-            LOG(WARNING) << "Expected key " << i << " to exist but it didn't";
+            LOG_WARNING << "Expected key " << i << " to exist but it didn't";
         }
     }
 
@@ -1694,7 +1695,7 @@ void BenchIsExist(BackendType type, const std::string& storage_path,
         // Verify it actually didn't exist
         if (result && result.value()) {
             miss_thread_stats.RecordError();
-            LOG(WARNING) << "Expected key " << i << " to NOT exist but it did";
+            LOG_WARNING << "Expected key " << i << " to NOT exist but it did";
         }
     }
 
@@ -1736,13 +1737,13 @@ void BenchMixedRW(BackendType type, const std::string& storage_path,
 
     auto backend = CreateBackend(type, storage_path, capacity);
     if (!backend) {
-        LOG(ERROR) << "Failed to create backend";
+        LOG_ERROR << "Failed to create backend";
         return;
     }
 
     auto init_result = backend->Init();
     if (!init_result) {
-        LOG(ERROR) << "Init failed";
+        LOG_ERROR << "Init failed";
         return;
     }
 
@@ -1954,13 +1955,13 @@ void BenchChurn(BackendType type, const std::string& storage_path,
 
     auto backend = CreateBackend(type, storage_path, capacity);
     if (!backend) {
-        LOG(ERROR) << "Failed to create backend";
+        LOG_ERROR << "Failed to create backend";
         return;
     }
 
     auto init_result = backend->Init();
     if (!init_result) {
-        LOG(ERROR) << "Init failed";
+        LOG_ERROR << "Init failed";
         return;
     }
 
@@ -2155,7 +2156,7 @@ void BenchRestart(BackendType type, const std::string& storage_path,
     {
         auto backend = CreateBackend(type, storage_path, capacity);
         if (!backend) {
-            LOG(ERROR) << "Failed to create backend";
+            LOG_ERROR << "Failed to create backend";
             return;
         }
         backend->Init();
@@ -2190,7 +2191,7 @@ void BenchRestart(BackendType type, const std::string& storage_path,
 
     auto backend = CreateBackend(type, storage_path, capacity);
     if (!backend) {
-        LOG(ERROR) << "Failed to create backend on restart";
+        LOG_ERROR << "Failed to create backend on restart";
         return;
     }
 
@@ -2242,7 +2243,7 @@ void BenchRestart(BackendType type, const std::string& storage_path,
         // Verify data
         if (result && FLAGS_verify) {
             if (!gen.VerifyBuffer(buffers.Get(0), value_size, i)) {
-                LOG(ERROR) << "Post-restart verification failed for key " << i;
+                LOG_ERROR << "Post-restart verification failed for key " << i;
             }
         }
     }
@@ -2365,9 +2366,7 @@ void RunAllBenchmarks(const std::string& storage_path, size_t capacity) {
 // Main
 // ============================================================================
 
-int main(int argc, char** argv) {
-    google::InitGoogleLogging("StorageBackendBench");
-    FLAGS_logtostderr = true;
+int main(int argc, char** argv) { 
     gflags::ParseCommandLineFlags(&argc, &argv, true);
 
     std::string storage_path = FLAGS_storage_path;
@@ -2451,9 +2450,7 @@ int main(int argc, char** argv) {
     // Cleanup
     if (!FLAGS_skip_cleanup) {
         CleanupStoragePath(storage_path);
-    }
-
-    google::ShutdownGoogleLogging();
+    } 
 
     // Return non-zero if corruption detected
     return total_failures > 0 ? 1 : 0;

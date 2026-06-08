@@ -1,4 +1,5 @@
 #include "ha/leadership/backends/k8s/k8s_leader_coordinator.h"
+#include "log_macros.h"
 
 #include <algorithm>
 #include <atomic>
@@ -8,7 +9,7 @@
 #include <string>
 #include <thread>
 
-#include <glog/logging.h>
+
 #include <ylt/util/tl/expected.hpp>
 
 namespace mooncake {
@@ -424,7 +425,7 @@ K8sLeaderCoordinator::ParseConnstring(const std::string& connstring) {
     // Format: "namespace/lease-name" or just "lease-name" (default namespace).
     // Exactly zero or one '/' is allowed.
     if (connstring.empty()) {
-        LOG(ERROR) << "K8s HA connstring is empty";
+        LOG_ERROR << "K8s HA connstring is empty";
         return tl::make_unexpected(ErrorCode::INVALID_PARAMS);
     }
 
@@ -436,14 +437,14 @@ K8sLeaderCoordinator::ParseConnstring(const std::string& connstring) {
 
     // Reject multiple slashes (e.g. "a/b/c")
     if (connstring.find('/', first_slash + 1) != std::string::npos) {
-        LOG(ERROR) << "K8s HA connstring contains multiple '/': " << connstring;
+        LOG_ERROR << "K8s HA connstring contains multiple '/': " << connstring;
         return tl::make_unexpected(ErrorCode::INVALID_PARAMS);
     }
 
     auto ns = connstring.substr(0, first_slash);
     auto name = connstring.substr(first_slash + 1);
     if (ns.empty() || name.empty()) {
-        LOG(ERROR) << "K8s HA connstring has empty namespace or lease name: "
+        LOG_ERROR << "K8s HA connstring has empty namespace or lease name: "
                    << connstring;
         return tl::make_unexpected(ErrorCode::INVALID_PARAMS);
     }

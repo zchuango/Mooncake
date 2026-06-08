@@ -15,7 +15,15 @@
  */
 
 #include "trace.h"
+#include "log_config.h"
+#include "logger.h"
+#include "log_macros.h"
+
+#include <atomic>
 #include <cstring>
+#include <unistd.h>
+
+#include <spdlog/common.h>
 
 namespace mooncake {
 
@@ -75,3 +83,66 @@ uint64_t Trace::FnvHash(const std::string &str)
 }
 
 }  // namespace mooncake
+
+namespace mooncake::logging {
+
+uint64_t NewTraceId()
+{
+    static std::atomic<uint64_t> counter{1};
+    const uint64_t pid = static_cast<uint64_t>(getpid()) & 0xffff;
+    return (pid << 48) ^ counter.fetch_add(1, std::memory_order_relaxed);
+}
+
+uint64_t CurrentTraceId()
+{
+    const auto trace_id = Trace::Instance().GetTraceID();
+    if (trace_id.empty()) {
+        return 0;
+    }
+    try {
+        return std::stoull(trace_id);
+    } catch (...) {
+        return Trace::Instance().GetTraceHash();
+    }
+}
+
+bool ShouldLog(spdlog::level::level_enum level)
+{
+    switch (level) {
+        case spdlog::level::debug:
+            return mooncake::ShouldLog(LogLevel::kDebug);
+        case spdlog::level::warn:
+            return mooncake::ShouldLog(LogLevel::kWarning);
+        case spdlog::level::err:
+            return mooncake::ShouldLog(LogLevel::kError);
+        case spdlog::level::critical:
+            return mooncake::ShouldLog(LogLevel::kFatal);
+        case spdlog::level::info:
+        default:
+            return mooncake::ShouldLog(LogLevel::kInfo);
+    }
+}
+
+void ApplyMooncakeLogEnableToGlog()
+{
+    if (!Logger::Instance().IsInitialized()) {
+        Logger::Instance().Init(LogConfig());
+    }
+}
+
+ScopedTraceId::ScopedTraceId(uint64_t trace_id)
+    : previous_trace_id_(Trace::Instance().GetTraceID())
+{
+    Trace::Instance().SetTraceID(trace_id);
+}
+
+ScopedTraceId::~ScopedTraceId()
+{
+    if (previous_trace_id_.empty()) {
+        Trace::Instance().Invalidate();
+    } else {
+        Trace::Instance().SetTraceID(previous_trace_id_);
+    }
+}
+
+}  // namespace mooncake::logging

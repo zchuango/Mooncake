@@ -13,8 +13,9 @@
 // limitations under the License.
 
 #include "tent/metastore/redis.h"
+#include "log_macros.h"
 
-#include <glog/logging.h>
+
 #include <memory>
 
 namespace mooncake {
@@ -161,7 +162,7 @@ Status RedisMetaStore::handleRedisReply(redisReply *reply,
         std::string message = "Redis " + operation + " failed: operation error";
 
         // Log detailed error for debugging (ensure logs are properly secured)
-        LOG(WARNING) << "Redis operation failed - " << operation << ": "
+        LOG_WARNING << "Redis operation failed - " << operation << ": "
                      << error_msg;
 
         return Status::MetadataError(message + LOC_MARK);

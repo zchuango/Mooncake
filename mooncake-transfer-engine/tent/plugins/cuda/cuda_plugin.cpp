@@ -13,12 +13,13 @@
 // limitations under the License.
 
 #include "tent/device_plugin.h"
+#include "log_macros.h"
 
 #include <cuda_runtime.h>
 #include <string.h>
 #include <stdio.h>
 #include <string>
-#include <glog/logging.h>
+
 
 struct cuda_plugin_ctx_t {
     // reserved
@@ -28,7 +29,7 @@ struct cuda_plugin_ctx_t {
     do {                                                                       \
         auto err = call;                                                       \
         if (err != cudaSuccess) {                                              \
-            LOG(ERROR) << std::string(#call) + ": " + cudaGetErrorString(err); \
+            LOG_ERROR << std::string(#call) + ": " + cudaGetErrorString(err); \
             return -1;                                                         \
         }                                                                      \
     } while (0)

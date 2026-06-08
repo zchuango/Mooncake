@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include "tent/transport/ascend/ascend_direct_transport.h"
+#include "log_macros.h"
 
 #include <algorithm>
 #include <cstddef>
@@ -23,7 +24,7 @@
 #include <string>
 
 #include <bits/stdint-uintn.h>
-#include <glog/logging.h>
+
 
 #include "tent/common/status.h"
 #include "tent/runtime/slab.h"
@@ -61,11 +62,11 @@ uint16_t findListenPort(int32_t dev_id) {
             try {
                 dev_id = std::stoi(device_list[dev_id]);
             } catch (const std::exception &e) {
-                LOG(WARNING) << "ASCEND_RT_VISIBLE_DEVICES is not valid, value:"
+                LOG_WARNING << "ASCEND_RT_VISIBLE_DEVICES is not valid, value:"
                              << rt_visible_devices;
             }
         } else {
-            LOG(WARNING) << "Device id is " << dev_id
+            LOG_WARNING << "Device id is " << dev_id
                          << ", ASCEND_RT_VISIBLE_DEVICES is "
                          << rt_visible_devices << ", which is unexpected.";
         }
@@ -73,7 +74,7 @@ uint16_t findListenPort(int32_t dev_id) {
     static std::random_device rand_gen;
     const int min_port = BASE_PORT + dev_id * 1000;
     const int max_port = BASE_PORT + (dev_id + 1) * 1000;
-    LOG(INFO) << "Find available between " << min_port << " and " << max_port;
+    LOG_INFO << "Find available between " << min_port << " and " << max_port;
     const int max_attempts = 500;
     std::uniform_int_distribution<> rand_dist(min_port, max_port);
     int sockfd;
@@ -142,13 +143,13 @@ Status AscendDirectTransport::install(std::string &local_segment_name,
 Status AscendDirectTransport::initHixl(const std::shared_ptr<Config> &conf) {
     auto ret = aclrtGetDevice(&device_logic_id_);
     if (ret) {
-        LOG(ERROR) << "Call aclrtGetDevice failed, ret: " << ret;
+        LOG_ERROR << "Call aclrtGetDevice failed, ret: " << ret;
         return Status::InvalidArgument(
             "Get device id failed, device id may be not set.");
     }
     ret = aclrtGetCurrentContext(&rt_context_);
     if (ret) {
-        LOG(ERROR) << "Call aclrtGetCurrentContext failed, ret: " << ret;
+        LOG_ERROR << "Call aclrtGetCurrentContext failed, ret: " << ret;
         return Status::InternalError("Get rt context failed.");
     }
     auto host_ip = local_segment_name_;
@@ -170,23 +171,23 @@ Status AscendDirectTransport::initHixl(const std::shared_ptr<Config> &conf) {
     std::string rdma_tc = conf->get("transports/ascend_direct/rdma_tc", "");
     if (!rdma_tc.empty()) {
         options["RdmaTrafficClass"] = rdma_tc.c_str();
-        LOG(INFO) << "Set RdmaTrafficClass to:" << rdma_tc;
+        LOG_INFO << "Set RdmaTrafficClass to:" << rdma_tc;
     } else {
         auto rdma_tc_env = std::getenv("HCCL_RDMA_TC");
         if (rdma_tc_env) {
             options["RdmaTrafficClass"] = rdma_tc_env;
-            LOG(INFO) << "Set RdmaTrafficClass to:" << rdma_tc_env;
+            LOG_INFO << "Set RdmaTrafficClass to:" << rdma_tc_env;
         }
     }
     std::string rdma_sl = conf->get("transports/ascend_direct/rdma_sl", "");
     if (!rdma_sl.empty()) {
         options["RdmaServiceLevel"] = rdma_sl.c_str();
-        LOG(INFO) << "Set RdmaServiceLevel to:" << rdma_sl;
+        LOG_INFO << "Set RdmaServiceLevel to:" << rdma_sl;
     } else {
         auto rdma_sl_env = std::getenv("HCCL_RDMA_SL");
         if (rdma_sl_env) {
             options["RdmaServiceLevel"] = rdma_sl_env;
-            LOG(INFO) << "Set RdmaServiceLevel to:" << rdma_sl_env;
+            LOG_INFO << "Set RdmaServiceLevel to:" << rdma_sl_env;
         }
     }
     std::string auto_connect =
@@ -194,27 +195,27 @@ Status AscendDirectTransport::initHixl(const std::shared_ptr<Config> &conf) {
     if (!auto_connect.empty()) {
         auto_connect_ = (auto_connect == "1");
         options["AutoConnect"] = auto_connect_ ? "1" : "0";
-        LOG(INFO) << "Set AutoConnect to: " << auto_connect;
+        LOG_INFO << "Set AutoConnect to: " << auto_connect;
     } else {
         options["AutoConnect"] = "1";
         auto_connect_ = true;
-        LOG(INFO) << "Set AutoConnect to default: 1";
+        LOG_INFO << "Set AutoConnect to default: 1";
     }
     auto status =
         hixl_->Initialize(hixl::AscendString(hixl_name.c_str()), options);
     if (status != hixl::SUCCESS) {
-        LOG(ERROR) << "Failed to initialize AdxlEngine, status: " << status
+        LOG_ERROR << "Failed to initialize AdxlEngine, status: " << status
                    << ", errmsg: " << aclGetRecentErrMsg();
         return Status::InternalError("Initialize hixl failed.");
     }
     ret = aclrtCreateStreamWithConfig(
         &stream_, 0, ACL_STREAM_FAST_LAUNCH | ACL_STREAM_FAST_SYNC);
     if (ret != ACL_ERROR_NONE) {
-        LOG(ERROR) << "AscendDirectTransport: cannot create stream, ret: "
+        LOG_ERROR << "AscendDirectTransport: cannot create stream, ret: "
                    << ret;
         return Status::InternalError("Create stream failed.");
     }
-    LOG(INFO) << "Success to initialize hixl engine:" << hixl_name
+    LOG_INFO << "Success to initialize hixl engine:" << hixl_name
               << " with device_id:" << device_logic_id_;
     return Status::OK();
 }
@@ -280,25 +281,25 @@ Status AscendDirectTransport::checkAndConnect(const std::string &remote_hixl) {
     std::lock_guard<std::mutex> lock(connection_mutex_);
     auto it = connected_segments_.find(remote_hixl);
     if (it != connected_segments_.end()) {
-        VLOG(1) << "Already connected to target hixl engine: " << remote_hixl;
+        LOG_INFO << "Already connected to target hixl engine: " << remote_hixl;
     } else {
         auto status = hixl_->Connect(
             remote_hixl.c_str(), static_cast<int32_t>(connect_timeout_ / 1000));
         if (status == hixl::TIMEOUT) {
-            LOG(ERROR) << "Connect timeout to: " << remote_hixl
+            LOG_ERROR << "Connect timeout to: " << remote_hixl
                        << ", you can increase the timeout duration to reduce "
                           "the failure rate by configuring "
                           "the ASCEND_CONNECT_TIMEOUT environment variable"
                        << ", errmsg: " << aclGetRecentErrMsg();
             return Status::InternalError("Connect to target timed out.");
         } else if (status != hixl::SUCCESS) {
-            LOG(ERROR) << "Failed to connect to target: " << remote_hixl
+            LOG_ERROR << "Failed to connect to target: " << remote_hixl
                        << ", status: " << status
                        << ", errmsg: " << aclGetRecentErrMsg();
             return Status::InternalError("Connect to target failed.");
         }
         connected_segments_.emplace(remote_hixl);
-        LOG(INFO) << "Connected to segment: " << remote_hixl;
+        LOG_INFO << "Connected to segment: " << remote_hixl;
     }
     return Status::OK();
 }
@@ -318,10 +319,10 @@ void AscendDirectTransport::startTransfer(
     auto &detail = std::get<MemorySegmentDesc>(desc->detail);
     auto remote_hixl = detail.device_attrs["hixl_name"];
     if (remote_hixl == local_hixl_name_) {
-        VLOG(1) << "Target is local.";
+        LOG_INFO << "Target is local.";
         auto start = std::chrono::steady_clock::now();
         localCopy(opcode, tasks);
-        LOG(INFO) << "Local copy cost: "
+        LOG_INFO << "Local copy cost: "
                   << std::chrono::duration_cast<std::chrono::microseconds>(
                          std::chrono::steady_clock::now() - start)
                          .count()
@@ -354,7 +355,7 @@ void AscendDirectTransport::startTransfer(
     hixl_ret = hixl_->TransferAsync(hixl::AscendString(remote_hixl.c_str()), op,
                                     op_descs, hixl::TransferArgs(), req_handle);
     if (hixl_ret != hixl::SUCCESS) {
-        LOG(ERROR) << "Failed to transfer to: " << remote_hixl
+        LOG_ERROR << "Failed to transfer to: " << remote_hixl
                    << ", status: " << hixl_ret
                    << ", errmsg: " << aclGetRecentErrMsg();
         // disconnect to remote when transfer fail
@@ -421,7 +422,7 @@ Status AscendDirectTransport::getTransferStatus(SubBatchRef batch, int task_id,
             task.transferred_bytes = task.request.length;
             task.status_word = TransferStatusEnum::COMPLETED;
         } else if (xfer_status == hixl::TransferStatus::FAILED) {
-            LOG(ERROR) << "Get transfer status failed, ret: "
+            LOG_ERROR << "Get transfer status failed, ret: "
                        << hixlTransferStatusToString(xfer_status)
                        << ", errmsg: " << aclGetRecentErrMsg();
             disconnect(task.remote_hixl, 10);
@@ -438,7 +439,7 @@ void AscendDirectTransport::disconnect(const std::string &remote_hixl,
     if (auto_connect_) {
         auto status = hixl_->Disconnect(remote_hixl.c_str(), timeout_in_millis);
         if (status != hixl::SUCCESS) {
-            LOG(ERROR) << "Failed to disconnect to: " << remote_hixl
+            LOG_ERROR << "Failed to disconnect to: " << remote_hixl
                        << ", status: " << status
                        << ", errmsg: " << aclGetRecentErrMsg();
         } else {
@@ -450,13 +451,13 @@ void AscendDirectTransport::disconnect(const std::string &remote_hixl,
     std::lock_guard<std::mutex> lock(connection_mutex_);
     auto it = connected_segments_.find(remote_hixl);
     if (it == connected_segments_.end()) {
-        LOG(INFO) << "Target hixl engine: " << remote_hixl
+        LOG_INFO << "Target hixl engine: " << remote_hixl
                   << " is not connected.";
     } else {
         auto status = hixl_->Disconnect(remote_hixl.c_str(), timeout_in_millis);
         connected_segments_.erase(remote_hixl);
         if (status != hixl::SUCCESS) {
-            LOG(ERROR) << "Failed to disconnect to: " << remote_hixl
+            LOG_ERROR << "Failed to disconnect to: " << remote_hixl
                        << ", status: " << status
                        << ", errmsg: " << aclGetRecentErrMsg();
         }
@@ -480,7 +481,7 @@ Status AscendDirectTransport::addMemoryBuffer(BufferDesc &desc,
         auto ret = aclrtPointerGetAttributes(
             reinterpret_cast<void *>(desc.addr), &attributes);
         if (ret != ACL_SUCCESS) {
-            LOG(ERROR) << "aclrtPointerGetAttributes failed, ret:" << ret;
+            LOG_ERROR << "aclrtPointerGetAttributes failed, ret:" << ret;
             return Status::InvalidArgument("Invalid location of addr:" +
                                            std::to_string(desc.addr));
         }
@@ -490,19 +491,19 @@ Status AscendDirectTransport::addMemoryBuffer(BufferDesc &desc,
             mem_type = hixl::MEM_DEVICE;
         }
     } else {
-        LOG(ERROR) << "location:" << desc.location << " is not supported.";
+        LOG_ERROR << "location:" << desc.location << " is not supported.";
         return Status::InvalidArgument("Invalid location of addr:" +
                                        std::to_string(desc.addr));
     }
     hixl::MemHandle mem_handle;
     auto hixl_ret = hixl_->RegisterMem(mem_desc, mem_type, mem_handle);
     if (hixl_ret != hixl::SUCCESS) {
-        LOG(ERROR) << "hixl_ret:" << hixl_ret
+        LOG_ERROR << "hixl_ret:" << hixl_ret
                    << ", errmsg: " << aclGetRecentErrMsg();
         return Status::InternalError("Register failed for addr:" +
                                      std::to_string(desc.addr));
     }
-    LOG(INFO) << "AscendDirectTransport register mem addr:" << desc.addr
+    LOG_INFO << "AscendDirectTransport register mem addr:" << desc.addr
               << ", length:" << desc.length << ", location:" << desc.location
               << ", mem type:"
               << (mem_type == hixl::MEM_HOST ? "host" : "device");
@@ -540,7 +541,7 @@ void AscendDirectTransport::localCopy(Request::OpCode opcode,
     auto ret =
         aclrtPointerGetAttributes(first_task->request.source, &attributes);
     if (ret != ACL_ERROR_NONE) {
-        LOG(ERROR) << "aclrtPointerGetAttributes failed, ret:" << ret;
+        LOG_ERROR << "aclrtPointerGetAttributes failed, ret:" << ret;
         for (auto &task : tasks) {
             task->status_word = TransferStatusEnum::FAILED;
         }
@@ -549,7 +550,7 @@ void AscendDirectTransport::localCopy(Request::OpCode opcode,
     aclrtPtrAttributes dst_attributes;
     ret = aclrtPointerGetAttributes(remote_ptr, &dst_attributes);
     if (ret != ACL_ERROR_NONE) {
-        LOG(ERROR) << "aclrtPointerGetAttributes failed, ret:" << ret;
+        LOG_ERROR << "aclrtPointerGetAttributes failed, ret:" << ret;
         for (auto &task : tasks) {
             task->status_word = TransferStatusEnum::FAILED;
         }
@@ -557,7 +558,7 @@ void AscendDirectTransport::localCopy(Request::OpCode opcode,
     }
     if (attributes.location.type != ACL_MEM_LOCATION_TYPE_HOST &&
         attributes.location.type != ACL_MEM_LOCATION_TYPE_DEVICE) {
-        LOG(ERROR) << "location of local addr is not supported.";
+        LOG_ERROR << "location of local addr is not supported.";
         for (auto &task : tasks) {
             task->status_word = TransferStatusEnum::FAILED;
         }
@@ -565,7 +566,7 @@ void AscendDirectTransport::localCopy(Request::OpCode opcode,
     }
     if (dst_attributes.location.type != ACL_MEM_LOCATION_TYPE_HOST &&
         dst_attributes.location.type != ACL_MEM_LOCATION_TYPE_DEVICE) {
-        LOG(ERROR) << "location of remote addr is not supported.";
+        LOG_ERROR << "location of remote addr is not supported.";
         for (auto &task : tasks) {
             task->status_word = TransferStatusEnum::FAILED;
         }
@@ -645,7 +646,7 @@ aclError AscendDirectTransport::copyWithBatch(
     }
     if (ret != ACL_ERROR_RT_FEATURE_NOT_SUPPORT) {
         if (ret == ACL_ERROR_NONE) {
-            VLOG(1) << "Copy with aclrtMemcpyBatch suc.";
+            LOG_INFO << "Copy with aclrtMemcpyBatch suc.";
             for (size_t i = 0; i < batch_num; i++) {
                 auto &task = tasks[task_index + i];
                 task->status_word = TransferStatusEnum::COMPLETED;
@@ -674,10 +675,10 @@ void AscendDirectTransport::copyWithSync(Request::OpCode opcode,
             ret = aclrtMemcpy(local_ptr, len, remote_ptr, len, kind);
         }
         if (ret == ACL_ERROR_NONE) {
-            VLOG(1) << "Copy with aclrtMemcpy suc.";
+            LOG_INFO << "Copy with aclrtMemcpy suc.";
             task->status_word = TransferStatusEnum::COMPLETED;
         } else {
-            LOG(ERROR) << "aclrtMemcpy failed, ret:" << ret;
+            LOG_ERROR << "aclrtMemcpy failed, ret:" << ret;
             task->status_word = TransferStatusEnum::FAILED;
         }
     }
@@ -699,7 +700,7 @@ void AscendDirectTransport::copyWithAsync(Request::OpCode opcode,
                                    stream_);
         }
         if (ret != ACL_ERROR_NONE) {
-            LOG(ERROR) << "aclrtMemcpyAsync failed, ret:" << ret;
+            LOG_ERROR << "aclrtMemcpyAsync failed, ret:" << ret;
             task->status_word = TransferStatusEnum::FAILED;
             continue;
         }
@@ -708,12 +709,12 @@ void AscendDirectTransport::copyWithAsync(Request::OpCode opcode,
     ret = aclrtSynchronizeStreamWithTimeout(
         stream_, static_cast<int32_t>(transfer_timeout_));
     if (ret == ACL_ERROR_NONE) {
-        VLOG(1) << "Copy with aclrtMemcpyAsync suc.";
+        LOG_INFO << "Copy with aclrtMemcpyAsync suc.";
         for (auto &task : async_list) {
             task->status_word = TransferStatusEnum::COMPLETED;
         }
     } else {
-        LOG(ERROR) << "Memory copy failed.";
+        LOG_ERROR << "Memory copy failed.";
         (void)aclrtStreamAbort(stream_);
         for (auto &task : async_list) {
             task->status_word = TransferStatusEnum::FAILED;

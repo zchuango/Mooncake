@@ -13,7 +13,8 @@
 // limitations under the License.
 
 #include <gflags/gflags.h>
-#include <glog/logging.h>
+#include "log_macros.h"
+
 #include <signal.h>
 #include <sys/time.h>
 
@@ -51,7 +52,7 @@
 
 static void checkCudaError(cudaError_t result, const char *message) {
     if (result != cudaSuccess) {
-        LOG(ERROR) << message << " (Error code: " << result << " - "
+        LOG_ERROR << message << " (Error code: " << result << " - "
                    << cudaGetErrorString(result) << ")" << std::endl;
         exit(EXIT_FAILURE);
     }
@@ -107,7 +108,7 @@ static void *allocateMemoryPool(size_t size, int buffer_id,
             gpu_id = FLAGS_gpu_id;
         }
         void *d_buf;
-        LOG(INFO) << "Allocating memory on GPU " << gpu_id;
+        LOG_INFO << "Allocating memory on GPU " << gpu_id;
         checkCudaError(cudaSetDevice(gpu_id), "Failed to set device");
 #ifdef USE_MNNVL
         d_buf = allocateFabricMemory(size);
@@ -141,7 +142,7 @@ static void freeMemoryPool(void *addr, size_t size) {
                attributes.type == cudaMemoryTypeUnregistered) {
         numa_free(addr, size);
     } else {
-        LOG(ERROR) << "Unknown memory type, " << addr << " " << attributes.type;
+        LOG_ERROR << "Unknown memory type, " << addr << " " << attributes.type;
     }
 #else
     numa_free(addr, size);
@@ -161,11 +162,11 @@ const static std::unordered_map<std::string, uint64_t> RATE_UNIT_MP = {
 
 static inline std::string calculateRate(uint64_t data_bytes, double duration) {
     if (std::fabs(duration) < 1e-10) {
-        LOG(ERROR) << "Invalid args: duration shouldn't be 0";
+        LOG_ERROR << "Invalid args: duration shouldn't be 0";
         return "";
     }
     if (!RATE_UNIT_MP.count(FLAGS_report_unit)) {
-        LOG(WARNING) << "Invalid flag: report_unit only support "
+        LOG_WARNING << "Invalid flag: report_unit only support "
                         "GB|GiB|Gb|MB|MiB|Mb|KB|KiB|Kb, not support "
                      << FLAGS_report_unit
                      << " . Now use GB(default) as report_unit";
@@ -200,7 +201,7 @@ Status submitRequestSync(TransferEngine *engine, SegmentID handle,
     }
 
     s = engine->submitTransfer(batch_id, requests);
-    if (!s.ok()) LOG(ERROR) << s.ToString();
+    if (!s.ok()) LOG_ERROR << s.ToString();
     LOG_ASSERT(s.ok());
     for (int task_id = 0; task_id < FLAGS_batch_size; ++task_id) {
         bool completed = false;
@@ -211,7 +212,7 @@ Status submitRequestSync(TransferEngine *engine, SegmentID handle,
             if (status.s == TransferStatusEnum::COMPLETED)
                 completed = true;
             else if (status.s == TransferStatusEnum::FAILED) {
-                LOG(INFO) << "FAILED";
+                LOG_INFO << "FAILED";
                 completed = true;
                 exit(EXIT_FAILURE);
             }
@@ -298,12 +299,12 @@ void checkData(int thread_id, void *addr, uint8_t seed) {
         cudaStreamSynchronize(s);
         cudaStreamDestroy(s);
         if (memcmp(user_buf.data(), ref_buf.data(), FLAGS_block_size) != 0) {
-            LOG(ERROR) << "Detect data integrity problem";
+            LOG_ERROR << "Detect data integrity problem";
             exit(EXIT_FAILURE);
         }
 #else
         if (memcmp(local_addr, ref_buf.data(), FLAGS_block_size) != 0) {
-            LOG(ERROR) << "Detect data integrity problem";
+            LOG_ERROR << "Detect data integrity problem";
             exit(EXIT_FAILURE);
         }
 #endif
@@ -315,7 +316,7 @@ Status initiatorWorker(TransferEngine *engine, SegmentID segment_id,
     bindToSocket(thread_id % NR_SOCKETS);
     auto segment_desc = engine->getMetadata()->getSegmentDescByID(segment_id);
     if (!segment_desc) {
-        LOG(ERROR) << "Unable to get target segment ID, please recheck";
+        LOG_ERROR << "Unable to get target segment ID, please recheck";
         exit(EXIT_FAILURE);
     }
     uint64_t remote_base =
@@ -341,7 +342,7 @@ Status initiatorWorker(TransferEngine *engine, SegmentID segment_id,
         }
         batch_count++;
     }
-    LOG(INFO) << "Worker " << thread_id << " stopped! Data validation passed";
+    LOG_INFO << "Worker " << thread_id << " stopped! Data validation passed";
     total_batch_count.fetch_add(batch_count);
     return Status::OK();
 }
@@ -418,7 +419,7 @@ int initiator() {
         } else if (FLAGS_protocol == "hip") {
             xport = engine->installTransport("hip", nullptr);
         } else {
-            LOG(ERROR) << "Unsupported protocol";
+            LOG_ERROR << "Unsupported protocol";
         }
         LOG_ASSERT(xport);
     }
@@ -428,18 +429,18 @@ int initiator() {
     defined(USE_MACA) || defined(USE_HYGON) || defined(USE_COREX)
     if (FLAGS_use_vram) {
         int gpu_num;
-        LOG(INFO) << "VRAM is used";
+        LOG_INFO << "VRAM is used";
         if (FLAGS_gpu_id == -1 && cudaGetDeviceCount(&gpu_num) == cudaSuccess) {
-            LOG(INFO) << "GPU ID is not specified, found " << gpu_num
+            LOG_INFO << "GPU ID is not specified, found " << gpu_num
                       << " GPUs to use";
             buffer_num = gpu_num;
         } else {
-            LOG(INFO) << "GPU ID is specified or failed to get GPU count, use "
+            LOG_INFO << "GPU ID is specified or failed to get GPU count, use "
                       << FLAGS_gpu_id << " GPU";
             buffer_num = 1;
         }
     } else {
-        LOG(INFO) << "DRAM is used, numa node num: " << NR_SOCKETS;
+        LOG_INFO << "DRAM is used, numa node num: " << NR_SOCKETS;
     }
     addr.resize(buffer_num);
     for (int i = 0; i < buffer_num; ++i) {
@@ -463,7 +464,7 @@ int initiator() {
         LOG_ASSERT(!rc);
     }
 #else
-    LOG(INFO) << "DRAM is used, numa node num: " << NR_SOCKETS;
+    LOG_INFO << "DRAM is used, numa node num: " << NR_SOCKETS;
     addr.resize(buffer_num);
     for (int i = 0; i < buffer_num; ++i) {
         addr[i] = allocateMemoryPool(FLAGS_buffer_size, i, false);
@@ -494,7 +495,7 @@ int initiator() {
                     (stop_tv.tv_usec - start_tv.tv_usec) / 1000000.0;
     auto batch_count = total_batch_count.load();
 
-    LOG(INFO) << "Test completed: duration " << std::fixed
+    LOG_INFO << "Test completed: duration " << std::fixed
               << std::setprecision(2) << duration << ", batch count "
               << batch_count << ", throughput "
               << calculateRate(
@@ -512,7 +513,7 @@ int initiator() {
 volatile bool target_running = true;
 
 void signalHandler(int signum) {
-    LOG(INFO) << "Received signal " << signum << ", stopping target server...";
+    LOG_INFO << "Received signal " << signum << ", stopping target server...";
     target_running = false;
 }
 
@@ -543,7 +544,7 @@ int target() {
         } else if (FLAGS_protocol == "hip") {
             engine->installTransport("hip", nullptr);
         } else {
-            LOG(ERROR) << "Unsupported protocol";
+            LOG_ERROR << "Unsupported protocol";
         }
     }
 
@@ -552,18 +553,18 @@ int target() {
     defined(USE_MACA) || defined(USE_HYGON) || defined(USE_COREX)
     if (FLAGS_use_vram) {
         int gpu_num;
-        LOG(INFO) << "VRAM is used";
+        LOG_INFO << "VRAM is used";
         if (FLAGS_gpu_id == -1 && cudaGetDeviceCount(&gpu_num) == cudaSuccess) {
-            LOG(INFO) << "GPU ID is not specified, found " << gpu_num
+            LOG_INFO << "GPU ID is not specified, found " << gpu_num
                       << " GPUs to use";
             buffer_num = gpu_num;
         } else {
-            LOG(INFO) << "GPU ID is specified or failed to get GPU count, use "
+            LOG_INFO << "GPU ID is specified or failed to get GPU count, use "
                       << FLAGS_gpu_id << " GPU";
             buffer_num = 1;
         }
     } else {
-        LOG(INFO) << "DRAM is used, numa node num: " << NR_SOCKETS;
+        LOG_INFO << "DRAM is used, numa node num: " << NR_SOCKETS;
     }
     addr.resize(buffer_num);
     for (int i = 0; i < buffer_num; ++i) {
@@ -587,7 +588,7 @@ int target() {
         LOG_ASSERT(!rc);
     }
 #else
-    LOG(INFO) << "DRAM is used, numa node num: " << NR_SOCKETS;
+    LOG_INFO << "DRAM is used, numa node num: " << NR_SOCKETS;
     addr.resize(buffer_num);
     for (int i = 0; i < buffer_num; ++i) {
         addr[i] = allocateMemoryPool(FLAGS_buffer_size, i, false);
@@ -610,7 +611,7 @@ void check_total_buffer_size() {
     uint64_t require_size = FLAGS_block_size * FLAGS_batch_size * FLAGS_threads;
     if (FLAGS_buffer_size < require_size) {
         FLAGS_buffer_size = require_size;
-        LOG(WARNING) << "Invalid flag: buffer size is smaller than "
+        LOG_WARNING << "Invalid flag: buffer size is smaller than "
                         "require_size, adjust to "
                      << require_size;
     }
@@ -625,6 +626,6 @@ int main(int argc, char **argv) {
     else if (FLAGS_mode == "target")
         return target();
 
-    LOG(ERROR) << "Unsupported mode: must be 'initiator' or 'target'";
+    LOG_ERROR << "Unsupported mode: must be 'initiator' or 'target'";
     exit(EXIT_FAILURE);
 }

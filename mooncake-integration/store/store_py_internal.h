@@ -499,11 +499,11 @@ bool validate_uniform_shard_request(const std::vector<int64_t> &shape,
                                     const std::string &error_context) {
     if (split_dim < 0 || split_dim >= static_cast<int>(shape.size()) ||
         shard_count <= 0) {
-        LOG(ERROR) << error_context << ": invalid shard parameters";
+        LOG_ERROR << error_context << ": invalid shard parameters";
         return false;
     }
     if (!is_uniform_shardable_dim(shape[split_dim], shard_count)) {
-        LOG(ERROR) << error_context << ": only uniform sharding is supported";
+        LOG_ERROR << error_context << ": only uniform sharding is supported";
         return false;
     }
     return true;
@@ -600,7 +600,7 @@ std::optional<LayoutAxisKind> parse_layout_axis_kind(const std::string &kind) {
     if (normalized == "DP") return LayoutAxisKind::DP;
     if (normalized == "EP") return LayoutAxisKind::EP;
     if (normalized == "PP") return LayoutAxisKind::PP;
-    LOG(ERROR) << "Unsupported parallel axis kind: " << kind;
+    LOG_ERROR << "Unsupported parallel axis kind: " << kind;
     return std::nullopt;
 }
 
@@ -671,7 +671,7 @@ resolve_parallelism_write_request(const py::object &parallelism_obj,
                                   const std::string &error_context) {
     if (!writer_partition_obj.is_none()) {
         if (!parallelism_obj.is_none()) {
-            LOG(ERROR)
+            LOG_ERROR
                 << error_context
                 << ": writer_partition cannot be combined with parallelism";
             return std::nullopt;
@@ -728,14 +728,14 @@ std::optional<py::list> validate_batch_request_list(
     const py::object &request_list_obj, size_t expected_size,
     const std::string &error_context, const char *request_name) {
     if (!py::isinstance<py::list>(request_list_obj)) {
-        LOG(ERROR) << error_context << ": " << request_name
+        LOG_ERROR << error_context << ": " << request_name
                    << " must be a list or None";
         return std::nullopt;
     }
 
     py::list request_list = py::cast<py::list>(request_list_obj);
     if (request_list.size() != expected_size) {
-        LOG(ERROR) << error_context << ": keys and " << request_name
+        LOG_ERROR << error_context << ": keys and " << request_name
                    << " must have the same length";
         return std::nullopt;
     }
@@ -855,7 +855,7 @@ std::optional<ParallelAxisSpec> parse_parallel_axis_spec(
     const py::handle &obj) {
     if (!py::hasattr(obj, "kind") || !py::hasattr(obj, "rank") ||
         !py::hasattr(obj, "size")) {
-        LOG(ERROR) << "ParallelAxis must provide kind, rank, and size";
+        LOG_ERROR << "ParallelAxis must provide kind, rank, and size";
         return std::nullopt;
     }
 
@@ -881,7 +881,7 @@ std::optional<TensorParallelismSpec> parse_tensor_parallelism_spec(
         return std::nullopt;
     }
     if (!py::hasattr(obj, "axes")) {
-        LOG(ERROR) << "TensorParallelism must provide axes";
+        LOG_ERROR << "TensorParallelism must provide axes";
         return std::nullopt;
     }
 
@@ -904,7 +904,7 @@ std::optional<ReadTargetMode> parse_read_target_mode(const py::object &obj) {
     if (mode == "AS_STORED") return ReadTargetMode::AS_STORED;
     if (mode == "SHARD") return ReadTargetMode::SHARD;
     if (mode == "FULL") return ReadTargetMode::FULL;
-    LOG(ERROR) << "Unsupported ReadTarget mode: " << mode;
+    LOG_ERROR << "Unsupported ReadTarget mode: " << mode;
     return std::nullopt;
 }
 
@@ -915,7 +915,7 @@ std::optional<WriterPartitionSpec> parse_writer_partition_spec(
     }
     if (!py::hasattr(obj, "rank") || !py::hasattr(obj, "size") ||
         !py::hasattr(obj, "split_dim")) {
-        LOG(ERROR)
+        LOG_ERROR
             << error_context
             << ": writer_partition must provide rank, size, and split_dim";
         return std::nullopt;
@@ -927,7 +927,7 @@ std::optional<WriterPartitionSpec> parse_writer_partition_spec(
     writer.split_dim = py::cast<int>(obj.attr("split_dim"));
     if (writer.size <= 0 || writer.rank < 0 || writer.rank >= writer.size ||
         writer.split_dim < 0) {
-        LOG(ERROR) << error_context << ": invalid writer partition";
+        LOG_ERROR << error_context << ": invalid writer partition";
         return std::nullopt;
     }
     return writer;
@@ -937,12 +937,12 @@ bool is_valid_writer_partition(const WriterPartitionSpec &writer,
                                const std::vector<int64_t> &shape,
                                const std::string &error_context) {
     if (writer.size <= 0 || writer.rank < 0 || writer.rank >= writer.size) {
-        LOG(ERROR) << error_context << ": invalid writer rank/size";
+        LOG_ERROR << error_context << ": invalid writer rank/size";
         return false;
     }
     if (writer.split_dim < 0 ||
         writer.split_dim >= static_cast<int>(shape.size())) {
-        LOG(ERROR) << error_context << ": split_dim out of range";
+        LOG_ERROR << error_context << ": split_dim out of range";
         return false;
     }
     if (!validate_uniform_shard_request(shape, writer.split_dim, writer.size,
@@ -962,14 +962,14 @@ std::optional<WriterShardTensorInfo> build_writer_shard_tensor_info(
 
     TensorDtype dtype_enum = get_tensor_dtype(tensor.attr("dtype"));
     if (dtype_enum == TensorDtype::UNKNOWN) {
-        LOG(ERROR) << error_context << ": unsupported tensor dtype";
+        LOG_ERROR << error_context << ": unsupported tensor dtype";
         return std::nullopt;
     }
 
     auto shard_tensor = materialize_shard_tensor(tensor, writer.split_dim,
                                                  writer.rank, writer.size);
     if (!shard_tensor.has_value()) {
-        LOG(ERROR) << error_context << ": failed to materialize writer shard";
+        LOG_ERROR << error_context << ": failed to materialize writer shard";
         return std::nullopt;
     }
 
@@ -981,7 +981,7 @@ std::optional<WriterShardTensorInfo> build_writer_shard_tensor_info(
         tensor, *shard_tensor, dtype_enum, writer,
         writer_info.info.tensor_size);
     if (!writer_info.info.valid()) {
-        LOG(ERROR) << error_context << ": invalid writer shard tensor info";
+        LOG_ERROR << error_context << ": invalid writer shard tensor info";
         return std::nullopt;
     }
     writer_info.manifest =
@@ -994,7 +994,7 @@ std::optional<ReadTargetSpec> parse_read_target_spec(const py::object &obj) {
         return ReadTargetSpec{};
     }
     if (!py::hasattr(obj, "mode") || !py::hasattr(obj, "parallelism")) {
-        LOG(ERROR) << "ReadTarget must provide mode and parallelism";
+        LOG_ERROR << "ReadTarget must provide mode and parallelism";
         return std::nullopt;
     }
 
@@ -1082,7 +1082,7 @@ std::optional<TensorParallelismSpec> validate_parallelism_spec(
         if (allow_empty) {
             return parallelism;
         }
-        LOG(ERROR) << error_context << ": parallelism is required";
+        LOG_ERROR << error_context << ": parallelism is required";
         return std::nullopt;
     }
 
@@ -1090,11 +1090,11 @@ std::optional<TensorParallelismSpec> validate_parallelism_spec(
         if (allow_empty) {
             return parallelism;
         }
-        LOG(ERROR) << error_context << ": parallelism axes cannot be empty";
+        LOG_ERROR << error_context << ": parallelism axes cannot be empty";
         return std::nullopt;
     }
     if (parallelism->axes.size() > kMaxLayoutAxes) {
-        LOG(ERROR) << error_context
+        LOG_ERROR << error_context
                    << ": axis count exceeds max supported axes";
         return std::nullopt;
     }
@@ -1103,17 +1103,17 @@ std::optional<TensorParallelismSpec> validate_parallelism_spec(
     for (const auto &axis : parallelism->axes) {
         auto kind = parse_layout_axis_kind(axis.kind);
         if (!kind.has_value()) {
-            LOG(ERROR) << error_context << ": unsupported axis kind "
+            LOG_ERROR << error_context << ": unsupported axis kind "
                        << axis.kind;
             return std::nullopt;
         }
         if (axis.size <= 0 || axis.rank < 0 || axis.rank >= axis.size) {
-            LOG(ERROR) << error_context << ": invalid rank/size for axis "
+            LOG_ERROR << error_context << ": invalid rank/size for axis "
                        << axis.kind;
             return std::nullopt;
         }
         if (!seen_kinds.insert(static_cast<int>(*kind)).second) {
-            LOG(ERROR) << error_context
+            LOG_ERROR << error_context
                        << ": duplicate axis kinds are not supported";
             return std::nullopt;
         }
@@ -1121,26 +1121,26 @@ std::optional<TensorParallelismSpec> validate_parallelism_spec(
         switch (*kind) {
             case LayoutAxisKind::TP:
                 if (!axis.split_dim.has_value()) {
-                    LOG(ERROR)
+                    LOG_ERROR
                         << error_context << ": TP axis requires split_dim";
                     return std::nullopt;
                 }
                 break;
             case LayoutAxisKind::DP:
                 if (axis.split_dim.has_value()) {
-                    LOG(ERROR) << error_context
+                    LOG_ERROR << error_context
                                << ": DP axis must not provide split_dim";
                     return std::nullopt;
                 }
                 break;
             case LayoutAxisKind::EP:
                 if (!axis.expert_id.has_value()) {
-                    LOG(ERROR)
+                    LOG_ERROR
                         << error_context << ": EP axis requires expert_id";
                     return std::nullopt;
                 }
                 if (axis.split_dim.has_value()) {
-                    LOG(ERROR)
+                    LOG_ERROR
                         << error_context
                         << ": EP axis must not provide split_dim in this phase";
                     return std::nullopt;
@@ -1148,18 +1148,18 @@ std::optional<TensorParallelismSpec> validate_parallelism_spec(
                 break;
             case LayoutAxisKind::PP:
                 if (!axis.stage_id.has_value()) {
-                    LOG(ERROR)
+                    LOG_ERROR
                         << error_context << ": PP axis requires stage_id";
                     return std::nullopt;
                 }
                 if (axis.split_dim.has_value()) {
-                    LOG(ERROR) << error_context
+                    LOG_ERROR << error_context
                                << ": PP axis must not provide split_dim";
                     return std::nullopt;
                 }
                 break;
             default:
-                LOG(ERROR) << error_context << ": unsupported axis kind";
+                LOG_ERROR << error_context << ": unsupported axis kind";
                 return std::nullopt;
         }
     }
@@ -1274,11 +1274,11 @@ resolve_tp_compatible_parallelism_from_metadata(
     const std::string &error_context) {
     auto stored_parallelism = parallelism_from_metadata(metadata);
     if (!stored_parallelism.has_value()) {
-        LOG(ERROR) << error_context << ": missing shard parallelism metadata";
+        LOG_ERROR << error_context << ": missing shard parallelism metadata";
         return std::nullopt;
     }
     if (stored_parallelism->axes.size() != parallelism.axes.size()) {
-        LOG(ERROR) << error_context << ": axis count mismatch";
+        LOG_ERROR << error_context << ": axis count mismatch";
         return std::nullopt;
     }
 
@@ -1286,11 +1286,11 @@ resolve_tp_compatible_parallelism_from_metadata(
     auto stored_tp_axis_index = find_tp_axis_index(stored_parallelism->axes);
     if (!request_tp_axis_index.has_value() ||
         !stored_tp_axis_index.has_value()) {
-        LOG(ERROR) << error_context << ": reconstruction requires a TP axis";
+        LOG_ERROR << error_context << ": reconstruction requires a TP axis";
         return std::nullopt;
     }
     if (*request_tp_axis_index != *stored_tp_axis_index) {
-        LOG(ERROR) << error_context << ": TP axis position mismatch";
+        LOG_ERROR << error_context << ": TP axis position mismatch";
         return std::nullopt;
     }
 
@@ -1308,14 +1308,14 @@ resolve_tp_compatible_parallelism_from_metadata(
                     stored_parallelism->axes[i].expert_id ||
                 parallelism.axes[i].stage_id !=
                     stored_parallelism->axes[i].stage_id) {
-                LOG(ERROR) << error_context << ": TP axis metadata mismatch";
+                LOG_ERROR << error_context << ": TP axis metadata mismatch";
                 return std::nullopt;
             }
             continue;
         }
         if (!axis_specs_equal(parallelism.axes[i],
                               stored_parallelism->axes[i])) {
-            LOG(ERROR) << error_context << ": non-TP axis metadata mismatch";
+            LOG_ERROR << error_context << ": non-TP axis metadata mismatch";
             return std::nullopt;
         }
     }
@@ -1345,7 +1345,7 @@ parse_tensor_metadata_from_buffer(BufferHandle *buffer_handle, char *usr_buffer,
     if (*take_ownership) {
         *total_length = buffer_handle->size();
         if (*total_length < sizeof(TensorMetadata)) {
-            LOG(ERROR) << "Invalid data format: insufficient data for metadata";
+            LOG_ERROR << "Invalid data format: insufficient data for metadata";
             return std::nullopt;
         }
 
@@ -1355,13 +1355,13 @@ parse_tensor_metadata_from_buffer(BufferHandle *buffer_handle, char *usr_buffer,
     } else {
         *exported_data = usr_buffer;
         if (data_length < 0) {
-            LOG(ERROR) << "Get tensor into failed with error code: "
+            LOG_ERROR << "Get tensor into failed with error code: "
                        << data_length;
             return std::nullopt;
         }
         *total_length = static_cast<size_t>(data_length);
         if (*total_length < sizeof(TensorMetadata)) {
-            LOG(ERROR) << "Invalid data format: insufficient data for metadata";
+            LOG_ERROR << "Invalid data format: insufficient data for metadata";
             return std::nullopt;
         }
     }
@@ -1372,7 +1372,7 @@ parse_tensor_metadata_from_buffer(BufferHandle *buffer_handle, char *usr_buffer,
             delete[] *exported_data;
             *exported_data = nullptr;
         }
-        LOG(ERROR) << "Invalid tensor metadata";
+        LOG_ERROR << "Invalid tensor metadata";
         return std::nullopt;
     }
 
@@ -1382,13 +1382,13 @@ parse_tensor_metadata_from_buffer(BufferHandle *buffer_handle, char *usr_buffer,
 std::optional<ParsedTensorMetadata> parse_tensor_metadata_from_raw_buffer(
     uintptr_t buffer_ptr, size_t size, const char *operation_name) {
     if (buffer_ptr == 0) {
-        LOG(ERROR) << operation_name << ": buffer pointer cannot be null";
+        LOG_ERROR << operation_name << ": buffer pointer cannot be null";
         return std::nullopt;
     }
     auto parsed =
         ParseTensorMetadata(reinterpret_cast<const char *>(buffer_ptr), size);
     if (!parsed.has_value()) {
-        LOG(ERROR) << operation_name << ": invalid tensor object metadata";
+        LOG_ERROR << operation_name << ": invalid tensor object metadata";
         return std::nullopt;
     }
     return parsed;
@@ -1412,26 +1412,26 @@ std::optional<RawTensorShardWritePlan> build_raw_tensor_shard_write_plan(
     int64_t local_numel = 1;
     for (size_t dim = 0; dim < global_shape.size(); ++dim) {
         if (global_shape[dim] <= 0 || local_shape[dim] < 0) {
-            LOG(ERROR) << operation_name << ": invalid tensor shape";
+            LOG_ERROR << operation_name << ": invalid tensor shape";
             return std::nullopt;
         }
         global_numel *= global_shape[dim];
         local_numel *= local_shape[dim];
         if (static_cast<int>(dim) != split_dim &&
             global_shape[dim] != local_shape[dim]) {
-            LOG(ERROR) << operation_name
+            LOG_ERROR << operation_name
                        << ": unsupported non-split local shape";
             return std::nullopt;
         }
     }
     if (local_numel < 0 || global_numel <= 0) {
-        LOG(ERROR) << operation_name << ": invalid tensor numel";
+        LOG_ERROR << operation_name << ": invalid tensor numel";
         return std::nullopt;
     }
     if ((local_numel == 0 && parsed.data_bytes != 0) ||
         (local_numel > 0 &&
          parsed.data_bytes % static_cast<size_t>(local_numel) != 0)) {
-        LOG(ERROR) << operation_name << ": invalid tensor byte size";
+        LOG_ERROR << operation_name << ": invalid tensor byte size";
         return std::nullopt;
     }
 

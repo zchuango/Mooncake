@@ -16,6 +16,7 @@
 #define UB_CONTEXT_H
 
 #include <atomic>
+#include "log_macros.h"
 #include <fcntl.h>
 #include <fstream>
 #include <list>
@@ -142,17 +143,17 @@ class UbContext {
     int doConstruct(GlobalConfig& config) {
         show_work_request_flushed_error_ = globalConfig().trace;
         if (construct(config)) {
-            LOG(INFO) << "failed construct context " << toString();
+            LOG_INFO << "failed construct context " << toString();
             return 1;
         }
-        LOG(INFO) << "finish construct context " << toString();
+        LOG_INFO << "finish construct context " << toString();
         endpoint_store_ =
             std::make_shared<UbSIEVEEndpointStore>(max_endpoints_);
         if (endpoint_store_ == nullptr) {
-            LOG(INFO) << "failed create endpoint store.";
+            LOG_INFO << "failed create endpoint store.";
             return 1;
         }
-        LOG(INFO) << "finish create endpoint store.";
+        LOG_INFO << "finish create endpoint store.";
         return 0;
     }
 
@@ -207,12 +208,12 @@ class UbContext {
 
     std::shared_ptr<UbEndPoint> endpoint(const std::string& peer_nic_path) {
         if (!active_) {
-            LOG(ERROR) << "Context is not active: " << deviceName();
+            LOG_ERROR << "Context is not active: " << deviceName();
             return nullptr;
         }
 
         if (peer_nic_path.empty()) {
-            LOG(ERROR) << "Invalid peer NIC path: " << deviceName();
+            LOG_ERROR << "Invalid peer NIC path: " << deviceName();
             return nullptr;
         }
         auto endpoint = endpoint_store_->getEndpoint(peer_nic_path);
@@ -305,7 +306,7 @@ class UbContext {
     static int joinNonblockingPollList(int& event_fd, int data_fd) {
         event_fd = epoll_create1(0);
         if (event_fd < 0) {
-            PLOG(ERROR) << "Failed to create epoll";
+            PLOG_ERROR << "Failed to create epoll";
             return ERR_CONTEXT;
         }
         epoll_event event{};
@@ -313,18 +314,18 @@ class UbContext {
 
         int flags = fcntl(data_fd, F_GETFL, 0);
         if (flags == -1) {
-            PLOG(ERROR) << "Failed to get file descriptor flags";
+            PLOG_ERROR << "Failed to get file descriptor flags";
             return ERR_CONTEXT;
         }
         if (fcntl(data_fd, F_SETFL, flags | O_NONBLOCK) == -1) {
-            PLOG(ERROR) << "Failed to set file descriptor nonblocking";
+            PLOG_ERROR << "Failed to set file descriptor nonblocking";
             return ERR_CONTEXT;
         }
 
         event.events = EPOLLIN | EPOLLET;
         event.data.fd = data_fd;
         if (epoll_ctl(event_fd, EPOLL_CTL_ADD, event.data.fd, &event)) {
-            PLOG(ERROR) << "Failed to register file descriptor to epoll";
+            PLOG_ERROR << "Failed to register file descriptor to epoll";
             return ERR_CONTEXT;
         }
         return 0;

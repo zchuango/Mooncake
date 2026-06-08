@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include "tent/transport/rdma/cq.h"
+#include "log_macros.h"
 
 #include <fcntl.h>
 #include <sys/epoll.h>
@@ -48,7 +49,7 @@ int RdmaCQ::construct(RdmaContext* context, int cqe_limit, int index) {
     cq_ = context_->verbs_.ibv_create_cq(native_context, cqe_limit, nullptr,
                                          comp_channel, comp_vector);
     if (!cq_) {
-        PLOG(ERROR) << "ibv_create_cq";
+        PLOG_ERROR << "ibv_create_cq";
         return -1;
     }
     return 0;
@@ -71,7 +72,7 @@ int RdmaCQ::poll(int num_entries, ibv_wc* wc) {
     if (!cqe_now_) return 0;
     int rc = ibv_poll_cq(cq_, num_entries, wc);
     if (rc < 0) {
-        PLOG(ERROR) << "ibv_poll_cq";
+        PLOG_ERROR << "ibv_poll_cq";
     }
     return rc;
 }

@@ -12,8 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 #include "tent/rpc/rpc.h"
+#include "log_macros.h"
 
-#include <glog/logging.h>
+
 #include <async_simple/executors/SimpleExecutor.h>
 
 #include "tent/common/utils/ip.h"
@@ -110,7 +111,7 @@ Status CoroRpcAgent::start(uint16_t& port, bool ipv6) {
             server_->async_start();
             const auto err = server_->get_errc();
             if (err) {
-                LOG(WARNING)
+                LOG_WARNING
                     << "Failed to start RPC server(async_start) on port "
                     << port << ": " << err.message();
                 delete server_;
@@ -121,7 +122,7 @@ Status CoroRpcAgent::start(uint16_t& port, bool ipv6) {
             running_ = true;
             return Status::OK();
         } catch (const std::exception& e) {
-            LOG(WARNING) << "Failed to start RPC server on port " << port
+            LOG_WARNING << "Failed to start RPC server on port " << port
                          << ": " << e.what();
             port = 0;
         }

@@ -2,6 +2,7 @@
 // MIT License (see file: LICENSE)
 
 #include "offset_allocator/offset_allocator.hpp"
+#include "log_macros.h"
 
 #include <cmath>
 #include <iomanip>
@@ -590,7 +591,7 @@ std::optional<OffsetAllocationHandle> OffsetAllocator::allocate(size_t size) {
         // Log metrics to help understand why allocation failed
         // Note: We're already holding m_mutex, so use internal method
         OffsetAllocatorMetrics metrics = get_metrics_internal();
-        VLOG(1) << "OffsetAllocator allocation failed: size=" << size
+        LOG_INFO << "OffsetAllocator allocation failed: size=" << size
                 << ", fake_size=" << fake_size << ", " << metrics;
         return std::nullopt;
     }

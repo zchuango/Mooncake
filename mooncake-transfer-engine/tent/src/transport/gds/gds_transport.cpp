@@ -13,9 +13,10 @@
 // limitations under the License.
 
 #include "tent/transport/gds/gds_transport.h"
+#include "log_macros.h"
 
 #include <bits/stdint-uintn.h>
-#include <glog/logging.h>
+
 
 #include <algorithm>
 #include <cassert>
@@ -34,7 +35,7 @@ class GdsFileContext {
     explicit GdsFileContext(const std::string& path) : ready_(false) {
         int fd = open(path.c_str(), O_RDWR | O_DIRECT);
         if (fd < 0) {
-            PLOG(ERROR) << "Failed to open file " << path;
+            PLOG_ERROR << "Failed to open file " << path;
             return;
         }
         memset(&desc_, 0, sizeof(desc_));
@@ -42,7 +43,7 @@ class GdsFileContext {
         desc_.handle.fd = fd;
         auto result = cuFileHandleRegister(&handle_, &desc_);
         if (result.err != CU_FILE_SUCCESS) {
-            LOG(ERROR) << "Failed to register GDS file handle: Code "
+            LOG_ERROR << "Failed to register GDS file handle: Code "
                        << result.err;
             return;
         }

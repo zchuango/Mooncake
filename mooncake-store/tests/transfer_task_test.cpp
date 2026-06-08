@@ -1,7 +1,7 @@
 // transfer_task_test.cpp
 #include "transfer_task.h"
 
-#include <glog/logging.h>
+
 #include <gtest/gtest.h>
 
 #include <chrono>

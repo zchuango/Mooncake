@@ -1,8 +1,12 @@
 #include "transport/rpc_communicator/rpc_communicator.h"
+#include "log_macros.h"
+#include "rpc_protocol.h"
 #include <iostream>
 #include <thread>
 #include <functional>
-#include <glog/logging.h>
+#include <type_traits>
+#include <variant>
+
 #include <ylt/coro_rpc/coro_rpc_client.hpp>
 #include <ylt/coro_rpc/coro_rpc_server.hpp>
 #include <ylt/coro_io/client_pool.hpp>
@@ -14,6 +18,104 @@
 
 namespace mooncake {
 namespace py = pybind11;
+
+namespace {
+
+template <typename Variant, typename T>
+struct variant_contains : std::false_type {};
+
+template <typename... Ts, typename T>
+struct variant_contains<std::variant<Ts...>, T>
+    : std::bool_constant<(std::is_same_v<Ts, T> || ...)> {};
+
+template <typename Variant, typename T>
+inline constexpr bool variant_contains_v =
+    variant_contains<std::decay_t<Variant>, T>::value;
+
+template <typename SocketConfigVariant>
+bool MaybeEnableRdmaSocketConfig(SocketConfigVariant& socket_config) {
+#ifdef YLT_ENABLE_IBV
+    if constexpr (variant_contains_v<SocketConfigVariant,
+                                     coro_io::ib_socket_t::config_t>) {
+        socket_config = coro_io::ib_socket_t::config_t{};
+        return true;
+    }
+#endif
+    return false;
+}
+
+template <typename SocketConfigVariant>
+bool MaybeEnableUrmaSocketConfig(SocketConfigVariant& socket_config) {
+#ifdef YLT_ENABLE_URMA
+    if constexpr (variant_contains_v<SocketConfigVariant,
+                                     coro_io::urma_socket_t::config_t>) {
+        socket_config = coro_io::urma_socket_t::config_t{};
+        return true;
+    }
+#endif
+    return false;
+}
+
+template <typename SocketConfigVariant>
+void ApplyRpcProtocolSocketConfig(SocketConfigVariant& socket_config) {
+    switch (GetRpcProtocolFromEnv()) {
+        case RpcProtocol::Urma:
+            if (!MaybeEnableUrmaSocketConfig(socket_config)) {
+                LOG_WARNING
+                    << "MC_RPC_PROTOCOL=urma requested but yalantinglibs was "
+                       "not built with YLT_ENABLE_URMA; using TCP";
+            }
+            break;
+        case RpcProtocol::Rdma:
+            if (!MaybeEnableRdmaSocketConfig(socket_config)) {
+                if (MaybeEnableUrmaSocketConfig(socket_config)) {
+                    LOG_WARNING
+                        << "MC_RPC_PROTOCOL=rdma requested but "
+                           "YLT_ENABLE_IBV is unavailable; using URMA";
+                } else {
+                    LOG_WARNING
+                        << "MC_RPC_PROTOCOL=rdma requested but no RDMA RPC "
+                           "transport is enabled; using TCP";
+                }
+            }
+            break;
+        case RpcProtocol::Tcp:
+            break;
+    }
+}
+
+void ApplyRpcProtocolToServer(coro_rpc::coro_rpc_server& server) {
+    switch (GetRpcProtocolFromEnv()) {
+        case RpcProtocol::Urma:
+#ifdef YLT_ENABLE_URMA
+            server.init_urma();
+            LOG_INFO << "URMA initialized successfully";
+#else
+            LOG_WARNING
+                << "MC_RPC_PROTOCOL=urma requested but yalantinglibs was not "
+                   "built with YLT_ENABLE_URMA; using TCP";
+#endif
+            break;
+        case RpcProtocol::Rdma:
+#ifdef YLT_ENABLE_IBV
+            server.init_ibv();
+            LOG_INFO << "RDMA initialized successfully";
+#elif defined(YLT_ENABLE_URMA)
+            LOG_WARNING << "MC_RPC_PROTOCOL=rdma requested but YLT_ENABLE_IBV "
+                           "is unavailable; using URMA";
+            server.init_urma();
+            LOG_INFO << "URMA initialized successfully";
+#else
+            LOG_WARNING << "MC_RPC_PROTOCOL=rdma requested but no RDMA RPC "
+                           "transport is enabled; using TCP";
+#endif
+            break;
+        case RpcProtocol::Tcp:
+            break;
+    }
+}
+
+}  // namespace
 
 class py_rpc_context {
    public:
@@ -39,9 +141,9 @@ RpcCommunicator::~RpcCommunicator() { stopServer(); }
 
 void RpcCommunicator::setDataReceiveCallback(
     std::function<void(std::string_view, std::string_view)> callback) {
-    LOG(INFO) << "Setting data receive callback...";
+    LOG_INFO << "Setting data receive callback...";
     data_receive_callback_ = callback;
-    LOG(INFO) << "Data receive callback set successfully";
+    LOG_INFO << "Data receive callback set successfully";
 }
 
 bool RpcCommunicator::initialize(const RpcCommunicatorConfig& config) {
@@ -50,57 +152,53 @@ bool RpcCommunicator::initialize(const RpcCommunicatorConfig& config) {
 
     // Initialize client pools with proper configuration
     coro_io::client_pool<coro_rpc::coro_rpc_client>::pool_config pool_conf{};
-    const char* value = std::getenv("MC_RPC_PROTOCOL");
-    if (value && std::string_view(value) == "rdma") {
-        pool_conf.client_config.socket_config =
-            coro_io::ib_socket_t::config_t{};
-    }
+    ApplyRpcProtocolSocketConfig(pool_conf.client_config.socket_config);
     client_pools_ =
         std::make_shared<coro_io::client_pools<coro_rpc::coro_rpc_client>>(
             pool_conf);
 
-    LOG(INFO) << "create coro_rpc_client_pool with " << config.pool_size
+    LOG_INFO << "create coro_rpc_client_pool with " << config.pool_size
               << " threads";
     if (!config.listen_address.empty()) {
-        LOG(INFO) << "Initializing server on " << config.listen_address;
+        LOG_INFO << "Initializing server on " << config.listen_address;
 
         server_ = std::make_unique<coro_rpc::coro_rpc_server>(
             config.thread_count, config.listen_address,
             std::chrono::seconds(config.timeout_seconds));
 
-        if (value && std::string_view(value) == "rdma") {
+        if (GetRpcProtocolFromEnv() != RpcProtocol::Tcp) {
             if (server_) {
                 try {
-                    server_->init_ibv();
-                    LOG(INFO) << "RDMA initialized successfully";
+                    ApplyRpcProtocolToServer(*server_);
                 } catch (const std::exception& e) {
-                    LOG(ERROR) << "RDMA initialization failed: " << e.what();
-                    LOG(WARNING) << "Falling back to TCP mode";
-                    // Continue without RDMA - the server will use TCP
+                    LOG_ERROR << "RPC transport initialization failed: "
+                              << e.what();
+                    LOG_WARNING << "Falling back to TCP mode";
                 } catch (...) {
-                    LOG(ERROR)
-                        << "RDMA initialization failed with unknown error";
-                    LOG(WARNING) << "Falling back to TCP mode";
-                    // Continue without RDMA - the server will use TCP
+                    LOG_ERROR
+                        << "RPC transport initialization failed with unknown "
+                           "error";
+                    LOG_WARNING << "Falling back to TCP mode";
                 }
             } else {
-                LOG(ERROR) << "Server pointer is null, cannot initialize RDMA";
-                LOG(WARNING) << "Falling back to TCP mode";
+                LOG_ERROR
+                    << "Server pointer is null, cannot initialize RPC "
+                       "transport";
+                LOG_WARNING << "Falling back to TCP mode";
             }
         }
 
         server_->register_handler<&RpcCommunicator::handleDataTransfer,
                                   &RpcCommunicator::handleTensorTransfer>(this);
     }
-    LOG(INFO) << "Environment variable MC_RPC_PROTOCOL is set to "
-              << (value ? value : "not set");
-    if (value && std::string_view(value) == "rdma") {
-        LOG(INFO) << "Using RDMA transport for RPC communication";
-    } else {
-        LOG(INFO) << "Using TCP transport for RPC communication";
-    }
+    auto rpc_protocol_env = RpcProtocolEnvValue();
+    LOG_INFO << "Environment variable MC_RPC_PROTOCOL is set to "
+              << (rpc_protocol_env.empty() ? std::string("not set")
+                                           : std::string(rpc_protocol_env));
+    LOG_INFO << "Using " << RpcProtocolName(GetRpcProtocolFromEnv())
+              << " transport for RPC communication";
 
-    LOG(INFO) << "Communicator initialized with client pool support";
+    LOG_INFO << "Communicator initialized with client pool support";
     return true;
 }
 
@@ -119,14 +217,14 @@ bool RpcCommunicator::startServer() {
         auto ec = server_->start();
         if (ec.val() == 0) {
             is_server_started_ = true;
-            LOG(INFO) << "Server started on " << config_.listen_address;
+            LOG_INFO << "Server started on " << config_.listen_address;
             return true;
         } else {
-            LOG(ERROR) << "Failed to start server: " << ec.message();
+            LOG_ERROR << "Failed to start server: " << ec.message();
             return false;
         }
     } catch (const std::exception& e) {
-        LOG(ERROR) << "Failed to start server: " << e.what();
+        LOG_ERROR << "Failed to start server: " << e.what();
         return false;
     }
 }
@@ -138,15 +236,15 @@ bool RpcCommunicator::startServerAsync() {
         auto ec = server_->async_start();
         if (!ec.hasResult()) {
             is_server_started_ = true;
-            LOG(INFO) << "Server started asynchronously on "
+            LOG_INFO << "Server started asynchronously on "
                       << config_.listen_address;
             return true;
         } else {
-            LOG(ERROR) << "Failed to start server asynchronously";
+            LOG_ERROR << "Failed to start server asynchronously";
             return false;
         }
     } catch (const std::exception& e) {
-        LOG(ERROR) << "Failed to start server asynchronously: " << e.what();
+        LOG_ERROR << "Failed to start server asynchronously: " << e.what();
         return false;
     }
 }
@@ -155,7 +253,7 @@ void RpcCommunicator::stopServer() {
     if (is_server_started_ && server_) {
         server_->stop();
         is_server_started_ = false;
-        LOG(INFO) << "Server stopped";
+        LOG_INFO << "Server stopped";
     }
 }
 
@@ -185,7 +283,7 @@ async_simple::coro::Lazy<RpcResult> RpcCommunicator::sendDataAsync(
                     co_await client.call<&RpcCommunicator::handleDataTransfer>(
                         std::string_view{});
                 if (!result.has_value()) {
-                    LOG(ERROR) << "RPC call failed: " << result.error().msg;
+                    LOG_ERROR << "RPC call failed: " << result.error().msg;
                 }
             } else {
                 // Use regular parameter for small data
@@ -193,13 +291,13 @@ async_simple::coro::Lazy<RpcResult> RpcCommunicator::sendDataAsync(
                     co_await client.call<&RpcCommunicator::handleDataTransfer>(
                         data_view);
                 if (!result.has_value()) {
-                    LOG(ERROR) << "RPC call failed: " << result.error().msg;
+                    LOG_ERROR << "RPC call failed: " << result.error().msg;
                 }
             }
         });
 
     if (!rpc_result.has_value()) {
-        LOG(ERROR) << "RPC send request failed";
+        LOG_ERROR << "RPC send request failed";
         co_return RpcResult{-1, "RPC call failed"};
     }
     RpcResult res;
@@ -223,7 +321,7 @@ int RpcCommunicator::sendTensor(const std::string& target_address,
                 !pybind11::hasattr(tensor_obj, "element_size") ||
                 !pybind11::hasattr(tensor_obj, "shape") ||
                 !pybind11::hasattr(tensor_obj, "dtype")) {
-                LOG(ERROR) << "Input is not a valid tensor object (missing "
+                LOG_ERROR << "Input is not a valid tensor object (missing "
                               "required attributes)";
                 return -1;
             }
@@ -269,7 +367,7 @@ int RpcCommunicator::sendTensor(const std::string& target_address,
                 shape_str += std::to_string(tensor_info.shape[i]);
             }
             shape_str += "]";
-            LOG(INFO) << "Sending tensor with shape: " << shape_str
+            LOG_INFO << "Sending tensor with shape: " << shape_str
                       << ", dtype: " << tensor_info.dtype
                       << ", tensor size: " << tensor_info.total_bytes
                       << " bytes";
@@ -282,7 +380,7 @@ int RpcCommunicator::sendTensor(const std::string& target_address,
         return result;
 
     } catch (const std::exception& e) {
-        LOG(ERROR) << "Send tensor error: " << e.what();
+        LOG_ERROR << "Send tensor error: " << e.what();
         return -1;
     }
 }
@@ -300,11 +398,11 @@ async_simple::coro::Lazy<int> RpcCommunicator::sendTensorAsync(
                 co_await client.call<&RpcCommunicator::handleTensorTransfer>();
 
             if (!result.has_value()) {
-                LOG(ERROR) << "Tensor RPC call failed: " << result.error().msg;
+                LOG_ERROR << "Tensor RPC call failed: " << result.error().msg;
             }
         });
     if (!rpc_result.has_value()) {
-        LOG(ERROR) << "Tensor RPC send request failed";
+        LOG_ERROR << "Tensor RPC send request failed";
         co_return -1;
     }
     co_return 0;
@@ -332,11 +430,11 @@ void RpcCommunicator::handleDataTransfer(coro_rpc::context<void> context,
     auto ctx_info = context.get_context_info();
     auto attachment = ctx_info->get_request_attachment();
 
-    LOG(INFO) << "Handling data transfer - Data: " << data.size()
+    LOG_INFO << "Handling data transfer - Data: " << data.size()
               << " bytes, Attachment: " << attachment.size() << " bytes";
     // Call the data receive callback if set
     if (data_receive_callback_) {
-        LOG(INFO) << "Calling data receive callback...";
+        LOG_INFO << "Calling data receive callback...";
         // Note: coro_rpc context doesn't provide get_remote_endpoint()
         // Using empty string as placeholder - can be enhanced if needed
         std::string_view source_address = "";
@@ -352,7 +450,7 @@ void RpcCommunicator::handleDataTransfer(coro_rpc::context<void> context,
             data_receive_callback_(source_address, data);
         }
     } else {
-        LOG(INFO) << "No data receive callback set!";
+        LOG_INFO << "No data receive callback set!";
     }
 
     // Echo back the attachment for response (zero-copy)
@@ -367,12 +465,12 @@ void RpcCommunicator::handleTensorTransfer(coro_rpc::context<void> context) {
     auto ctx_info = context.get_context_info();
     auto attachment = ctx_info->get_request_attachment();
 
-    LOG(INFO) << "Handling tensor transfer: " << attachment.size() << " bytes";
+    LOG_INFO << "Handling tensor transfer: " << attachment.size() << " bytes";
 
     // Call the data receive callback if set (tensor data is received via
     // attachment)
     if (data_receive_callback_) {
-        LOG(INFO) << "Calling data receive callback for tensor...";
+        LOG_INFO << "Calling data receive callback for tensor...";
         // Note: coro_rpc context doesn't provide get_remote_endpoint()
         // Using empty string as placeholder - can be enhanced if needed
         std::string_view source_address = "";
@@ -380,7 +478,7 @@ void RpcCommunicator::handleTensorTransfer(coro_rpc::context<void> context) {
         // Pass the attachment data to the callback
         data_receive_callback_(source_address, attachment);
     } else {
-        LOG(INFO) << "No data receive callback set for tensor!";
+        LOG_INFO << "No data receive callback set for tensor!";
     }
 
     ctx_info->set_response_attachment(attachment);

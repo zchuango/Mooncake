@@ -26,7 +26,7 @@
 #include <functional>
 #include <fcntl.h>
 #include <gflags/gflags.h>
-#include <glog/logging.h>
+
 #include <signal.h>
 #include <sys/time.h>
 

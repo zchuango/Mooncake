@@ -1,6 +1,7 @@
 #pragma once
 
 #include <algorithm>
+#include "log_macros.h"
 #include <cctype>
 #include <cstddef>
 #include <cstdlib>
@@ -327,7 +328,7 @@ inline size_t align_up(size_t size, size_t alignment) {
         if (parsed_size == SZ_2MB || parsed_size == SZ_1GB) {
             size = parsed_size;
         } else {
-            LOG(WARNING) << "Invalid MC_STORE_HUGEPAGE_SIZE='" << size_env
+            LOG_WARNING << "Invalid MC_STORE_HUGEPAGE_SIZE='" << size_env
                          << "'. Supported: 2MB, 1GB. Fallback to 2MB.";
             size = SZ_2MB;
         }
@@ -354,7 +355,7 @@ inline size_t align_up(size_t size, size_t alignment) {
                 *out_flags |= MAP_HUGE_1GB;
             }
         }
-        LOG(INFO) << "Using hugepage size: "
+        LOG_INFO << "Using hugepage size: "
                   << (size == SZ_2MB ? "2MB" : "1GB");
     }
 

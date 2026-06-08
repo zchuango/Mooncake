@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include "tent/runtime/metastore.h"
+#include "log_macros.h"
 #ifdef USE_ETCD
 #include "tent/metastore/etcd.h"
 #endif
@@ -23,7 +24,7 @@
 #include "tent/metastore/http.h"
 #endif
 
-#include <glog/logging.h>
+
 
 namespace mooncake {
 namespace tent {
@@ -58,7 +59,7 @@ std::shared_ptr<MetaStore> MetaStore::Create(const std::string &type,
         if (status.ok())
             return redis_plugin;
         else {
-            LOG(FATAL) << status.ToString();
+            LOG_FATAL << status.ToString();
             return nullptr;
         }
     }
@@ -70,7 +71,7 @@ std::shared_ptr<MetaStore> MetaStore::Create(const std::string &type,
     }
 #endif  // USE_HTTP
     if (!plugin) {
-        LOG(FATAL) << "Protocol " << type
+        LOG_FATAL << "Protocol " << type
                    << " not installed. Please rebuild the package.";
         return nullptr;
     }
@@ -78,7 +79,7 @@ std::shared_ptr<MetaStore> MetaStore::Create(const std::string &type,
     if (status.ok())
         return plugin;
     else {
-        LOG(FATAL) << status.ToString();
+        LOG_FATAL << status.ToString();
         return nullptr;
     }
 }

@@ -1,6 +1,6 @@
 #include "transfer_task.h"
 
-#include <glog/logging.h>
+
 
 #include <algorithm>
 #include <cctype>
@@ -12,7 +12,7 @@
 #include <string>
 #include <vector>
 #include "gpu_staging_utils.h"
-#include "mooncake_logging.h"
+#include "log_macros.h"
 #include "transfer_engine.h"
 #include "transport/transport.h"
 #ifdef USE_NOF
@@ -66,7 +66,7 @@ static int GetPositiveEnvOrDefault(const char* name, int default_value) {
     if (errno != 0 || end_ptr == raw_value ||
         (end_ptr != nullptr && *end_ptr != '\0') || parsed <= 0 ||
         parsed > std::numeric_limits<int>::max()) {
-        LOG(WARNING) << "Invalid value for " << name << ": " << raw_value
+        LOG_WARNING << "Invalid value for " << name << ": " << raw_value
                      << ", using default " << default_value;
         return default_value;
     }
@@ -116,7 +116,7 @@ static inline void SpdkNofTaskCompletion(mooncake::SpdkNofTask* task) {
 
 static void nvmf_io_complete(void* ctx, const struct spdk_nvme_cpl* cpl) {
     if (!ctx) {
-        LOG(ERROR) << "nvmf_io_complete ctx is null";
+        LOG_ERROR << "nvmf_io_complete ctx is null";
         return;
     }
 
@@ -126,20 +126,20 @@ static void nvmf_io_complete(void* ctx, const struct spdk_nvme_cpl* cpl) {
     mooncake::SpdkNofQos* nof_qos = task->nof_qos;
     int op = task->op;
     if (--(*task->io_count) < 0) {
-        LOG(ERROR) << "total outstanding io < 0";
+        LOG_ERROR << "total outstanding io < 0";
     }
 
     if (--(task->outstanding_sub_io) < 0) {
-        LOG(ERROR) << "task outstanding io < 0";
+        LOG_ERROR << "task outstanding io < 0";
     }
 
     nof_qos->inflight_blocks[op] -= sub_task->submit_lba_count;
     if (nof_qos->inflight_blocks[op] < 0) {
-        LOG(ERROR) << "task outstanding io < 0";
+        LOG_ERROR << "task outstanding io < 0";
     }
 
     if (spdk_nvme_cpl_is_error(cpl)) {
-        LOG(ERROR) << "task_complete: I/O failed"
+        LOG_ERROR << "task_complete: I/O failed"
                    << spdk_nvme_cpl_get_status_string(&cpl->status);
         task->remaining_lba = 0;
         task->failed = true;
@@ -192,7 +192,7 @@ constexpr int kDefaultFilereadWorkers = 10;
 
 FilereadWorkerPool::FilereadWorkerPool(std::shared_ptr<StorageBackend>& backend)
     : shutdown_(false) {
-    MC_VLOG(1) << "Creating FilereadWorkerPool with " << kDefaultFilereadWorkers
+    MC_LOG_INFO << "Creating FilereadWorkerPool with " << kDefaultFilereadWorkers
             << " workers";
 
     // Start worker threads
@@ -218,14 +218,14 @@ FilereadWorkerPool::~FilereadWorkerPool() {
         }
     }
 
-    MC_VLOG(1) << "FilereadWorkerPool destroyed";
+    MC_LOG_INFO << "FilereadWorkerPool destroyed";
 }
 
 void FilereadWorkerPool::submitTask(FilereadTask task) {
     {
         std::lock_guard<std::mutex> lock(queue_mutex_);
         if (shutdown_.load()) {
-            MC_LOG(WARNING)
+            MC_LOG_WARNING
                 << "Attempting to submit task to shutdown FilereadWorkerPool";
             task.state->set_completed(ErrorCode::TRANSFER_FAIL);
             return;
@@ -236,7 +236,7 @@ void FilereadWorkerPool::submitTask(FilereadTask task) {
 }
 
 void FilereadWorkerPool::workerThread() {
-    MC_VLOG(2) << "FilereadWorkerPool worker thread started";
+    MC_LOG_INFO << "FilereadWorkerPool worker thread started";
 
     while (true) {
         FilereadTask task("", 0, {}, nullptr, 0);
@@ -263,7 +263,7 @@ void FilereadWorkerPool::workerThread() {
             mooncake::logging::ScopedTraceId trace(task.trace_id);
             try {
                 if (!backend_) {
-                    MC_LOG(ERROR)
+                    MC_LOG_ERROR
                         << "Backend is not initialized, cannot load object";
                     task.state->set_completed(ErrorCode::TRANSFER_FAIL);
                     continue;
@@ -272,23 +272,23 @@ void FilereadWorkerPool::workerThread() {
                 auto load_result = backend_->LoadObject(
                     task.file_path, task.slices, task.object_size);
                 if (load_result) {
-                    MC_VLOG(2) << "Fileread task completed successfully with "
+                    MC_LOG_INFO << "Fileread task completed successfully with "
                             << task.file_path;
                     task.state->set_completed(ErrorCode::OK);
                 } else {
-                    MC_LOG(ERROR)
+                    MC_LOG_ERROR
                         << "Fileread task failed for file: " << task.file_path
                         << " with error: " << toString(load_result.error());
                     task.state->set_completed(ErrorCode::TRANSFER_FAIL);
                 }
             } catch (const std::exception& e) {
-                MC_LOG(ERROR) << "Exception during async fileread: " << e.what();
+                MC_LOG_ERROR << "Exception during async fileread: " << e.what();
                 task.state->set_completed(ErrorCode::TRANSFER_FAIL);
             }
         }
     }
 
-    MC_VLOG(2) << "FilereadWorkerPool worker thread exiting";
+    MC_LOG_INFO << "FilereadWorkerPool worker thread exiting";
 }
 
 // ============================================================================
@@ -305,7 +305,7 @@ SpdkNofWorkerPool::SpdkNofWorkerPool(int numa_socket_id)
       queue_mutex_(std::make_unique<std::mutex[]>(worker_count_)),
       queue_cv_(std::make_unique<std::condition_variable[]>(worker_count_)),
       shutdown_(false) {
-    VLOG(1) << "Creating SpdkNofWorkerPool with " << worker_count_
+    LOG_INFO << "Creating SpdkNofWorkerPool with " << worker_count_
             << " workers";
 
     // Start worker threads
@@ -330,17 +330,17 @@ SpdkNofWorkerPool::~SpdkNofWorkerPool() {
         }
     }
 
-    VLOG(1) << "SpdkNofWorkerPool destroyed";
+    LOG_INFO << "SpdkNofWorkerPool destroyed";
 }
 
 void SpdkNofWorkerPool::submitTask(SpdkNofTask task) {
     if (!task.state) {
-        LOG(ERROR) << "Attempting to submit spdk nof task without state";
+        LOG_ERROR << "Attempting to submit spdk nof task without state";
         return;
     }
 
     if (shutdown_.load()) {
-        LOG(WARNING)
+        LOG_WARNING
             << "Attempting to submit task to shutdown SpdkNofWorkerPool";
         task.state->set_completed(ErrorCode::TRANSFER_FAIL);
         return;
@@ -359,12 +359,12 @@ void SpdkNofWorkerPool::submitTask(SpdkNofTask task) {
             new_binding = true;
         }
         if (new_binding && IsSpdkNofDebugEnabled()) {
-            LOG(INFO) << "nof_worker_bind seg_handle=" << seg
+            LOG_INFO << "nof_worker_bind seg_handle=" << seg
                       << " worker_idx=" << worker_idx;
         }
     }
     if (worker_idx < 0 || worker_idx >= worker_count_) {
-        LOG(ERROR) << "seg is not bind to invalid worker " << worker_idx;
+        LOG_ERROR << "seg is not bind to invalid worker " << worker_idx;
         task.state->set_completed(ErrorCode::TRANSFER_FAIL);
         return;
     }
@@ -397,7 +397,7 @@ static inline bool CheckSubTaskPool(
     SpdkNofSubTask* sub_tasks =
         new (std::nothrow) SpdkNofSubTask[kSpdkNofSubTaskChunkSize];
     if (!sub_tasks) {
-        LOG(ERROR) << "alloc SpdkNofSubTask failed, worker " << work_idx;
+        LOG_ERROR << "alloc SpdkNofSubTask failed, worker " << work_idx;
         return false;
     }
     sub_task_chunks.push_back(sub_tasks);
@@ -412,7 +412,7 @@ static inline bool CheckSubTaskPool(
 
 void SpdkNofWorkerPool::workerThread(int work_idx) {
     bindToSocket(numa_socket_id_);
-    VLOG(2) << "SpdkNofWorkerPool worker thread started";
+    LOG_INFO << "SpdkNofWorkerPool worker thread started";
 
     int64_t total_outstanding_io = 0;
     // std::set<nof_seg_handle *> seg_set;
@@ -447,7 +447,7 @@ void SpdkNofWorkerPool::workerThread(int work_idx) {
                 SpdkNofTask* task = new (std::nothrow)
                     SpdkNofTask(std::move(task_queue.front()));
                 if (task == nullptr) {
-                    LOG(ERROR)
+                    LOG_ERROR
                         << "alloc SpdkNofTask failed, worker " << work_idx;
                     continue;
                 }
@@ -459,7 +459,7 @@ void SpdkNofWorkerPool::workerThread(int work_idx) {
                         SpdkWrapper::GetInstance().GetBlockSize(
                             task->seg_handle));
                     if (qos == nullptr) {
-                        LOG(ERROR)
+                        LOG_ERROR
                             << "alloc SpdkNofQos failed, worker " << work_idx;
                         delete task;
                         continue;
@@ -467,7 +467,7 @@ void SpdkNofWorkerPool::workerThread(int work_idx) {
                     nof_qos = qos.get();
                     seg_to_qos[task->seg_handle] = std::move(qos);
                     if (IsSpdkNofDebugEnabled()) {
-                        LOG(INFO)
+                        LOG_INFO
                             << "nof_qos_create worker_idx=" << work_idx
                             << " seg_handle=" << task->seg_handle
                             << " blocks_per_chunk="
@@ -522,7 +522,7 @@ void SpdkNofWorkerPool::workerThread(int work_idx) {
                             submit_lba_count, task->op, nvmf_io_complete,
                             sub_task);
                         if (ret != 0) {
-                            LOG(ERROR) << "work " << work_idx << ", seg "
+                            LOG_ERROR << "work " << work_idx << ", seg "
                                        << task->seg_handle << " submit io fail";
                             task->failed = true;
                             task->remaining_lba = 0;
@@ -550,7 +550,7 @@ void SpdkNofWorkerPool::workerThread(int work_idx) {
                 ret = SpdkWrapper::GetInstance().NvmePollProcessCompletion(
                     it.first, 0);
                 if (ret < 0) {
-                    LOG(ERROR) << "poll completion error: ret " << ret;
+                    LOG_ERROR << "poll completion error: ret " << ret;
                 }
             }
         }
@@ -562,7 +562,7 @@ void SpdkNofWorkerPool::workerThread(int work_idx) {
                     now - last_debug_snapshot);
             if (elapsed.count() >= GetSpdkNofDebugIntervalMs()) {
                 for (const auto& [seg_handle, nof_qos] : seg_to_qos) {
-                    LOG(INFO)
+                    LOG_INFO
                         << "nof_qos_state worker_idx=" << work_idx
                         << " seg_handle=" << seg_handle
                         << " inflight_read=" << nof_qos->inflight_blocks[0]
@@ -585,7 +585,7 @@ void SpdkNofWorkerPool::workerThread(int work_idx) {
     // seg_to_qos will automatically clean up SpdkNofQos objects using
     // unique_ptr
 
-    VLOG(2) << "SpdkNofWorkerPool worker thread exiting";
+    LOG_INFO << "SpdkNofWorkerPool worker thread exiting";
 }
 #endif
 
@@ -596,7 +596,7 @@ void SpdkNofWorkerPool::workerThread(int work_idx) {
 constexpr int kDefaultMemcpyWorkers = 1;
 
 MemcpyWorkerPool::MemcpyWorkerPool() : shutdown_(false) {
-    MC_VLOG(1) << "Creating MemcpyWorkerPool with " << kDefaultMemcpyWorkers
+    MC_LOG_INFO << "Creating MemcpyWorkerPool with " << kDefaultMemcpyWorkers
             << " workers";
 
     // Start worker threads
@@ -621,14 +621,14 @@ MemcpyWorkerPool::~MemcpyWorkerPool() {
         }
     }
 
-    MC_VLOG(1) << "MemcpyWorkerPool destroyed";
+    MC_LOG_INFO << "MemcpyWorkerPool destroyed";
 }
 
 void MemcpyWorkerPool::submitTask(MemcpyTask task) {
     {
         std::lock_guard<std::mutex> lock(queue_mutex_);
         if (shutdown_.load()) {
-            MC_LOG(WARNING)
+            MC_LOG_WARNING
                 << "Attempting to submit task to shutdown MemcpyWorkerPool";
             task.state->set_completed(ErrorCode::TRANSFER_FAIL);
             return;
@@ -639,7 +639,7 @@ void MemcpyWorkerPool::submitTask(MemcpyTask task) {
 }
 
 void MemcpyWorkerPool::workerThread() {
-    MC_VLOG(2) << "MemcpyWorkerPool worker thread started";
+    MC_LOG_INFO << "MemcpyWorkerPool worker thread started";
 
     while (true) {
         MemcpyTask task({}, nullptr, 0);
@@ -679,7 +679,7 @@ void MemcpyWorkerPool::workerThread() {
                         int dev = src_on_gpu ? src_dev : dst_dev;
                         gpu_staging::SetDevice(dev);
                         if (!gpu_staging::CopyAuto(op.dest, op.src, op.size)) {
-                            MC_LOG(ERROR)
+                            MC_LOG_ERROR
                                 << "GPU memcpy failed: src_dev=" << src_dev
                                 << " dst_dev=" << dst_dev
                                 << " size=" << op.size;
@@ -689,19 +689,19 @@ void MemcpyWorkerPool::workerThread() {
                     }
                 }
 
-                MC_VLOG(2) << "Memcpy task completed with "
+                MC_LOG_INFO << "Memcpy task completed with "
                         << task.operations.size() << " operations"
                         << (ok ? "" : " (with GPU copy failure)");
                 task.state->set_completed(ok ? ErrorCode::OK
                                              : ErrorCode::TRANSFER_FAIL);
             } catch (const std::exception& e) {
-                MC_LOG(ERROR) << "Exception during async memcpy: " << e.what();
+                MC_LOG_ERROR << "Exception during async memcpy: " << e.what();
                 task.state->set_completed(ErrorCode::TRANSFER_FAIL);
             }
         }
     }
 
-    MC_VLOG(2) << "MemcpyWorkerPool worker thread exiting";
+    MC_LOG_INFO << "MemcpyWorkerPool worker thread exiting";
 }
 
 // ============================================================================
@@ -733,7 +733,7 @@ void TransferEngineOperationState::check_task_status() {
         TransferStatus status;
         Status s = engine_.getTransferStatus(batch_id_, i, status);
         if (!s.ok()) {
-            MC_LOG(ERROR) << "Failed to get transfer status for batch "
+            MC_LOG_ERROR << "Failed to get transfer status for batch "
                        << batch_id_ << " task " << i << " with error "
                        << s.message();
             set_result_internal(ErrorCode::TRANSFER_FAIL);
@@ -748,7 +748,7 @@ void TransferEngineOperationState::check_task_status() {
             case TransferStatusEnum::CANCELED:
             case TransferStatusEnum::INVALID:
 #ifndef USE_ASCEND_DIRECT
-                MC_VLOG(1) << "Transfer failed for batch " << batch_id_ << " task "
+                MC_LOG_INFO << "Transfer failed for batch " << batch_id_ << " task "
                         << i << " with status " << static_cast<int>(status.s);
 #endif
                 failed_task_ids.push_back(i);
@@ -774,7 +774,7 @@ void TransferEngineOperationState::check_task_status() {
             if (j > 0) oss << ", ";
             oss << failed_task_ids[j];
         }
-        MC_LOG(ERROR) << "Batch " << batch_id_
+        MC_LOG_ERROR << "Batch " << batch_id_
                    << " completed with task failures: task_ids=[" << oss.str()
                    << "]";
         ec = ErrorCode::TRANSFER_FAIL;
@@ -786,7 +786,7 @@ void TransferEngineOperationState::check_task_status() {
 void TransferEngineOperationState::set_result_internal(ErrorCode error_code) {
     [[maybe_unused]] auto trace = RestoreTraceIfMissing(trace_id());
     if (result_.has_value()) {
-        MC_LOG(ERROR) << "Attempting to set result multiple times for batch "
+        MC_LOG_ERROR << "Attempting to set result multiple times for batch "
                    << batch_id_
                    << ". Previous result: " << static_cast<int>(result_.value())
                    << ", attempted new result: " << static_cast<int>(error_code)
@@ -794,7 +794,7 @@ void TransferEngineOperationState::set_result_internal(ErrorCode error_code) {
         return;  // Don't crash, just return early
     }
 
-    MC_VLOG(1) << "Setting transfer result for batch " << batch_id_ << " to "
+    MC_LOG_INFO << "Setting transfer result for batch " << batch_id_ << " to "
             << static_cast<int>(error_code);
     result_.emplace(error_code);
 }
@@ -809,7 +809,7 @@ void TransferEngineOperationState::wait_for_completion() {
     constexpr int64_t timeout_milliseconds = 60 * 1000;
 
 #ifdef USE_EVENT_DRIVEN_COMPLETION
-    MC_VLOG(1) << "Waiting for transfer engine completion for batch " << batch_id_;
+    MC_LOG_INFO << "Waiting for transfer engine completion for batch " << batch_id_;
 
     // Wait directly on BatchDesc's condition variable.
     auto& batch_desc = Transport::toBatchDesc(batch_id_);
@@ -855,19 +855,19 @@ void TransferEngineOperationState::wait_for_completion() {
     }
 
     if (completed) {
-        MC_VLOG(1) << "Transfer engine operation completed for batch " << batch_id_
+        MC_LOG_INFO << "Transfer engine operation completed for batch " << batch_id_
                 << " with result: " << static_cast<int>(error_code);
     } else {
-        MC_LOG(ERROR) << "Failed to complete transfers after "
+        MC_LOG_ERROR << "Failed to complete transfers after "
                    << timeout_milliseconds << " milliseconds for batch "
                    << batch_id_;
     }
 #else
-    MC_VLOG(1) << "Starting transfer engine polling for batch " << batch_id_;
+    MC_LOG_INFO << "Starting transfer engine polling for batch " << batch_id_;
 
     while (true) {
         if (getCurrentTimeInMilli() - start_ts_ > timeout_milliseconds) {
-            MC_LOG(ERROR) << "Failed to complete transfers after "
+            MC_LOG_ERROR << "Failed to complete transfers after "
                        << timeout_milliseconds << " milliseconds for batch "
                        << batch_id_;
             set_result_internal(ErrorCode::TRANSFER_FAIL);
@@ -877,13 +877,13 @@ void TransferEngineOperationState::wait_for_completion() {
         std::unique_lock<std::mutex> lock(mutex_);
         check_task_status();
         if (result_.has_value()) {
-            MC_VLOG(1) << "Transfer engine operation completed for batch "
+            MC_LOG_INFO << "Transfer engine operation completed for batch "
                     << batch_id_
                     << " with result: " << static_cast<int>(result_.value());
             break;
         }
         // Continue polling
-        MC_VLOG(1) << "Transfer engine operation still pending for batch "
+        MC_LOG_INFO << "Transfer engine operation still pending for batch "
                 << batch_id_;
     }
 #endif
@@ -896,7 +896,7 @@ void TransferEngineOperationState::wait_for_completion() {
 TransferFuture::TransferFuture(std::shared_ptr<OperationState> state)
     : state_(std::move(state)) {
     if (!state_) {
-        MC_LOG(ERROR) << "TransferFuture requires valid state";
+        MC_LOG_ERROR << "TransferFuture requires valid state";
         throw std::invalid_argument("TransferFuture requires valid state");
     }
 }
@@ -917,7 +917,7 @@ ErrorCode TransferFuture::wait() {
     const auto wait_us = std::chrono::duration_cast<std::chrono::microseconds>(
                              std::chrono::steady_clock::now() - t0)
                              .count();
-    MC_LOG(INFO) << "transfer_future_wait first_wait[" << (first_wait ? 1 : 0)
+    MC_LOG_INFO << "transfer_future_wait first_wait[" << (first_wait ? 1 : 0)
                  << "] ready_before_wait[" << (ready_before_wait ? 1 : 0)
                  << "] strategy[" << static_cast<int>(state_->get_strategy())
                  << "] wait_us[" << wait_us << "] result[" << toString(result)
@@ -956,7 +956,7 @@ TransferSubmitter::TransferSubmitter(TransferEngine& engine,
     const char* env_value = std::getenv("MC_STORE_MEMCPY");
     if (env_value == nullptr) {
         memcpy_enabled_ = engine_.isTcpOnly();
-        MC_LOG(INFO) << "MC_STORE_MEMCPY not set, auto-detected: "
+        MC_LOG_INFO << "MC_STORE_MEMCPY not set, auto-detected: "
                   << (memcpy_enabled_ ? "TCP-only environment, memcpy enabled"
                                       : "non-TCP transport available, memcpy "
                                         "disabled");
@@ -972,13 +972,13 @@ TransferSubmitter::TransferSubmitter(TransferEngine& engine,
                    env_str == "on") {
             memcpy_enabled_ = true;
         } else {
-            MC_LOG(WARNING) << "Invalid value for MC_STORE_MEMCPY: " << env_str
+            MC_LOG_WARNING << "Invalid value for MC_STORE_MEMCPY: " << env_str
                          << ", defaulting to enabled";
             memcpy_enabled_ = true;
         }
     }
 
-    MC_VLOG(1) << "TransferSubmitter initialized with memcpy_enabled="
+    MC_LOG_INFO << "TransferSubmitter initialized with memcpy_enabled="
             << memcpy_enabled_;
 }
 
@@ -1009,7 +1009,7 @@ std::optional<TransferFuture> TransferSubmitter::submit(
                         submitTransferEngineOperation(handle, slices, op_code);
                     break;
                 default:
-                    MC_LOG(ERROR) << "Unknown transfer strategy: " << strategy;
+                    MC_LOG_ERROR << "Unknown transfer strategy: " << strategy;
                     return std::nullopt;
             }
         }
@@ -1024,7 +1024,7 @@ std::optional<TransferFuture> TransferSubmitter::submit(
 
         future = submitSpdkNofOperation(handle, ptr, size, op_code);
 #else
-        LOG(ERROR) << "NoF transfer requested while USE_NOF is disabled";
+        LOG_ERROR << "NoF transfer requested while USE_NOF is disabled";
         return std::nullopt;
 #endif
     } else {
@@ -1060,7 +1060,7 @@ std::optional<TransferFuture> TransferSubmitter::submit_batch(
             std::chrono::duration_cast<std::chrono::microseconds>(
                 std::chrono::steady_clock::now() - t_open_start)
                 .count();
-        MC_LOG(INFO) << "open_segment_breakdown endpoint["
+        MC_LOG_INFO << "open_segment_breakdown endpoint["
                      << handle.transport_endpoint_ << "] open_segment_us["
                      << open_segment_us << "] status["
                      << (seg == static_cast<uint64_t>(ERR_INVALID_ARGUMENT)
@@ -1068,7 +1068,7 @@ std::optional<TransferFuture> TransferSubmitter::submit_batch(
                              : 0)
                      << "]";
         if (seg == static_cast<uint64_t>(ERR_INVALID_ARGUMENT)) {
-            MC_LOG(ERROR) << "Failed to open segment "
+            MC_LOG_ERROR << "Failed to open segment "
                        << handle.transport_endpoint_;
             return std::nullopt;
         }
@@ -1107,13 +1107,13 @@ TransferSubmitter::submit_batch_get_offload_object(
         std::chrono::duration_cast<std::chrono::microseconds>(
             std::chrono::steady_clock::now() - t_open_start)
             .count();
-    MC_LOG(INFO) << "open_segment_breakdown endpoint[" << transfer_engine_addr
+    MC_LOG_INFO << "open_segment_breakdown endpoint[" << transfer_engine_addr
                  << "] open_segment_us[" << open_segment_us << "] status["
                  << (seg == static_cast<uint64_t>(ERR_INVALID_ARGUMENT) ? -1
                                                                         : 0)
                  << "]";
     if (seg == static_cast<uint64_t>(ERR_INVALID_ARGUMENT)) {
-        MC_LOG(ERROR) << "Failed to open segment " << transfer_engine_addr;
+        MC_LOG_ERROR << "Failed to open segment " << transfer_engine_addr;
         // nullopt = failure (caller checks !future).  The function returns
         // std::optional so tl::unexpected is not available here.
         return std::nullopt;
@@ -1123,7 +1123,7 @@ TransferSubmitter::submit_batch_get_offload_object(
         const uint64_t pointer = pointers[i];
         auto it = batched_slices.find(key);
         if (it == batched_slices.end()) {
-            MC_LOG(ERROR) << "Key not found in batched_slices: " << key;
+            MC_LOG_ERROR << "Key not found in batched_slices: " << key;
             return std::nullopt;  // fail closed
         }
         // Emit one TransferRequest per slice: the on-disk blob is read
@@ -1181,7 +1181,7 @@ std::optional<TransferFuture> TransferSubmitter::submitMemcpyOperation(
     MemcpyTask task(std::move(operations), state, trace_id);
     memcpy_pool_->submitTask(std::move(task));
 
-    MC_VLOG(1) << "Memcpy transfer submitted to worker pool with " << slices.size()
+    MC_LOG_INFO << "Memcpy transfer submitted to worker pool with " << slices.size()
             << " operations";
 
     return TransferFuture(state);
@@ -1198,7 +1198,7 @@ std::optional<TransferFuture> TransferSubmitter::submitTransfer(
     BatchID batch_id = engine_.allocateBatchID(batch_size);
     const auto t_alloc = std::chrono::steady_clock::now();
     if (batch_id == INVALID_BATCH_ID) {
-        MC_LOG(ERROR) << "Failed to allocate batch ID";
+        MC_LOG_ERROR << "Failed to allocate batch ID";
         return std::nullopt;
     }
 
@@ -1213,14 +1213,14 @@ std::optional<TransferFuture> TransferSubmitter::submitTransfer(
                                                               t_alloc)
             .count();
     const int submit_status = s.ok() ? 0 : static_cast<int>(s.code());
-    MC_LOG(INFO) << "submit_transfer_breakdown first_transfer["
+    MC_LOG_INFO << "submit_transfer_breakdown first_transfer["
                  << (first_transfer ? 1 : 0) << "] batch_id[" << batch_id
                  << "] request_count[" << requests.size()
                  << "] alloc_batch_id_us[" << alloc_batch_id_us
                  << "] submit_transfer_us[" << submit_transfer_us
                  << "] status[" << submit_status << "]";
     if (!s.ok()) {
-        MC_LOG(ERROR) << "Failed to submit all transfers, error code is "
+        MC_LOG_ERROR << "Failed to submit all transfers, error code is "
                    << s.code();
         // Note: batch_id will be freed by TransferEngineOperationState
         // destructor if we create the state object, otherwise we need to free
@@ -1230,7 +1230,7 @@ std::optional<TransferFuture> TransferSubmitter::submitTransfer(
     }
 
     if (batch_id == INVALID_BATCH_ID) {  // INVALID_BATCH_ID
-        MC_LOG(ERROR) << "Invalid batch ID for transfer engine operation";
+        MC_LOG_ERROR << "Invalid batch ID for transfer engine operation";
         return std::nullopt;
     }
 
@@ -1246,7 +1246,7 @@ std::optional<TransferFuture> TransferSubmitter::submitTransferEngineOperation(
     const AllocatedBuffer::Descriptor& handle, const std::vector<Slice>& slices,
     const TransferRequest::OpCode op_code, uint64_t src_offset) {
     if (handle.transport_endpoint_.empty()) {
-        MC_LOG(ERROR) << "Transport endpoint is empty for handle with address "
+        MC_LOG_ERROR << "Transport endpoint is empty for handle with address "
                    << handle.buffer_address_;
         return std::nullopt;
     }
@@ -1256,7 +1256,7 @@ std::optional<TransferFuture> TransferSubmitter::submitTransferEngineOperation(
         std::chrono::duration_cast<std::chrono::microseconds>(
             std::chrono::steady_clock::now() - t_open_start)
             .count();
-    MC_LOG(INFO) << "open_segment_breakdown endpoint["
+    MC_LOG_INFO << "open_segment_breakdown endpoint["
                  << handle.transport_endpoint_ << "] open_segment_us["
                  << open_segment_us << "] status["
                  << (seg == static_cast<uint64_t>(ERR_INVALID_ARGUMENT) ? -1
@@ -1264,7 +1264,7 @@ std::optional<TransferFuture> TransferSubmitter::submitTransferEngineOperation(
                  << "]";
 
     if (seg == static_cast<uint64_t>(ERR_INVALID_ARGUMENT)) {
-        MC_LOG(ERROR) << "Failed to open segment for endpoint='"
+        MC_LOG_ERROR << "Failed to open segment for endpoint='"
                    << handle.transport_endpoint_ << "'";
         return std::nullopt;
     }
@@ -1306,7 +1306,7 @@ std::optional<TransferFuture> TransferSubmitter::submitMemoryReadOperation(
                                              TransferRequest::READ, src_offset);
     }
 
-    MC_LOG(ERROR) << "Read only supports LOCAL_MEMCPY or TRANSFER_ENGINE, got: "
+    MC_LOG_ERROR << "Read only supports LOCAL_MEMCPY or TRANSFER_ENGINE, got: "
                << strategy;
     return std::nullopt;
 }
@@ -1323,7 +1323,7 @@ std::optional<TransferFuture> TransferSubmitter::submitRangeRead(
         size_t slices_size = 0;
         for (const auto& s : slices) slices_size += s.size;
         if (src_offset + slices_size > handle.size_) {
-            MC_LOG(ERROR) << "Range read overflow: src_offset=" << src_offset
+            MC_LOG_ERROR << "Range read overflow: src_offset=" << src_offset
                        << " + slices_size=" << slices_size
                        << " > handle.size_=" << handle.size_;
             return std::nullopt;
@@ -1331,10 +1331,10 @@ std::optional<TransferFuture> TransferSubmitter::submitRangeRead(
 
         future = submitMemoryReadOperation(handle, slices, src_offset);
     } else if (replica.is_nof_replica()) {
-        LOG(ERROR) << "Range read not supported for NoF replicas";
+        LOG_ERROR << "Range read not supported for NoF replicas";
         return std::nullopt;
     } else if (replica.is_disk_replica() || replica.is_local_disk_replica()) {
-        MC_LOG(ERROR)
+        MC_LOG_ERROR
             << "Range read not supported for disk replicas (use full read)";
         return std::nullopt;
     }
@@ -1351,7 +1351,7 @@ std::optional<TransferFuture> TransferSubmitter::submitSpdkNofOperation(
     const AllocatedBuffer::Descriptor& handle, void* ptr, size_t size,
     const TransferRequest::OpCode op_code) {
     if (handle.transport_endpoint_.empty() || handle.size_ < size) {
-        LOG(ERROR) << "Invalid NoF request endpoint="
+        LOG_ERROR << "Invalid NoF request endpoint="
                    << handle.transport_endpoint_
                    << ", buffer_size=" << handle.size_
                    << ", request_size=" << size;
@@ -1361,7 +1361,7 @@ std::optional<TransferFuture> TransferSubmitter::submitSpdkNofOperation(
     nof_seg_handle* seg_handle =
         SpdkWrapper::GetInstance().OpenNofSegment(handle.transport_endpoint_);
     if (!seg_handle) {
-        LOG(ERROR) << "Failed to open NoF segment endpoint="
+        LOG_ERROR << "Failed to open NoF segment endpoint="
                    << handle.transport_endpoint_;
         return std::nullopt;
     }
@@ -1370,7 +1370,7 @@ std::optional<TransferFuture> TransferSubmitter::submitSpdkNofOperation(
     if (block_size == INVALID_BLOCK_SIZE ||
         handle.buffer_address_ % block_size != 0 || size % block_size != 0 ||
         reinterpret_cast<std::uintptr_t>(ptr) % block_size != 0) {
-        LOG(ERROR) << "NoF request offset=" << handle.buffer_address_
+        LOG_ERROR << "NoF request offset=" << handle.buffer_address_
                    << ", ptr=" << ptr << ", size=" << size
                    << " is not aligned to block size " << block_size;
         return std::nullopt;
@@ -1381,7 +1381,7 @@ std::optional<TransferFuture> TransferSubmitter::submitSpdkNofOperation(
                      size / block_size, op_code, state);
     spdk_nvmf_pool_->submitTask(std::move(task));
 
-    VLOG(1) << "SPDK NoF transfer submitted to " << handle.transport_endpoint_;
+    LOG_INFO << "SPDK NoF transfer submitted to " << handle.transport_endpoint_;
     return TransferFuture(state);
 }
 #endif
@@ -1399,7 +1399,7 @@ std::optional<TransferFuture> TransferSubmitter::submitFileReadOperation(
     FilereadTask task(file_path, file_length, slices, state, trace_id);
     fileread_pool_->submitTask(std::move(task));
 
-    MC_VLOG(1) << "Fileread transfer submitted to worker pool with " << file_path;
+    MC_LOG_INFO << "Fileread transfer submitted to worker pool with " << file_path;
 
     return TransferFuture(state);
 }
@@ -1409,7 +1409,7 @@ TransferStrategy TransferSubmitter::selectStrategy(
     const std::vector<Slice>& slices) const {
     // Check if memcpy operations are enabled via environment variable
     if (!memcpy_enabled_) {
-        MC_VLOG(2) << "Memcpy operations disabled via MC_STORE_MEMCPY environment "
+        MC_LOG_INFO << "Memcpy operations disabled via MC_STORE_MEMCPY environment "
                    "variable";
         return TransferStrategy::TRANSFER_ENGINE;
     }
@@ -1434,7 +1434,7 @@ std::string extractIpAddress(const std::string& endpoint) {
     if (endpoint[0] == '[') {
         size_t closing_bracket = endpoint.find(']');
         if (closing_bracket == std::string::npos) {
-            MC_LOG(WARNING) << "Invalid IPv6 endpoint format: " << endpoint;
+            MC_LOG_WARNING << "Invalid IPv6 endpoint format: " << endpoint;
             return "";
         }
         return endpoint.substr(1, closing_bracket - 1);
@@ -1469,7 +1469,7 @@ bool TransferSubmitter::isSameProcessEndpoint(
     const std::string handle_ip = extractIpAddress(handle_endpoint);
     const std::string local_ip = extractIpAddress(local_endpoint);
     if (!handle_ip.empty() && handle_ip == local_ip) {
-        MC_VLOG(2) << "Disabling local memcpy for same-host endpoints with "
+        MC_LOG_INFO << "Disabling local memcpy for same-host endpoints with "
                    "different process endpoints: handle="
                 << handle_endpoint << ", local=" << local_endpoint;
     }
@@ -1491,7 +1491,7 @@ bool TransferSubmitter::validateTransferParams(
         all_slice_len += slice.size;
     }
     if (handle.size_ != all_slice_len) {
-        MC_LOG(ERROR) << "handles len:" << handle.size_
+        MC_LOG_ERROR << "handles len:" << handle.size_
                    << ", all_slice_len:" << all_slice_len;
         return false;
     }

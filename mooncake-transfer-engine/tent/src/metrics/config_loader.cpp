@@ -13,8 +13,9 @@
 // limitations under the License.
 
 #include "tent/metrics/config_loader.h"
+#include "log_macros.h"
 
-#include <glog/logging.h>
+
 
 #include <cstdlib>
 
@@ -114,7 +115,7 @@ MetricsConfig MetricsConfigLoader::loadFromConfig(const Config& config) {
         metrics_config.size_buckets = size_buckets_array;
     }
 
-    LOG(INFO) << "Loaded metrics config from Config object: enabled="
+    LOG_INFO << "Loaded metrics config from Config object: enabled="
               << metrics_config.enabled
               << ", port=" << metrics_config.http_port;
 
@@ -125,7 +126,7 @@ MetricsConfig MetricsConfigLoader::loadFromEnvironment() {
     MetricsConfig metrics_config = getDefaultConfig();
     applyEnvironmentOverrides(metrics_config);
 
-    LOG(INFO) << "Loaded metrics config from environment: enabled="
+    LOG_INFO << "Loaded metrics config from environment: enabled="
               << metrics_config.enabled
               << ", port=" << metrics_config.http_port;
 

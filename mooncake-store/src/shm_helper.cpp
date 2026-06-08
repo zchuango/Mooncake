@@ -1,4 +1,5 @@
 #include "shm_helper.h"
+#include "log_macros.h"
 
 #include <cstdlib>
 #include <cstring>
@@ -8,7 +9,7 @@
 #include <sys/syscall.h>
 #include <fcntl.h>
 #include <unistd.h>
-#include <glog/logging.h>
+
 
 #include "utils.h"
 #include "config.h"
@@ -61,7 +62,7 @@ bool ShmHelper::cleanup() {
             }
 #endif
             if (munmap(shm->base_addr, shm->size) == -1) {
-                LOG(ERROR) << "Failed to unmap shared memory: "
+                LOG_ERROR << "Failed to unmap shared memory: "
                            << strerror(errno);
                 ret = false;
             }
@@ -103,7 +104,7 @@ void* ShmHelper::allocate(size_t size) {
     if (use_hugepage_) {
         bool use_memfd = true;
         size = align_up(size, get_hugepage_size_from_env(&flags, use_memfd));
-        LOG(INFO) << "Using huge pages for shared memory, size: " << size;
+        LOG_INFO << "Using huge pages for shared memory, size: " << size;
     }
 
     int fd = memfd_create_wrapper(MOONCAKE_SHM_NAME, flags);
@@ -155,18 +156,18 @@ int ShmHelper::free(void* addr) {
                 } else
 #endif
                     if (munmap((*it)->base_addr, (*it)->size) == -1) {
-                    LOG(ERROR) << "Failed to unmap shared memory during free: "
+                    LOG_ERROR << "Failed to unmap shared memory during free: "
                                << strerror(errno);
                     return -1;
                 }
             }
-            LOG(INFO) << "Freed shared memory at " << addr
+            LOG_INFO << "Freed shared memory at " << addr
                       << ", size: " << (*it)->size;
             shms_.erase(it);
             return 0;
         }
     }
-    LOG(ERROR) << "Attempted to free unknown shared memory address: " << addr;
+    LOG_ERROR << "Attempted to free unknown shared memory address: " << addr;
     return -1;
 }
 

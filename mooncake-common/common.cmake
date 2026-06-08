@@ -408,3 +408,7 @@ find_package(yaml-cpp REQUIRED)
 find_package(gflags REQUIRED)
 find_package(yalantinglibs CONFIG REQUIRED)
 add_compile_definitions(YLT_ENABLE_IBV)
+
+# Prepend spdlog submodule to include path for all targets
+set(SPDLOG_SUBMODULE_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/extern/spdlog/include)
+list(PREPEND CMAKE_INCLUDE_PATH "${SPDLOG_SUBMODULE_INCLUDE}")

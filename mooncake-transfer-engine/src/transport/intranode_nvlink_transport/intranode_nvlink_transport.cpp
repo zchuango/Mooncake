@@ -13,10 +13,11 @@
 // limitations under the License.
 
 #include "transport/intranode_nvlink_transport/intranode_nvlink_transport.h"
+#include "log_macros.h"
 
 #include <bits/stdint-uintn.h>
 #include "cuda_alike.h"
-#include <glog/logging.h>
+
 
 #include <algorithm>
 #include <cassert>
@@ -38,7 +39,7 @@ struct CudaStreamNVLinkRAII {
     CudaStreamNVLinkRAII() : stream_(nullptr) {
         auto err = cudaStreamCreateWithFlags(&stream_, cudaStreamNonBlocking);
         if (err != cudaSuccess) {
-            LOG(FATAL) << "Failed to create NVLink CUDA stream: " << err
+            LOG_FATAL << "Failed to create NVLink CUDA stream: " << err
                        << " - " << cudaGetErrorString(err);
         }
     }
@@ -55,7 +56,7 @@ struct CudaSyncEventRAII {
     CudaSyncEventRAII() {
         auto err = cudaEventCreateWithFlags(&event_, cudaEventDisableTiming);
         if (err != cudaSuccess) {
-            LOG(FATAL) << "Failed to create NVLink sync CUDA event: " << err
+            LOG_FATAL << "Failed to create NVLink sync CUDA event: " << err
                        << " - " << cudaGetErrorString(err);
         }
     }
@@ -66,7 +67,7 @@ static thread_local CudaSyncEventRAII tl_nvlink_sync_event;
 
 static bool checkCudaErrorReturn(cudaError_t result, const char *message) {
     if (result != cudaSuccess) {
-        LOG(ERROR) << message << " (Error code: " << result << " - "
+        LOG_ERROR << message << " (Error code: " << result << " - "
                    << cudaGetErrorString(result) << ")" << std::endl;
         return false;
     }
@@ -96,7 +97,7 @@ static bool enableP2PAccess(int src_device_id, int dst_device_id) {
     }
 
     if (!canAccessPeer) {
-        LOG(ERROR) << "IntraNodeNvlinkTransport: device " << src_device_id
+        LOG_ERROR << "IntraNodeNvlinkTransport: device " << src_device_id
                    << " cannot p2p access device " << dst_device_id;
         return false;
     }
@@ -110,7 +111,7 @@ static bool enableP2PAccess(int src_device_id, int dst_device_id) {
     cudaError_t result = cudaDeviceEnablePeerAccess(dst_device_id, 0);
 
     if (result != cudaSuccess && result != cudaErrorPeerAccessAlreadyEnabled) {
-        LOG(ERROR) << "IntraNodeNvlinkTransport: failed to enable p2p access "
+        LOG_ERROR << "IntraNodeNvlinkTransport: failed to enable p2p access "
                       "(Error code: "
                    << result << " - " << cudaGetErrorString(result) << ")"
                    << std::endl;
@@ -127,7 +128,7 @@ static bool enableP2PAccess(int src_device_id, int dst_device_id) {
     result = cudaDeviceEnablePeerAccess(src_device_id, 0);
 
     if (result != cudaSuccess && result != cudaErrorPeerAccessAlreadyEnabled) {
-        LOG(ERROR) << "IntraNodeNvlinkTransport: failed to enable p2p access "
+        LOG_ERROR << "IntraNodeNvlinkTransport: failed to enable p2p access "
                       "(Error code: "
                    << result << " - " << cudaGetErrorString(result) << ")"
                    << std::endl;
@@ -143,7 +144,7 @@ IntraNodeNvlinkTransport::IntraNodeNvlinkTransport() {}
 // use_fabric_mem_(supportFabricMem()) {}
 //     int num_devices = getNumDevices();
 //     if (globalConfig().trace) {
-//         LOG(INFO) << "IntraNodeNvlinkTransport: use_fabric_mem_:" <<
+//         LOG_INFO << "IntraNodeNvlinkTransport: use_fabric_mem_:" <<
 //         use_fabric_mem_
 //                   << ", num_devices: " << num_devices;
 //     }
@@ -155,13 +156,13 @@ IntraNodeNvlinkTransport::IntraNodeNvlinkTransport() {}
 //              ++dst_device_id) {
 //             if (enableP2PAccess(src_device_id, dst_device_id)) {
 //                 if (globalConfig().trace) {
-//                     LOG(INFO)
+//                     LOG_INFO
 //                         << "IntraNodeNvlinkTransport: enabled p2p access
 //                         between device "
 //                         << src_device_id << " and " << dst_device_id;
 //                 }
 //             } else {
-//                 LOG(ERROR) << "IntraNodeNvlinkTransport: failed to enable p2p
+//                 LOG_ERROR << "IntraNodeNvlinkTransport: failed to enable p2p
 //                 access "
 //                               "between device "
 //                            << src_device_id << " and " << dst_device_id;
@@ -196,7 +197,7 @@ Status IntraNodeNvlinkTransport::submitTransfer(
     BatchID batch_id, const std::vector<TransferRequest> &entries) {
     auto &batch_desc = *((BatchDesc *)(batch_id));
     if (batch_desc.task_list.size() + entries.size() > batch_desc.batch_size) {
-        LOG(ERROR) << "IntraNodeNvlinkTransport: Exceed the limitation of "
+        LOG_ERROR << "IntraNodeNvlinkTransport: Exceed the limitation of "
                       "current batch's "
                       "capacity";
         return Status::InvalidArgument(
@@ -219,7 +220,7 @@ Status IntraNodeNvlinkTransport::submitTransfer(
     cudaError_t sync_err =
         cudaEventRecord(tl_nvlink_sync_event.event_, cudaStreamPerThread);
     if (sync_err != cudaSuccess) {
-        LOG(ERROR) << "IntraNodeNvlinkTransport: cudaEventRecord on "
+        LOG_ERROR << "IntraNodeNvlinkTransport: cudaEventRecord on "
                       "cudaStreamPerThread failed: "
                    << cudaGetErrorString(sync_err);
         return Status::Context("cudaEventRecord failed: " +
@@ -227,7 +228,7 @@ Status IntraNodeNvlinkTransport::submitTransfer(
     }
     sync_err = cudaStreamWaitEvent(stream, tl_nvlink_sync_event.event_, 0);
     if (sync_err != cudaSuccess) {
-        LOG(ERROR) << "IntraNodeNvlinkTransport: cudaStreamWaitEvent failed: "
+        LOG_ERROR << "IntraNodeNvlinkTransport: cudaStreamWaitEvent failed: "
                    << cudaGetErrorString(sync_err);
         return Status::Context("cudaStreamWaitEvent failed: " +
                                std::string(cudaGetErrorString(sync_err)));
@@ -324,7 +325,7 @@ Status IntraNodeNvlinkTransport::submitTransferTask(
     cudaError_t sync_err =
         cudaEventRecord(tl_nvlink_sync_event.event_, cudaStreamPerThread);
     if (sync_err != cudaSuccess) {
-        LOG(ERROR) << "IntraNodeNvlinkTransport: cudaEventRecord on "
+        LOG_ERROR << "IntraNodeNvlinkTransport: cudaEventRecord on "
                       "cudaStreamPerThread failed: "
                    << cudaGetErrorString(sync_err);
         return Status::Context("cudaEventRecord failed: " +
@@ -332,7 +333,7 @@ Status IntraNodeNvlinkTransport::submitTransferTask(
     }
     sync_err = cudaStreamWaitEvent(stream, tl_nvlink_sync_event.event_, 0);
     if (sync_err != cudaSuccess) {
-        LOG(ERROR) << "IntraNodeNvlinkTransport: cudaStreamWaitEvent failed: "
+        LOG_ERROR << "IntraNodeNvlinkTransport: cudaStreamWaitEvent failed: "
                    << cudaGetErrorString(sync_err);
         return Status::Context("cudaStreamWaitEvent failed: " +
                                std::string(cudaGetErrorString(sync_err)));
@@ -388,18 +389,18 @@ int IntraNodeNvlinkTransport::registerLocalMemory(void *addr, size_t length,
                                                   bool update_metadata) {
     std::lock_guard<std::mutex> lock(register_mutex_);
     if (globalConfig().trace) {
-        LOG(INFO) << "register memory: addr " << addr << ", length " << length;
+        LOG_INFO << "register memory: addr " << addr << ", length " << length;
     }
     cudaPointerAttributes attr;
     cudaError_t err = cudaPointerGetAttributes(&attr, addr);
     if (err != cudaSuccess) {
-        LOG(ERROR)
+        LOG_ERROR
             << "IntraNodeNvlinkTransport: cudaPointerGetAttributes failed";
         return -1;
     }
 
     if (attr.type != cudaMemoryTypeDevice) {
-        LOG(ERROR) << "Unsupported memory type, " << addr << " " << attr.type;
+        LOG_ERROR << "Unsupported memory type, " << addr << " " << attr.type;
         return -1;
     }
 
@@ -412,7 +413,7 @@ int IntraNodeNvlinkTransport::registerLocalMemory(void *addr, size_t length,
     CUresult cu_err =
         cuMemGetAddressRange(&base_ptr, &alloc_size, (CUdeviceptr)addr);
     if (cu_err != CUDA_SUCCESS) {
-        LOG(ERROR) << "IntraNodeNvlinkTransport: cuMemGetAddressRange failed "
+        LOG_ERROR << "IntraNodeNvlinkTransport: cuMemGetAddressRange failed "
                    << "for addr " << addr << " (error " << cu_err << ")";
         return -1;
     }
@@ -425,7 +426,7 @@ int IntraNodeNvlinkTransport::registerLocalMemory(void *addr, size_t length,
     cudaIpcMemHandle_t handle;
     err = cudaIpcGetMemHandle(&handle, (void *)base_ptr);
     if (err != cudaSuccess) {
-        LOG(ERROR) << "IntraNodeNvlinkTransport: cudaIpcGetMemHandle failed";
+        LOG_ERROR << "IntraNodeNvlinkTransport: cudaIpcGetMemHandle failed";
         return -1;
     }
 
@@ -453,7 +454,7 @@ int IntraNodeNvlinkTransport::unregisterLocalMemory(void *addr,
     if (cu_err == CUDA_SUCCESS) {
         key_ptr = (void *)base_ptr;
     } else {
-        LOG(WARNING)
+        LOG_WARNING
             << "IntraNodeNvlinkTransport: cuMemGetAddressRange failed for "
             << "addr " << addr << " during unregister (error " << cu_err
             << "). Memory may already be freed, using provided address.";
@@ -495,7 +496,7 @@ int IntraNodeNvlinkTransport::relocateSharedMemoryAddress(uint64_t &dest_addr,
                     cudaError_t err = cudaIpcOpenMemHandle(
                         &shm_addr, handle, cudaIpcMemLazyEnablePeerAccess);
                     if (err != cudaSuccess) {
-                        LOG(ERROR) << "IntraNodeNvlinkTransport: "
+                        LOG_ERROR << "IntraNodeNvlinkTransport: "
                                       "cudaIpcOpenMemHandle failed: "
                                    << cudaGetErrorString(err);
                         return -1;
@@ -506,7 +507,7 @@ int IntraNodeNvlinkTransport::relocateSharedMemoryAddress(uint64_t &dest_addr,
                     remap_entries_[std::make_pair(target_id, entry.addr)] =
                         shm_entry;
                 } else {
-                    LOG(ERROR) << "Mismatched NVLink data transfer method";
+                    LOG_ERROR << "Mismatched NVLink data transfer method";
                     return -1;
                 }
             }
@@ -517,7 +518,7 @@ int IntraNodeNvlinkTransport::relocateSharedMemoryAddress(uint64_t &dest_addr,
         }
         index++;
     }
-    LOG(ERROR) << "Requested address " << (void *)dest_addr << " to "
+    LOG_ERROR << "Requested address " << (void *)dest_addr << " to "
                << (void *)(dest_addr + length) << " not found!";
     return ERR_INVALID_ARGUMENT;
 }
@@ -540,11 +541,11 @@ void *IntraNodeNvlinkTransport::allocatePinnedLocalMemory(size_t size) {
     void *ptr = nullptr;
     cudaError_t res = cudaMalloc(&ptr, size);
     if (res == cudaSuccess) {
-        LOG(INFO) << "IntraNodeNvlinkTransport: Falling back to cudaMalloc for "
+        LOG_INFO << "IntraNodeNvlinkTransport: Falling back to cudaMalloc for "
                   << size << " bytes (memory will NOT be exportable)";
         return ptr;
     } else {
-        LOG(ERROR)
+        LOG_ERROR
             << "IntraNodeNvlinkTransport: cudaMalloc failed during fallback: "
             << cudaGetErrorString(res);
         return nullptr;

@@ -50,45 +50,31 @@ bool RateLimiter::ShouldLog(uint64_t traceHash, int64_t nowMs)
         return true;  // No limiting
     }
 
-    // Cleanup stale entries periodically
-    CleanupStaleWindows(nowMs);
-
-    Window *win = GetOrCreateWindow(traceHash);
-    if (!win) {
-        return true;
-    }
+    std::lock_guard<std::mutex> lock(mutex_);
+    CleanupStaleWindowsLocked(nowMs);
+    Window &win = windows_[traceHash];
 
     // Check if we need to reset the window for a new second
     int64_t windowStart = nowMs / WINDOW_SIZE_MS;
-    int64_t lastWindowStart = win->lastWindowMs / WINDOW_SIZE_MS;
+    int64_t lastWindowStart = win.lastWindowMs / WINDOW_SIZE_MS;
 
     if (windowStart > lastWindowStart) {
         // New second, reset counter
-        win->lastWindowMs = nowMs;
-        win->count = 1;
+        win.lastWindowMs = nowMs;
+        win.count = 1;
         return true;
     }
 
     // Within same second window
-    if (win->count < limit) {
-        ++win->count;
+    if (win.count < limit) {
+        ++win.count;
         return true;
     }
 
     return false;  // Rate exceeded
 }
 
-RateLimiter::Window *RateLimiter::GetOrCreateWindow(uint64_t traceHash)
-{
-    if (!IsEnabled()) {
-        return nullptr;
-    }
-
-    std::lock_guard<std::mutex> lock(mutex_);
-    return &windows_[traceHash];
-}
-
-void RateLimiter::CleanupStaleWindows(int64_t nowMs)
+void RateLimiter::CleanupStaleWindowsLocked(int64_t nowMs)
 {
     int64_t lastCleanup = lastCleanupMs_.load(std::memory_order_relaxed);
     if (nowMs - lastCleanup < CLEANUP_INTERVAL_MS) {
@@ -100,7 +86,6 @@ void RateLimiter::CleanupStaleWindows(int64_t nowMs)
         return;
     }
 
-    std::lock_guard<std::mutex> lock(mutex_);
     int64_t staleThreshold = nowMs - WINDOW_SIZE_MS * 2;
 
     for (auto it = windows_.begin(); it != windows_.end(); ) {

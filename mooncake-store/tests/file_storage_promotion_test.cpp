@@ -2,7 +2,7 @@
 // that overrides the 4 promotion-RPC entry points so we can drive the
 // orchestration loop deterministically without standing up a master.
 
-#include <glog/logging.h>
+
 #include <gtest/gtest.h>
 
 #include <atomic>

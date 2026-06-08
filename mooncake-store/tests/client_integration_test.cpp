@@ -1,5 +1,6 @@
 #include <gflags/gflags.h>
-#include <glog/logging.h>
+#include "log_macros.h"
+
 #include <gtest/gtest.h>
 
 #include <cstdint>
@@ -44,10 +45,10 @@ UUID ParseClientId(const std::string& client_id_str) {
             client_id.first = std::stoull(client_id_str.substr(0, dash_pos));
             client_id.second = std::stoull(client_id_str.substr(dash_pos + 1));
         } catch (const std::exception& e) {
-            LOG(ERROR) << "Failed to parse client_id: " << e.what();
+            LOG_ERROR << "Failed to parse client_id: " << e.what();
         }
     } else {
-        LOG(ERROR) << "Invalid client_id format. Expected format: first-second";
+        LOG_ERROR << "Invalid client_id format. Expected format: first-second";
     }
     return client_id;
 }
@@ -111,7 +112,7 @@ class ClientIntegrationTest : public ::testing::Test {
         if (getenv("PROTOCOL")) FLAGS_protocol = getenv("PROTOCOL");
         if (getenv("DEVICE_NAME")) FLAGS_device_name = getenv("DEVICE_NAME");
 
-        LOG(INFO) << "Protocol: " << FLAGS_protocol
+        LOG_INFO << "Protocol: " << FLAGS_protocol
                   << ", Device name: " << FLAGS_device_name;
 
         if (getenv("DEFAULT_KV_LEASE_TTL")) {
@@ -119,13 +120,13 @@ class ClientIntegrationTest : public ::testing::Test {
         } else {
             default_kv_lease_ttl_ = FLAGS_default_kv_lease_ttl;
         }
-        LOG(INFO) << "Default KV lease TTL: " << default_kv_lease_ttl_;
+        LOG_INFO << "Default KV lease TTL: " << default_kv_lease_ttl_;
 
         // Start an in-process non-HA master without HTTP metadata server
         ASSERT_TRUE(master_.Start(InProcMasterConfigBuilder().build()));
         master_address_ = master_.master_address();
         metadata_url_ = master_.metadata_url();
-        LOG(INFO) << "Started in-proc master at " << master_address_
+        LOG_INFO << "Started in-proc master at " << master_address_
                   << ", metadata=P2PHANDSHAKE";
 
         InitializeClients();
@@ -146,10 +147,10 @@ class ClientIntegrationTest : public ::testing::Test {
         auto mount_result = segment_provider_client_->MountSegment(
             segment_ptr_, ram_buffer_size_, FLAGS_protocol);
         if (!mount_result.has_value()) {
-            LOG(ERROR) << "Failed to mount segment: "
+            LOG_ERROR << "Failed to mount segment: "
                        << toString(mount_result.error());
         }
-        LOG(INFO) << "Segment mounted successfully";
+        LOG_INFO << "Segment mounted successfully";
     }
 
     static void InitializeClients() {
@@ -170,7 +171,7 @@ class ClientIntegrationTest : public ::testing::Test {
                 ParseClientId(test_client_sink->captured_client_id);
             if (extracted_id.first != 0 || extracted_id.second != 0) {
                 test_client_id_ = extracted_id;
-                LOG(INFO) << "Captured test_client_id: "
+                LOG_INFO << "Captured test_client_id: "
                           << FormatClientId(test_client_id_);
             }
         }
@@ -193,7 +194,7 @@ class ClientIntegrationTest : public ::testing::Test {
                 ParseClientId(provider_client_sink->captured_client_id);
             if (extracted_id.first != 0 || extracted_id.second != 0) {
                 segment_provider_client_id_ = extracted_id;
-                LOG(INFO) << "Captured segment_provider_client_id: "
+                LOG_INFO << "Captured segment_provider_client_id: "
                           << FormatClientId(segment_provider_client_id_);
             }
         }
@@ -205,7 +206,7 @@ class ClientIntegrationTest : public ::testing::Test {
             client_buffer_allocator_->getBase(), 128 * 1024 * 1024, "cpu:0",
             false, false);
         if (!register_result.has_value()) {
-            LOG(ERROR) << "Failed to register local memory: "
+            LOG_ERROR << "Failed to register local memory: "
                        << toString(register_result.error());
         }
 
@@ -218,10 +219,10 @@ class ClientIntegrationTest : public ::testing::Test {
             test_client_segment_ptr_, test_client_ram_buffer_size_,
             FLAGS_protocol);
         if (!test_client_mount_result.has_value()) {
-            LOG(ERROR) << "Failed to mount segment for test_client_: "
+            LOG_ERROR << "Failed to mount segment for test_client_: "
                        << toString(test_client_mount_result.error());
         }
-        LOG(INFO) << "Test client segment mounted successfully";
+        LOG_INFO << "Test client segment mounted successfully";
     }
 
     static void CleanupClients() {
@@ -231,7 +232,7 @@ class ClientIntegrationTest : public ::testing::Test {
                      ->UnmountSegment(test_client_segment_ptr_,
                                       test_client_ram_buffer_size_)
                      .has_value()) {
-                LOG(ERROR) << "Failed to unmount test client segment";
+                LOG_ERROR << "Failed to unmount test client segment";
             }
         }
 
@@ -255,7 +256,7 @@ class ClientIntegrationTest : public ::testing::Test {
         if (!segment_provider_client_
                  ->UnmountSegment(segment_ptr_, ram_buffer_size_)
                  .has_value()) {
-            LOG(ERROR) << "Failed to unmount segment";
+            LOG_ERROR << "Failed to unmount segment";
         }
     }
 
@@ -596,7 +597,7 @@ TEST_F(ClientIntegrationTest, BatchPutGetOperations) {
         ASSERT_TRUE(result.has_value()) << "BatchPut operation failed";
     }
     auto end = std::chrono::high_resolution_clock::now();
-    LOG(INFO) << "Time taken for BatchPut: "
+    LOG_INFO << "Time taken for BatchPut: "
               << std::chrono::duration_cast<std::chrono::microseconds>(end -
                                                                        start)
                      .count()
@@ -615,7 +616,7 @@ TEST_F(ClientIntegrationTest, BatchPutGetOperations) {
                                              test_data_list[i].size());
     }
     end = std::chrono::high_resolution_clock::now();
-    LOG(INFO) << "Time taken for single Get: "
+    LOG_INFO << "Time taken for single Get: "
               << std::chrono::duration_cast<std::chrono::microseconds>(end -
                                                                        start)
                      .count()
@@ -637,7 +638,7 @@ TEST_F(ClientIntegrationTest, BatchPutGetOperations) {
         ASSERT_TRUE(result.has_value()) << "BatchGet operation failed";
     }
     end = std::chrono::high_resolution_clock::now();
-    LOG(INFO) << "Time taken for BatchGet: "
+    LOG_INFO << "Time taken for BatchGet: "
               << std::chrono::duration_cast<std::chrono::microseconds>(end -
                                                                        start)
                      .count()
@@ -835,9 +836,9 @@ TEST_F(ClientIntegrationTest, BatchQueryIpOperations) {
     ASSERT_FALSE(ip_addresses.empty())
         << "test_client_ should have at least one IP address";
 
-    LOG(INFO) << "test_client_ IP addresses (" << ip_addresses.size() << "):";
+    LOG_INFO << "test_client_ IP addresses (" << ip_addresses.size() << "):";
     for (size_t i = 0; i < ip_addresses.size(); ++i) {
-        LOG(INFO) << "  [" << (i + 1) << "] " << ip_addresses[i];
+        LOG_INFO << "  [" << (i + 1) << "] " << ip_addresses[i];
     }
 
     // Verify IP addresses are valid (should contain "127.0.0.1" or "localhost")
@@ -874,10 +875,10 @@ TEST_F(ClientIntegrationTest, BatchQueryIpOperations) {
     if (provider_it != multi_results.end()) {
         EXPECT_FALSE(provider_it->second.empty())
             << "segment_provider_client_ should have IP addresses";
-        LOG(INFO) << "segment_provider_client_ IP addresses ("
+        LOG_INFO << "segment_provider_client_ IP addresses ("
                   << provider_it->second.size() << "):";
         for (size_t i = 0; i < provider_it->second.size(); ++i) {
-            LOG(INFO) << "  [" << (i + 1) << "] " << provider_it->second[i];
+            LOG_INFO << "  [" << (i + 1) << "] " << provider_it->second[i];
         }
     }
 

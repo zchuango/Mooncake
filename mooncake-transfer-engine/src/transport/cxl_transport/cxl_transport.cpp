@@ -13,9 +13,10 @@
 // limitations under the License.
 
 #include "transport/cxl_transport/cxl_transport.h"
+#include "log_macros.h"
 
 #include <bits/stdint-uintn.h>
-#include <glog/logging.h>
+
 
 #include <algorithm>
 #include <cassert>
@@ -44,7 +45,7 @@ CxlTransport::CxlTransport() {
     const char *env_cxl_dev_path = std::getenv("MC_CXL_DEV_PATH");
 
     if (env_cxl_dev_path) {
-        LOG(INFO) << "MC_CXL_DEV_PATH: " << env_cxl_dev_path;
+        LOG_INFO << "MC_CXL_DEV_PATH: " << env_cxl_dev_path;
         cxl_dev_path = (char *)env_cxl_dev_path;
         cxl_dev_size = cxlGetDeviceSize();
     }
@@ -63,7 +64,7 @@ size_t CxlTransport::cxlGetDeviceSize() {
     const char *env_cxl_dev_size = std::getenv("MC_CXL_DEV_SIZE");
 
     if (env_cxl_dev_size) {
-        LOG(INFO) << "MC_CXL_DEV_SIZE: " << env_cxl_dev_size;
+        LOG_INFO << "MC_CXL_DEV_SIZE: " << env_cxl_dev_size;
         char *end = nullptr;
         unsigned long long val = strtoull(env_cxl_dev_size, &end, 10);
         if (end != env_cxl_dev_size && *end == '\0')
@@ -79,28 +80,28 @@ size_t CxlTransport::cxlGetDeviceSize() {
         if (std::regex_search(str_cxl_dev_path, match, dax_pattern)) {
             dev_name = match.str();
         } else {
-            LOG(ERROR) << "Can not find CXL device name in path: "
+            LOG_ERROR << "Can not find CXL device name in path: "
                        << cxl_dev_path;
             return 0;
         }
 
         std::string size_path = "/sys/bus/dax/devices/" + dev_name + "/size";
-        LOG(INFO) << "Try to get CXL device size from: " << size_path;
+        LOG_INFO << "Try to get CXL device size from: " << size_path;
         std::ifstream file(size_path);
         if (!file.is_open()) {
-            LOG(ERROR) << "CXL size file does not exist";
+            LOG_ERROR << "CXL size file does not exist";
             return 0;
         }
 
         std::string content;
         if (!std::getline(file, content)) {
-            LOG(ERROR) << "Failed to read from: " << size_path;
+            LOG_ERROR << "Failed to read from: " << size_path;
             return 0;
         }
 
         unsigned long long val = strtoull(content.c_str(), nullptr, 10);
         // the content is written by kernel, so it should be a valid ull
-        LOG(INFO) << "CXL device size is: " << val;
+        LOG_INFO << "CXL device size is: " << val;
         return static_cast<size_t>(val);
     }
     return 0;
@@ -109,7 +110,7 @@ size_t CxlTransport::cxlGetDeviceSize() {
 int CxlTransport::cxlMemcpy(void *dest, void *src, size_t size) {
     // Input validation
     if (!src || !dest) {
-        LOG(ERROR) << "CxlTransport::cxlMemcpy invalid arguments: null pointer "
+        LOG_ERROR << "CxlTransport::cxlMemcpy invalid arguments: null pointer "
                       "provided.";
         return -1;  // null pointer
     }
@@ -140,7 +141,7 @@ bool CxlTransport::validateMemoryBounds(void *dest, void *src, size_t size) {
     if (isAddressInCxlRange(dest)) {
         uintptr_t dest_end = dest_ptr + size;
         if (dest_end > end || dest_end < dest_ptr) {
-            LOG(ERROR) << "CxlTransport::cxlMemcpy destination out of bounds.";
+            LOG_ERROR << "CxlTransport::cxlMemcpy destination out of bounds.";
             return false;
         }
     }
@@ -148,7 +149,7 @@ bool CxlTransport::validateMemoryBounds(void *dest, void *src, size_t size) {
     if (isAddressInCxlRange(src)) {
         uintptr_t src_end = src_ptr + size;
         if (src_end > end || src_end < src_ptr) {
-            LOG(ERROR) << "CxlTransport::cxlMemcpy source out of bounds.";
+            LOG_ERROR << "CxlTransport::cxlMemcpy source out of bounds.";
             return false;
         }
     }
@@ -168,12 +169,12 @@ bool CxlTransport::isAddressInCxlRange(void *addr) {
 
 int CxlTransport::cxlDevInit() {
     if (!cxl_dev_path || !cxl_dev_size) {
-        LOG(ERROR) << "CxlTransport: cxl_dev_path or cxl_dev_size is null.";
+        LOG_ERROR << "CxlTransport: cxl_dev_path or cxl_dev_size is null.";
         return -1;
     }
     int fd = open(cxl_dev_path, O_RDWR);
     if (fd == -1) {
-        LOG(ERROR) << "CxlTransport: Cannot open cxl device."
+        LOG_ERROR << "CxlTransport: Cannot open cxl device."
                    << strerror(errno);
         return -1;
     }
@@ -197,19 +198,19 @@ int CxlTransport::install(std::string &local_server_name,
 
     int ret = cxlDevInit();
     if (ret) {
-        LOG(ERROR) << "CxlTransport: Mmap cxl device failed.";
+        LOG_ERROR << "CxlTransport: Mmap cxl device failed.";
         return -1;
     }
 
     ret = allocateLocalSegmentID();
     if (ret) {
-        LOG(ERROR) << "CxlTransport: cannot allocate local segment";
+        LOG_ERROR << "CxlTransport: cannot allocate local segment";
         return -1;
     }
 
     ret = metadata_->updateLocalSegmentDesc();
     if (ret) {
-        LOG(ERROR) << "CxlTransport: cannot publish segments, "
+        LOG_ERROR << "CxlTransport: cannot publish segments, "
                       "check the availability of metadata storage";
         return -1;
     }
@@ -313,7 +314,7 @@ Status CxlTransport::submitTransfer(
     BatchID batch_id, const std::vector<TransferRequest> &entries) {
     auto &batch_desc = *((BatchDesc *)(batch_id));
     if (batch_desc.task_list.size() + entries.size() > batch_desc.batch_size) {
-        LOG(ERROR) << "CxlTransport: Exceed the limitation of current batch's "
+        LOG_ERROR << "CxlTransport: Exceed the limitation of current batch's "
                       "capacity";
         return Status::InvalidArgument(
             "CxlTransport: Exceed the limitation of capacity, batch id: " +

@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include "tent/runtime/transfer_engine_impl.h"
+#include "log_macros.h"
 #include "tent/runtime/control_plane.h"
 
 #include <algorithm>
@@ -185,7 +186,7 @@ TransferEngineImpl::TransferEngineImpl()
     ConfigHelper().loadFromEnv(*conf_);
     auto status = construct();
     if (!status.ok()) {
-        LOG(ERROR) << "Failed to construct Transfer Engine instance: "
+        LOG_ERROR << "Failed to construct Transfer Engine instance: "
                    << status.ToString();
     } else {
         available_ = true;
@@ -205,7 +206,7 @@ TransferEngineImpl::TransferEngineImpl(std::shared_ptr<Config> conf)
     restoreExplicitTransferEngineConfig(*conf_, preserved);
     auto status = construct();
     if (!status.ok()) {
-        LOG(ERROR) << "Failed to construct Transfer Engine instance: "
+        LOG_ERROR << "Failed to construct Transfer Engine instance: "
                    << status.ToString();
     } else {
         available_ = true;
@@ -252,7 +253,7 @@ std::string getMachineID() {
 
     std::string content = "undefined_machine_";
     for (int i = 0; i < 16; ++i) content += 'a' + SimpleRandom::Get().next(26);
-    LOG(WARNING) << "TENT getMachineID source=fallback value=" << content;
+    LOG_WARNING << "TENT getMachineID source=fallback value=" << content;
     return content;
 }
 
@@ -293,7 +294,7 @@ Status TransferEngineImpl::construct() {
         try {
             redis_db_index_config = std::stoi(env_db_index);
         } catch (const std::exception& e) {
-            LOG(WARNING) << "Invalid REDIS_DB_INDEX environment variable: "
+            LOG_WARNING << "Invalid REDIS_DB_INDEX environment variable: "
                          << env_db_index
                          << ", using config value: " << redis_db_index_config;
         }
@@ -323,7 +324,7 @@ Status TransferEngineImpl::construct() {
         redis_db_index_config <= REDIS_MAX_DB_INDEX) {
         db_index = static_cast<uint8_t>(redis_db_index_config);
     } else {
-        LOG(WARNING) << "Invalid Redis DB index: " << redis_db_index_config
+        LOG_WARNING << "Invalid Redis DB index: " << redis_db_index_config
                      << ", using default "
                      << static_cast<int>(REDIS_DEFAULT_DB_INDEX);
     }
@@ -349,7 +350,7 @@ Status TransferEngineImpl::construct() {
     bool legacy_mode = conf_->get("use_legacy_transport_selection", false);
     transport_selector_->setLegacyMode(legacy_mode);
     if (legacy_mode) {
-        LOG(INFO) << "Using legacy transport selection (original logic)";
+        LOG_INFO << "Using legacy transport selection (original logic)";
     }
 
     CHECK_STATUS(loadTransports());
@@ -360,7 +361,7 @@ Status TransferEngineImpl::construct() {
             auto status = transport->install(local_segment_name_, metadata_,
                                              topology_, conf_);
             if (!status.ok()) {
-                LOG(WARNING) << "Transport " << transport->getName()
+                LOG_WARNING << "Transport " << transport->getName()
                              << " skipped: " << status.ToString();
                 transport = nullptr;
                 continue;
@@ -383,33 +384,33 @@ Status TransferEngineImpl::construct() {
         std::string validation_error;
         if (!MetricsConfigLoader::validateConfig(metrics_config,
                                                  &validation_error)) {
-            LOG(WARNING) << "Invalid metrics configuration: "
+            LOG_WARNING << "Invalid metrics configuration: "
                          << validation_error << ", Metrics system disabled";
         } else {
             // Initialize metrics
             auto status = TentMetrics::instance().initialize(metrics_config);
             if (!status.ok()) {
-                LOG(WARNING) << "Failed to initialize TENT metrics: "
+                LOG_WARNING << "Failed to initialize TENT metrics: "
                              << status.ToString();
             } else {
-                LOG(INFO) << "TENT Metrics system initialized";
+                LOG_INFO << "TENT Metrics system initialized";
             }
         }
     } else {
-        LOG(INFO) << "Metrics system disabled by configuration";
+        LOG_INFO << "Metrics system disabled by configuration";
     }
 
     if (conf_->get("verbose", false)) {
-        LOG(INFO) << "========== Transfer Engine Parameters ==========";
-        LOG(INFO) << " - Segment Name:       " << local_segment_name_;
-        LOG(INFO) << " - RPC Server Address: "
+        LOG_INFO << "========== Transfer Engine Parameters ==========";
+        LOG_INFO << " - Segment Name:       " << local_segment_name_;
+        LOG_INFO << " - RPC Server Address: "
                   << buildIpAddrWithPort(hostname_, port_, ipv6_);
-        LOG(INFO) << " - Metadata Type:      " << metadata_type;
-        LOG(INFO) << " - Metadata Servers:   " << metadata_servers;
-        LOG(INFO) << " - Loaded Transports:  " << transport_string;
-        LOG(INFO) << "================================================";
+        LOG_INFO << " - Metadata Type:      " << metadata_type;
+        LOG_INFO << " - Metadata Servers:   " << metadata_servers;
+        LOG_INFO << " - Loaded Transports:  " << transport_string;
+        LOG_INFO << "================================================";
     } else {
-        LOG(INFO) << "Transfer Engine " << local_segment_name_
+        LOG_INFO << "Transfer Engine " << local_segment_name_
                   << " started successfully";
     }
 
@@ -705,7 +706,7 @@ Status TransferEngineImpl::registerLocalMemory(std::vector<void*> addr_list,
         desc_list, [&](std::vector<BufferDesc>& descs) -> Status {
             for (auto type : transports) {
                 auto s = transport_list_[type]->addMemoryBuffer(descs, options);
-                if (!s.ok()) LOG(WARNING) << s.ToString();
+                if (!s.ok()) LOG_WARNING << s.ToString();
             }
             return Status::OK();
         });
@@ -724,7 +725,7 @@ Status TransferEngineImpl::unregisterLocalMemory(void* addr, size_t size) {
             removed = true;
             for (auto type : desc.transports) {
                 auto status = transport_list_[type]->removeMemoryBuffer(desc);
-                if (!status.ok()) LOG(WARNING) << status.ToString();
+                if (!status.ok()) LOG_WARNING << status.ToString();
             }
             return Status::OK();
         });
@@ -748,7 +749,7 @@ Status TransferEngineImpl::unregisterLocalMemory(
                 removed = true;
                 for (auto type : desc.transports) {
                     auto s = transport_list_[type]->removeMemoryBuffer(desc);
-                    if (!s.ok()) LOG(WARNING) << s.ToString();
+                    if (!s.ok()) LOG_WARNING << s.ToString();
                 }
                 return Status::OK();
             });
@@ -1244,7 +1245,7 @@ Status TransferEngineImpl::submitTransfer(
         task.type = select_result.transport;
         task.device_mask = select_result.device_mask;
         if (task.type == UNSPEC) {
-            LOG(WARNING) << "Unable to find registered buffer for request: "
+            LOG_WARNING << "Unable to find registered buffer for request: "
                          << printRequest(merged_request);
             merged_task_id_map[merged_task_id] = task;
             continue;
@@ -1265,7 +1266,7 @@ Status TransferEngineImpl::submitTransfer(
             auto status = transport->allocateSubBatch(
                 batch->sub_batch[task.type], batch->max_size);
             if (!status.ok()) {
-                LOG(WARNING) << "Failed to allocate SubBatch " << task.type
+                LOG_WARNING << "Failed to allocate SubBatch " << task.type
                              << ":" << status.ToString();
                 merged_task_id_map[merged_task_id] = task;
                 continue;
@@ -1300,7 +1301,7 @@ Status TransferEngineImpl::submitTransfer(
         auto status = transport->submitTransferTasks(
             sub_batch, classified_request_list[type]);
         if (!status.ok()) {
-            // LOG(WARNING) << "Failed to submit SubBatch " << type << ":"
+            // LOG_WARNING << "Failed to submit SubBatch " << type << ":"
             //              << status.ToString();
             for (auto& task_id : task_id_list[type])
                 batch->task_list[task_id].type = UNSPEC;
@@ -1333,7 +1334,7 @@ Status TransferEngineImpl::maybeFireSubmitHooks(Batch* batch, bool check) {
         for (auto target_id : hook.targets) {
             last = sendNotification(target_id, hook.notifi);
             if (!last.ok()) {
-                LOG(WARNING) << "sendNotification failed: " << last.ToString();
+                LOG_WARNING << "sendNotification failed: " << last.ToString();
                 break;
             }
         }
@@ -1366,7 +1367,7 @@ Status TransferEngineImpl::resubmitTransferTask(Batch* batch, size_t task_id) {
     auto prev_type = task.type;
 
     if (++task.failover_count > max_failover_attempts_) {
-        LOG(WARNING) << "Task failover limit reached ("
+        LOG_WARNING << "Task failover limit reached ("
                      << max_failover_attempts_
                      << "), last transport=" << transportTypeName(prev_type);
         return Status::InvalidEntry(
@@ -1381,12 +1382,12 @@ Status TransferEngineImpl::resubmitTransferTask(Batch* batch, size_t task_id) {
     auto result = resolveTransport(task.request, task.xport_priority);
     auto type = result.transport;
     if (type == UNSPEC) {
-        LOG(WARNING) << "No more transports available after "
+        LOG_WARNING << "No more transports available after "
                      << transportTypeName(prev_type) << " failed";
         return Status::InvalidEntry("All available transports are failed");
     }
 
-    LOG(INFO) << "Transport failover: " << transportTypeName(prev_type)
+    LOG_INFO << "Transport failover: " << transportTypeName(prev_type)
               << " -> " << transportTypeName(type) << " (attempt "
               << task.failover_count << "/" << max_failover_attempts_ << ")";
     TENT_RECORD_TRANSPORT_FAILOVER();
@@ -1633,7 +1634,7 @@ Status TransferEngineImpl::transferSync(
 uint64_t TransferEngineImpl::lockStageBuffer(const std::string& location) {
     uint64_t addr = 0;
     auto status = staging_proxy_->pinStageBuffer(location, addr);
-    if (!status.ok()) LOG(ERROR) << status.ToString();
+    if (!status.ok()) LOG_ERROR << status.ToString();
     return addr;
 }
 

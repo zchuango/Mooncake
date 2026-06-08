@@ -15,7 +15,6 @@
  */
 
 #include "logger.h"
-#include "config.h"
 #include "rate_limiter.h"
 
 #include <spdlog/spdlog.h>

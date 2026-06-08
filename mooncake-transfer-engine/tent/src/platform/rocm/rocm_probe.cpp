@@ -13,10 +13,11 @@
 // limitations under the License.
 
 #include "tent/platform/rocm.h"
+#include "log_macros.h"
 #include "tent/common/status.h"
 #include "tent/common/utils/prefault.h"
 
-#include <glog/logging.h>
+
 #include <fstream>
 #include <map>
 #include <set>
@@ -44,7 +45,7 @@ static std::vector<Topology::NicEntry> listInfiniBandDevices() {
 
     struct ibv_device** device_list = ibv_get_device_list(&num_devices);
     if (!device_list || num_devices <= 0) {
-        LOG(WARNING) << "No RDMA devices found, check your device installation";
+        LOG_WARNING << "No RDMA devices found, check your device installation";
         return {};
     }
 
@@ -55,7 +56,7 @@ static std::vector<Topology::NicEntry> listInfiniBandDevices() {
         snprintf(path, sizeof(path), "/sys/class/infiniband/%s/../..",
                  device_name.c_str());
         if (realpath(path, resolved_path) == NULL) {
-            PLOG(ERROR) << "realpath " << path << ":";
+            PLOG_ERROR << "realpath " << path << ":";
             continue;
         }
         std::string pci_bus_id = basename(resolved_path);
@@ -104,7 +105,7 @@ static void discoverCpuTopology(std::vector<Topology::NicEntry>& nic_list,
     DIR* dir = opendir("/sys/devices/system/node");
     struct dirent* entry;
     if (dir == NULL) {
-        PLOG(WARNING) << "open /sys/devices/system/node failed";
+        PLOG_WARNING << "open /sys/devices/system/node failed";
         return;
     }
     while ((entry = readdir(dir))) {
@@ -167,14 +168,14 @@ static void discoverRocmTopology(std::vector<Topology::NicEntry>& nic_list,
     int device_count = 0;
     auto err = hipGetDeviceCount(&device_count);
     if (err != hipSuccess) {
-        LOG(WARNING) << "hipGetDeviceCount: " << hipGetErrorString(err);
+        LOG_WARNING << "hipGetDeviceCount: " << hipGetErrorString(err);
         device_count = 0;
     }
     for (int i = 0; i < device_count; i++) {
         hipDeviceProp_t prop;
         err = hipGetDeviceProperties(&prop, i);
         if (err != hipSuccess) {
-            LOG(WARNING) << "hipGetDeviceProperties: "
+            LOG_WARNING << "hipGetDeviceProperties: "
                          << hipGetErrorString(err);
             continue;
         }
@@ -255,7 +256,7 @@ MemoryType RocmPlatform::getMemoryType(void* addr) {
     hipPointerAttribute_t attributes;
     hipError_t result = hipPointerGetAttributes(&attributes, addr);
     if (result != hipSuccess) {
-        LOG(WARNING) << "hipPointerGetAttributes: "
+        LOG_WARNING << "hipPointerGetAttributes: "
                      << hipGetErrorString(result);
         return MTYPE_UNKNOWN;
     }
@@ -287,7 +288,7 @@ const std::vector<RangeLocation> RocmPlatform::getLocation(void* start,
     hipPointerAttribute_t attributes;
     hipError_t result = hipPointerGetAttributes(&attributes, start);
     if (result != hipSuccess) {
-        LOG(WARNING) << "hipPointerGetAttributes: "
+        LOG_WARNING << "hipPointerGetAttributes: "
                      << hipGetErrorString(result);
         entries.push_back({(uint64_t)start, len, kWildcardLocation});
         return entries;

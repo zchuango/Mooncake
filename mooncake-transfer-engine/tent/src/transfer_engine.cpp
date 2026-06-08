@@ -13,9 +13,10 @@
 // limitations under the License.
 
 #include "tent/transfer_engine.h"
+#include "log_macros.h"
 #include "tent/common/config.h"
 #include "tent/runtime/transfer_engine_impl.h"
-#include <glog/logging.h>
+
 
 namespace mooncake {
 namespace tent {
@@ -27,7 +28,7 @@ TransferEngine::TransferEngine(const std::string config_path) {
     auto conf = std::make_shared<Config>();
     auto status = conf->loadFile(config_path);
     if (!status.ok()) {
-        LOG(WARNING) << "Failed to read config file " << config_path;
+        LOG_WARNING << "Failed to read config file " << config_path;
     }
     impl_ = std::make_unique<TransferEngineImpl>(conf);
 }

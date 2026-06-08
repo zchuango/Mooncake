@@ -1,6 +1,7 @@
 #include "ha/oplog/oplog_replicator.h"
+#include "log_macros.h"
 
-#include <glog/logging.h>
+
 
 #include "ha/oplog/oplog_applier.h"
 
@@ -10,10 +11,10 @@ OpLogReplicator::OpLogReplicator(OpLogChangeNotifier* notifier,
                                  OpLogApplier* applier)
     : notifier_(notifier), applier_(applier) {
     if (notifier_ == nullptr) {
-        LOG(FATAL) << "OpLogChangeNotifier cannot be null";
+        LOG_FATAL << "OpLogChangeNotifier cannot be null";
     }
     if (applier_ == nullptr) {
-        LOG(FATAL) << "OpLogApplier cannot be null";
+        LOG_FATAL << "OpLogApplier cannot be null";
     }
 }
 
@@ -26,7 +27,7 @@ void OpLogReplicator::Start() {
 
 bool OpLogReplicator::StartFromSequenceId(uint64_t start_seq_id) {
     if (running_.load()) {
-        LOG(WARNING) << "OpLogReplicator is already running";
+        LOG_WARNING << "OpLogReplicator is already running";
         return true;
     }
 
@@ -41,21 +42,21 @@ bool OpLogReplicator::StartFromSequenceId(uint64_t start_seq_id) {
     };
 
     auto on_error = [this](ErrorCode err) {
-        LOG(ERROR) << "OpLogReplicator: notifier error="
+        LOG_ERROR << "OpLogReplicator: notifier error="
                    << static_cast<int>(err);
         NotifyStateEvent(StandbyEvent::WATCH_BROKEN);
     };
 
     ErrorCode err = notifier_->Start(start_seq_id, on_entry, on_error);
     if (err != ErrorCode::OK) {
-        LOG(ERROR) << "Failed to start OpLogChangeNotifier, error="
+        LOG_ERROR << "Failed to start OpLogChangeNotifier, error="
                    << static_cast<int>(err);
         return false;
     }
 
     running_.store(true);
     NotifyStateEvent(StandbyEvent::WATCH_HEALTHY);
-    LOG(INFO) << "OpLogReplicator started from sequence_id=" << start_seq_id;
+    LOG_INFO << "OpLogReplicator started from sequence_id=" << start_seq_id;
     return true;
 }
 
@@ -66,7 +67,7 @@ void OpLogReplicator::Stop() {
 
     running_.store(false);
     notifier_->Stop();
-    LOG(INFO) << "OpLogReplicator stopped";
+    LOG_INFO << "OpLogReplicator stopped";
 }
 
 uint64_t OpLogReplicator::GetLastProcessedSequenceId() const {

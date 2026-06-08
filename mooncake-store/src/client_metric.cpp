@@ -1,6 +1,7 @@
 #include "client_metric.h"
+#include "log_macros.h"
 
-#include <glog/logging.h>
+
 #include <algorithm>
 #include <cctype>
 #include <chrono>
@@ -44,7 +45,7 @@ bool parseBoolEnv(const char* env_name, bool default_value) {
         return false;
     }
 
-    LOG(WARNING) << "Failed to parse " << env_name << ": " << env_value
+    LOG_WARNING << "Failed to parse " << env_name << ": " << env_value
                  << ", fallback to default=" << default_value;
     return default_value;
 }
@@ -59,15 +60,15 @@ uint64_t parseMetricsInterval() {
     try {
         uint64_t interval = std::stoull(interval_env);
         if (interval == 0) {
-            LOG(INFO) << "Client metrics reporting disabled (interval=0) via "
+            LOG_INFO << "Client metrics reporting disabled (interval=0) via "
                          "MC_STORE_CLIENT_METRIC_INTERVAL";
         } else {
-            LOG(INFO) << "Client metrics interval set to " << interval
+            LOG_INFO << "Client metrics interval set to " << interval
                       << "s via MC_STORE_CLIENT_METRIC_INTERVAL";
         }
         return interval;
     } catch (const std::exception& e) {
-        LOG(WARNING) << "Failed to parse MC_STORE_CLIENT_METRIC_INTERVAL: "
+        LOG_WARNING << "Failed to parse MC_STORE_CLIENT_METRIC_INTERVAL: "
                      << interval_env << ", disabling metrics reporting";
         return 0;
     }
@@ -102,7 +103,7 @@ std::unique_ptr<ClientMetric> ClientMetric::Create(
     const std::map<std::string, std::string>& labels,
     bool master_rpc_metrics_enabled) {
     if (!parseMetricsEnabled()) {
-        LOG(INFO) << "Client metrics disabled (set MC_STORE_CLIENT_METRIC=0 to "
+        LOG_INFO << "Client metrics disabled (set MC_STORE_CLIENT_METRIC=0 to "
                      "disable)";
         return nullptr;
     }
@@ -111,8 +112,8 @@ std::unique_ptr<ClientMetric> ClientMetric::Create(
     bool bandwidth_reporting_enabled =
         parseBoolEnv("MC_STORE_CLIENT_METRIC_BANDWIDTH", true);
 
-    LOG(INFO) << "Client metrics enabled (default enabled)";
-    LOG(INFO) << "Client bandwidth summary "
+    LOG_INFO << "Client metrics enabled (default enabled)";
+    LOG_INFO << "Client bandwidth summary "
               << (bandwidth_reporting_enabled ? "enabled" : "disabled")
               << " via MC_STORE_CLIENT_METRIC_BANDWIDTH";
 
@@ -189,7 +190,7 @@ void ClientMetric::StartMetricsReportingThread() {
     should_stop_metrics_thread_ = false;
     metrics_reporting_thread_ =
         std::jthread([this](const std::stop_token& stop_token) {
-            LOG(INFO) << "Client metrics reporting thread started (interval: "
+            LOG_INFO << "Client metrics reporting thread started (interval: "
                       << metrics_interval_seconds_ << "s)";
 
             while (!stop_token.stop_requested() &&
@@ -214,19 +215,19 @@ void ClientMetric::StartMetricsReportingThread() {
                 if (!bandwidth_report.empty()) {
                     report += "\n" + bandwidth_report;
                 }
-                LOG(INFO) << report;
+                LOG_INFO << report;
             }
-            LOG(INFO) << "Client metrics reporting thread stopped";
+            LOG_INFO << "Client metrics reporting thread stopped";
         });
 }
 
 void ClientMetric::StopMetricsReportingThread() {
     should_stop_metrics_thread_ = true;  // Signal the thread to stop
     if (metrics_reporting_thread_.joinable()) {
-        LOG(INFO) << "Waiting for client metrics reporting thread to join...";
+        LOG_INFO << "Waiting for client metrics reporting thread to join...";
         metrics_reporting_thread_.request_stop();
         metrics_reporting_thread_.join();  // Wait for the thread to finish
-        LOG(INFO) << "Client metrics reporting thread joined";
+        LOG_INFO << "Client metrics reporting thread joined";
     }
 }
 

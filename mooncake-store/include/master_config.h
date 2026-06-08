@@ -4,10 +4,11 @@
 #include <stdexcept>
 #include <string_view>
 
-#include <glog/logging.h>
+
 
 #include "config_helper.h"
 #include "types.h"
+#include "log_macros.h"
 
 namespace mooncake {
 
@@ -456,7 +457,7 @@ class WrappedMasterServiceConfig {
         } else if (config.allocation_strategy == "random") {
             allocation_strategy_type = AllocationStrategyType::RANDOM;
         } else {
-            LOG(WARNING) << "Unrecognized allocation_strategy value: '"
+            LOG_WARNING << "Unrecognized allocation_strategy value: '"
                          << config.allocation_strategy
                          << "'. Defaulting to 'random'. "
                          << "Valid options are: random, free_ratio_first, cxl, "

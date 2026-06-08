@@ -1,13 +1,14 @@
 #pragma once
 
 #include "master_service.h"
+#include "log_macros.h"
 #include "master_metric_manager.h"
 #include "segment.h"
 #include "ha/snapshot/catalog/snapshot_catalog_store.h"
 #include "ha/snapshot/object/snapshot_object_store.h"
 #include "task_manager.h"
 
-#include <glog/logging.h>
+
 #include <gtest/gtest.h>
 
 #include <algorithm>
@@ -291,7 +292,7 @@ class MasterServiceSnapshotTestBase : public ::testing::Test {
                                   const Replica::Descriptor& b,
                                   bool compare_id = true) const {
         if (compare_id && a.id != b.id) {
-            LOG(ERROR) << "Replica id mismatch: a.id=" << a.id
+            LOG_ERROR << "Replica id mismatch: a.id=" << a.id
                        << ", b.id=" << b.id;
             return false;
         }
@@ -368,7 +369,7 @@ class MasterServiceSnapshotTestBase : public ::testing::Test {
         // ========== Check LocalDiskSegment state ==========
 
         if (before.client_by_name != after.client_by_name) {
-            LOG(ERROR) << "client_by_name mismatch. before.size="
+            LOG_ERROR << "client_by_name mismatch. before.size="
                        << before.client_by_name.size()
                        << ", after.size=" << after.client_by_name.size();
             all_passed = false;
@@ -376,7 +377,7 @@ class MasterServiceSnapshotTestBase : public ::testing::Test {
 
         if (before.local_disk_segments.size() !=
             after.local_disk_segments.size()) {
-            LOG(ERROR) << "local_disk_segments size mismatch. before="
+            LOG_ERROR << "local_disk_segments size mismatch. before="
                        << before.local_disk_segments.size()
                        << ", after=" << after.local_disk_segments.size();
             all_passed = false;
@@ -385,12 +386,12 @@ class MasterServiceSnapshotTestBase : public ::testing::Test {
                  before.local_disk_segments) {
                 auto it = after.local_disk_segments.find(client_id);
                 if (it == after.local_disk_segments.end()) {
-                    LOG(ERROR) << "local_disk_segment missing for client_id";
+                    LOG_ERROR << "local_disk_segment missing for client_id";
                     all_passed = false;
                     continue;
                 }
                 if (!CompareLocalDiskSegmentState(seg_state, it->second)) {
-                    LOG(ERROR) << "local_disk_segment state mismatch";
+                    LOG_ERROR << "local_disk_segment state mismatch";
                     all_passed = false;
                 }
             }
@@ -399,14 +400,14 @@ class MasterServiceSnapshotTestBase : public ::testing::Test {
         // ========== Level 1: Basic state comparison ==========
 
         if (before.all_keys != after.all_keys) {
-            LOG(ERROR) << "all_keys mismatch. before.size="
+            LOG_ERROR << "all_keys mismatch. before.size="
                        << before.all_keys.size()
                        << ", after.size=" << after.all_keys.size();
             all_passed = false;
         }
 
         if (before.all_segments != after.all_segments) {
-            LOG(ERROR) << "all_segments mismatch. before.size="
+            LOG_ERROR << "all_segments mismatch. before.size="
                        << before.all_segments.size()
                        << ", after.size=" << after.all_segments.size();
             all_passed = false;
@@ -415,7 +416,7 @@ class MasterServiceSnapshotTestBase : public ::testing::Test {
         // ========== Level 2: Enhanced state comparison ==========
 
         if (before.key_count != after.key_count) {
-            LOG(ERROR) << "key_count mismatch. before=" << before.key_count
+            LOG_ERROR << "key_count mismatch. before=" << before.key_count
                        << ", after=" << after.key_count;
             all_passed = false;
         }
@@ -426,12 +427,12 @@ class MasterServiceSnapshotTestBase : public ::testing::Test {
         for (const auto& [key, replica_response] : before.replica_lists) {
             auto it = after.replica_lists.find(key);
             if (it == after.replica_lists.end()) {
-                LOG(ERROR) << "replica_list missing for key: " << key;
+                LOG_ERROR << "replica_list missing for key: " << key;
                 all_passed = false;
                 continue;
             }
             if (!CompareReplicaListResponse(replica_response, it->second)) {
-                LOG(ERROR) << "replica_list mismatch for key: " << key;
+                LOG_ERROR << "replica_list mismatch for key: " << key;
                 all_passed = false;
             }
         }
@@ -440,12 +441,12 @@ class MasterServiceSnapshotTestBase : public ::testing::Test {
         for (const auto& [segment, stats] : before.segment_stats) {
             auto it = after.segment_stats.find(segment);
             if (it == after.segment_stats.end()) {
-                LOG(ERROR) << "segment_stats missing for: " << segment;
+                LOG_ERROR << "segment_stats missing for: " << segment;
                 all_passed = false;
                 continue;
             }
             if (stats != it->second) {
-                LOG(ERROR) << "segment_stats mismatch for: " << segment;
+                LOG_ERROR << "segment_stats mismatch for: " << segment;
                 all_passed = false;
             }
         }
@@ -453,19 +454,19 @@ class MasterServiceSnapshotTestBase : public ::testing::Test {
         // ========== Level 4: TaskManager state comparison ==========
 
         if (before.tasks.size() != after.tasks.size()) {
-            LOG(ERROR) << "tasks size mismatch. before=" << before.tasks.size()
+            LOG_ERROR << "tasks size mismatch. before=" << before.tasks.size()
                        << ", after=" << after.tasks.size();
             all_passed = false;
         } else {
             for (const auto& [task_id, task_state] : before.tasks) {
                 auto it = after.tasks.find(task_id);
                 if (it == after.tasks.end()) {
-                    LOG(ERROR) << "task missing for task_id";
+                    LOG_ERROR << "task missing for task_id";
                     all_passed = false;
                     continue;
                 }
                 if (!(task_state == it->second)) {
-                    LOG(ERROR) << "task state mismatch for task_id";
+                    LOG_ERROR << "task state mismatch for task_id";
                     all_passed = false;
                 }
             }
@@ -497,7 +498,7 @@ class MasterServiceSnapshotTestBase : public ::testing::Test {
         }
 
         if (!best_segment.empty()) {
-            LOG(INFO) << "[FindBestSegment] Selected: " << best_segment
+            LOG_INFO << "[FindBestSegment] Selected: " << best_segment
                       << " (remaining=" << max_remaining << " bytes)";
         }
         return best_segment;
@@ -514,12 +515,12 @@ class MasterServiceSnapshotTestBase : public ::testing::Test {
         MasterService* original, MasterService* restored,
         const std::string& best_segment) const {
         if (best_segment.empty()) {
-            LOG(WARNING)
+            LOG_WARNING
                 << "Skip PutStart consistency check: no best_segment provided";
             return;
         }
 
-        LOG(INFO) << "[PutStart Consistency] Using best_segment: "
+        LOG_INFO << "[PutStart Consistency] Using best_segment: "
                   << best_segment;
 
         ReplicateConfig config;
@@ -538,7 +539,7 @@ class MasterServiceSnapshotTestBase : public ::testing::Test {
                "service";
 
         if (!before.has_value()) {
-            LOG(INFO) << "[PutStart Consistency] Both services failed PutStart";
+            LOG_INFO << "[PutStart Consistency] Both services failed PutStart";
             return;
         }
 
@@ -575,7 +576,7 @@ class MasterServiceSnapshotTestBase : public ::testing::Test {
             }
         }
 
-        LOG(INFO) << "[PutStart Consistency] ORIGINAL on best_segment: "
+        LOG_INFO << "[PutStart Consistency] ORIGINAL on best_segment: "
                   << orig_on_best
                   << ", RESTORED on best_segment: " << rest_on_best;
 
@@ -586,7 +587,7 @@ class MasterServiceSnapshotTestBase : public ::testing::Test {
 
         if (!orig_on_best && !rest_on_best) {
             // Both entered random allocation - considered consistent
-            LOG(INFO) << "[PutStart Consistency] Both services entered random "
+            LOG_INFO << "[PutStart Consistency] Both services entered random "
                          "allocation, considered consistent";
             return;
         }
@@ -600,7 +601,7 @@ class MasterServiceSnapshotTestBase : public ::testing::Test {
                 << "Replica descriptor mismatch at index " << i;
         }
 
-        LOG(INFO) << "[PutStart Consistency] Check passed: both allocated on "
+        LOG_INFO << "[PutStart Consistency] Check passed: both allocated on "
                      "best_segment consistently";
     }
 
@@ -617,7 +618,7 @@ class MasterServiceSnapshotTestBase : public ::testing::Test {
         std::error_code ec;
         fs::create_directories(dst_dir, ec);
         if (ec) {
-            LOG(ERROR) << "Failed to create backup directory: "
+            LOG_ERROR << "Failed to create backup directory: "
                        << dst_dir.string() << ", error: " << ec.message();
             return;
         }
@@ -627,11 +628,11 @@ class MasterServiceSnapshotTestBase : public ::testing::Test {
             fs::copy_options::recursive | fs::copy_options::overwrite_existing,
             ec);
         if (ec) {
-            LOG(ERROR) << "Failed to copy snapshot files from "
+            LOG_ERROR << "Failed to copy snapshot files from "
                        << src_dir.string() << " to " << dst_dir.string()
                        << ", error: " << ec.message();
         } else {
-            LOG(INFO) << "Successfully copied snapshot from "
+            LOG_INFO << "Successfully copied snapshot from "
                       << src_dir.string() << " to " << dst_dir.string();
         }
     }
@@ -643,7 +644,7 @@ class MasterServiceSnapshotTestBase : public ::testing::Test {
         std::ifstream f2(file2, std::ios::binary | std::ios::ate);
 
         if (!f1.is_open() || !f2.is_open()) {
-            LOG(ERROR) << "Failed to open files for comparison: " << file1
+            LOG_ERROR << "Failed to open files for comparison: " << file1
                        << " or " << file2;
             return false;
         }
@@ -652,7 +653,7 @@ class MasterServiceSnapshotTestBase : public ::testing::Test {
         auto size1 = f1.tellg();
         auto size2 = f2.tellg();
         if (size1 != size2) {
-            LOG(ERROR) << "File sizes differ: " << file1 << " (" << size1
+            LOG_ERROR << "File sizes differ: " << file1 << " (" << size1
                        << " bytes) vs " << file2 << " (" << size2 << " bytes)";
             return false;
         }
@@ -668,7 +669,7 @@ class MasterServiceSnapshotTestBase : public ::testing::Test {
 
         bool is_equal = std::equal(begin1, end, begin2);
         if (!is_equal) {
-            LOG(ERROR) << "File contents differ: " << file1 << " vs " << file2;
+            LOG_ERROR << "File contents differ: " << file1 << " vs " << file2;
         }
         return is_equal;
     }
@@ -676,7 +677,7 @@ class MasterServiceSnapshotTestBase : public ::testing::Test {
     // Compare all msgpack files in two snapshot directories
     bool CompareSnapshotDirectories(const std::string& dir1,
                                     const std::string& dir2) const {
-        LOG(INFO) << "Comparing snapshot directories: " << dir1 << " vs "
+        LOG_INFO << "Comparing snapshot directories: " << dir1 << " vs "
                   << dir2;
 
         // Actual snapshot has three files: metadata, segments, and task_manager
@@ -690,17 +691,17 @@ class MasterServiceSnapshotTestBase : public ::testing::Test {
             std::string file1 = dir1 + filename;
             std::string file2 = dir2 + filename;
 
-            LOG(INFO) << "Comparing file: " << filename;
+            LOG_INFO << "Comparing file: " << filename;
 
             if (!CompareBinaryFiles(file1, file2)) {
-                LOG(ERROR) << "Mismatch found in file: " << filename;
+                LOG_ERROR << "Mismatch found in file: " << filename;
                 all_match = false;
                 break;
             }
             file_count++;
         }
 
-        LOG(INFO) << "Compared " << file_count
+        LOG_INFO << "Compared " << file_count
                   << " msgpack files, all match: " << all_match;
         return all_match;
     }
@@ -766,7 +767,7 @@ class MasterServiceSnapshotTestBase : public ::testing::Test {
             AssertPutStartConsistentWithBestSegment(
                 service.get(), restored_service.get(), best_segment);
         } else {
-            LOG(WARNING) << "[TestSnapshotAndRestore] No valid segment found, "
+            LOG_WARNING << "[TestSnapshotAndRestore] No valid segment found, "
                             "skip PutStart consistency check";
         }
     }

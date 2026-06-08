@@ -1,5 +1,6 @@
 #include <gflags/gflags.h>
-#include <glog/logging.h>
+#include "log_macros.h"
+
 #include <gtest/gtest.h>
 
 #include <chrono>
@@ -48,7 +49,7 @@ class BatchRemoveTest : public ::testing::Test {
         if (getenv("PROTOCOL")) FLAGS_protocol = getenv("PROTOCOL");
         if (getenv("DEVICE_NAME")) FLAGS_device_name = getenv("DEVICE_NAME");
 
-        LOG(INFO) << "Protocol: " << FLAGS_protocol
+        LOG_INFO << "Protocol: " << FLAGS_protocol
                   << ", Device name: " << FLAGS_device_name;
 
         if (getenv("DEFAULT_KV_LEASE_TTL")) {
@@ -56,11 +57,11 @@ class BatchRemoveTest : public ::testing::Test {
         } else {
             default_kv_lease_ttl_ = FLAGS_default_kv_lease_ttl;
         }
-        LOG(INFO) << "Default KV lease TTL: " << default_kv_lease_ttl_;
+        LOG_INFO << "Default KV lease TTL: " << default_kv_lease_ttl_;
 
         ASSERT_TRUE(master_.Start(InProcMasterConfigBuilder().build()));
         master_address_ = master_.master_address();
-        LOG(INFO) << "Started in-proc master at " << master_address_
+        LOG_INFO << "Started in-proc master at " << master_address_
                   << ", metadata=P2PHANDSHAKE";
 
         InitializeClients();
@@ -81,10 +82,10 @@ class BatchRemoveTest : public ::testing::Test {
         auto mount_result = segment_provider_client_->MountSegment(
             segment_ptr_, ram_buffer_size_, FLAGS_protocol);
         if (!mount_result.has_value()) {
-            LOG(ERROR) << "Failed to mount segment: "
+            LOG_ERROR << "Failed to mount segment: "
                        << toString(mount_result.error());
         }
-        LOG(INFO) << "Segment mounted successfully";
+        LOG_INFO << "Segment mounted successfully";
     }
 
     static void InitializeClients() {
@@ -100,7 +101,7 @@ class BatchRemoveTest : public ::testing::Test {
             client_buffer_allocator_->getBase(), 128 * 1024 * 1024, "cpu:0",
             false, false);
         if (!register_result.has_value()) {
-            LOG(ERROR) << "Failed to register local memory: "
+            LOG_ERROR << "Failed to register local memory: "
                        << toString(register_result.error());
         }
 
@@ -112,10 +113,10 @@ class BatchRemoveTest : public ::testing::Test {
             test_client_segment_ptr_, test_client_ram_buffer_size_,
             FLAGS_protocol);
         if (!test_client_mount_result.has_value()) {
-            LOG(ERROR) << "Failed to mount segment for test_client_: "
+            LOG_ERROR << "Failed to mount segment for test_client_: "
                        << toString(test_client_mount_result.error());
         }
-        LOG(INFO) << "Test client segment mounted successfully";
+        LOG_INFO << "Test client segment mounted successfully";
     }
 
     static void CleanupClients() {
@@ -325,7 +326,7 @@ TEST_F(BatchRemoveTest, LargeBatch) {
     EXPECT_LT(elapsed.count(), 5.0)
         << "Large batch should complete in reasonable time (" << elapsed.count()
         << "s)";
-    LOG(INFO) << "Removed " << count << " keys in " << elapsed.count() << "s ("
+    LOG_INFO << "Removed " << count << " keys in " << elapsed.count() << "s ("
               << count / elapsed.count() << " ops/sec)";
 }
 

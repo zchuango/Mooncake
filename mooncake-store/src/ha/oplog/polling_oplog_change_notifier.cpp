@@ -1,6 +1,6 @@
 #include "ha/oplog/polling_oplog_change_notifier.h"
 
-#include <glog/logging.h>
+
 
 namespace mooncake {
 

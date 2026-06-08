@@ -1,4 +1,5 @@
 #include <ATen/cuda/CUDAContext.h>
+#include "log_macros.h"
 #include <cuda_runtime.h>
 #include <torch/torch.h>
 #include <torch/csrc/distributed/c10d/Backend.hpp>
@@ -1128,7 +1129,7 @@ void MooncakeBackend::extendGroupSizeTo(int newSize) {
                 "Size out of range");
     TORCH_CHECK(newSize >= oldSize, "newSize < oldSize");
 
-    LOG(INFO) << "Backend " << backendIndex_ << " rank " << rank_
+    LOG_INFO << "Backend " << backendIndex_ << " rank " << rank_
               << ": Group size extend to " << newSize;
 
     meta_->size = newSize;
@@ -1257,7 +1258,7 @@ void MooncakeBackend::joinGroup() {
 void MooncakeBackend::setExternalEngine(TransferEngine* engine) {
     externalEngine_ = engine;
     if (engine) {
-        LOG(INFO) << "MooncakeBackend: external TransferEngine set (ptr="
+        LOG_INFO << "MooncakeBackend: external TransferEngine set (ptr="
                   << engine << ")";
     }
 }

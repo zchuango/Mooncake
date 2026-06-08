@@ -1,5 +1,5 @@
 #include <gtest/gtest.h>
-#include <glog/logging.h>
+
 #include <atomic>
 #include <chrono>
 #include <mutex>

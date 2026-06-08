@@ -14,12 +14,13 @@
 // limitations under the License.
 
 #include "transport/ascend_transport/ascend_direct_transport/slice_dispatcher.h"
+#include "log_macros.h"
 #include "transport/ascend_transport/ascend_direct_transport/transfer_executor_base.h"
 #include "transport/ascend_transport/ascend_direct_transport/utils.h"
 
 #include "common.h"
 
-#include <glog/logging.h>
+
 
 #include <cstdlib>
 #include <cstring>
@@ -45,10 +46,10 @@ size_t DefaultSliceDispatcher::resolveThreadPoolSize() const {
         if (opt.has_value()) {
             auto size = static_cast<size_t>(opt.value());
             if (size <= kMaxThreadPoolSize) {
-                LOG(INFO) << "Set thread pool size to:" << size;
+                LOG_INFO << "Set thread pool size to:" << size;
                 return size;
             }
-            LOG(WARNING) << "Invalid thread pool size:" << size;
+            LOG_WARNING << "Invalid thread pool size:" << size;
         }
     }
     return kDefaultThreadPoolSize;
@@ -82,7 +83,7 @@ void DefaultSliceDispatcher::enqueue(
             if (engine_idx < contexts.size()) {
                 auto ret = aclrtSetCurrentContext(contexts[engine_idx]);
                 if (ret != ACL_ERROR_NONE) {
-                    LOG(ERROR) << "DefaultSliceDispatcher: "
+                    LOG_ERROR << "DefaultSliceDispatcher: "
                                   "aclrtSetCurrentContext failed, "
                                << "engine_idx: " << engine_idx
                                << ", errmsg: " << aclGetRecentErrMsg();
@@ -117,7 +118,7 @@ RoceDummyRealSliceDispatcher::RoceDummyRealSliceDispatcher(
         engine_threads_.emplace_back(
             &RoceDummyRealSliceDispatcher::engineWorker, this, i);
     }
-    LOG(INFO) << "RoceDummyRealSliceDispatcher: started " << num_engines_
+    LOG_INFO << "RoceDummyRealSliceDispatcher: started " << num_engines_
               << " engine threads";
 }
 
@@ -133,13 +134,13 @@ void RoceDummyRealSliceDispatcher::enqueue(
     for (auto slice : slice_list) {
         int32_t dev_id = slice->ascend_direct.engine_id;
         if (dev_id < 0) {
-            LOG(ERROR) << "Invalid device_id: " << dev_id;
+            LOG_ERROR << "Invalid device_id: " << dev_id;
             slice->markFailed();
             continue;
         }
         size_t engine_idx = static_cast<size_t>(dev_id);
         if (engine_idx >= num_engines_) {
-            LOG(ERROR) << "Invalid engine_idx: " << engine_idx
+            LOG_ERROR << "Invalid engine_idx: " << engine_idx
                        << " >= num_engines: " << num_engines_;
             slice->markFailed();
             continue;
@@ -170,17 +171,17 @@ void RoceDummyRealSliceDispatcher::stop() {
             t.join();
         }
     }
-    LOG(INFO) << "RoceDummyRealSliceDispatcher: stopped";
+    LOG_INFO << "RoceDummyRealSliceDispatcher: stopped";
 }
 
 void RoceDummyRealSliceDispatcher::engineWorker(size_t engine_idx) {
     if (engine_idx >= local_engine_contexts_.size()) {
-        LOG(ERROR) << "engineWorker: invalid engine_idx " << engine_idx;
+        LOG_ERROR << "engineWorker: invalid engine_idx " << engine_idx;
         return;
     }
     auto ret = aclrtSetCurrentContext(local_engine_contexts_[engine_idx]);
     if (ret != ACL_ERROR_NONE) {
-        LOG(ERROR) << "engineWorker: aclrtSetCurrentContext failed for engine "
+        LOG_ERROR << "engineWorker: aclrtSetCurrentContext failed for engine "
                    << engine_idx << ", errmsg: " << aclGetRecentErrMsg();
         return;
     }

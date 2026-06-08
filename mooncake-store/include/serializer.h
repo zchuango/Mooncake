@@ -1,10 +1,11 @@
 #pragma once
 
 #include <memory>
+#include "log_macros.h"
 #include <string>
 #include <cstring>
 #include <cstdint>
-#include <glog/logging.h>
+
 
 #include "types.h"
 
@@ -309,7 +310,7 @@ template <typename T>
     SerializeSizeCounter counter;
     target->serialize_to(counter);
     if (counter.has_error()) {
-        LOG(ERROR) << "Serializing failed, error=" << counter.get_error();
+        LOG_ERROR << "Serializing failed, error=" << counter.get_error();
         return ErrorCode::INTERNAL_ERROR;
     }
 
@@ -321,11 +322,11 @@ template <typename T>
 
     // Check if the serialization failed
     if (writer.has_error()) {
-        LOG(ERROR) << "Serializing failed, error=" << writer.get_error();
+        LOG_ERROR << "Serializing failed, error=" << writer.get_error();
         return ErrorCode::INTERNAL_ERROR;
     }
     if (!writer.finish_write()) {
-        LOG(ERROR) << "Serializing failed, error=wrong_data_size";
+        LOG_ERROR << "Serializing failed, error=wrong_data_size";
         return ErrorCode::INTERNAL_ERROR;
     }
     return ErrorCode::OK;
@@ -359,17 +360,17 @@ template <typename T>
 
         // Check if the deserialization failed
         if (ret == nullptr) {
-            LOG(ERROR) << "Deserializing failed, error=return_nullptr";
+            LOG_ERROR << "Deserializing failed, error=return_nullptr";
             return nullptr;
         }
         if (!reader.finish_read()) {
-            LOG(ERROR) << "Deserializing failed, error=wrong_data_size";
+            LOG_ERROR << "Deserializing failed, error=wrong_data_size";
             return nullptr;
         }
         return ret;
     } catch (const std::exception& e) {
         // The deserialization method may throw an exception if it fails.
-        LOG(ERROR) << "Deserializing failed, error=" << e.what();
+        LOG_ERROR << "Deserializing failed, error=" << e.what();
         return nullptr;
     }
 }

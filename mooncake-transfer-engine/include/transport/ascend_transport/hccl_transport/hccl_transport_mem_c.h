@@ -17,7 +17,8 @@
 #define HCCL_TRANSPORT_MEM_C_H
 
 #include <condition_variable>
-#include <glog/logging.h>
+#include "log_macros.h"
+
 #include <functional>
 #include "acl/acl.h"
 #include "adapter_hccp_common.h"
@@ -85,12 +86,12 @@ struct ConnectionInfo {
         int retryCount = 0;                                             \
         int __ret = funcCall;                                           \
         while (__ret && retryCount < 3) {                               \
-            LOG(ERROR) << errorMsg << ", retrying... (" << ++retryCount \
+            LOG_ERROR << errorMsg << ", retrying... (" << ++retryCount \
                        << "/3), ret :" << __ret;                        \
             __ret = funcCall;                                           \
         }                                                               \
         if (__ret) {                                                    \
-            LOG(ERROR) << errorMsg                                      \
+            LOG_ERROR << errorMsg                                      \
                        << " failed after 3 retries, ret: " << __ret;    \
             return __ret;                                               \
         }                                                               \

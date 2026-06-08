@@ -1,10 +1,11 @@
 #include "k8s_lease_helper.h"
+#include "log_macros.h"
 
 #ifdef STORE_USE_K8S_LEASE
 #include "libk8s_lease_wrapper.h"
 #endif
 
-#include <glog/logging.h>
+
 
 namespace mooncake {
 
@@ -21,7 +22,7 @@ ErrorCode K8sLeaseHelper::Init() {
     char* err_msg = nullptr;
     int ret = K8sLeaseInit(&err_msg);
     if (ret != 0) {
-        LOG(ERROR) << "Failed to initialize K8s client: " << err_msg;
+        LOG_ERROR << "Failed to initialize K8s client: " << err_msg;
         free(err_msg);
         return ErrorCode::K8S_LEASE_OPERATION_ERROR;
     }
@@ -40,7 +41,7 @@ ErrorCode K8sLeaseHelper::RunElection(const std::string& ns,
         const_cast<char*>(identity.c_str()), lease_dur, renew_deadline,
         retry_period, &err_msg);
     if (ret != 0) {
-        LOG(ERROR) << "RunElection failed: " << err_msg;
+        LOG_ERROR << "RunElection failed: " << err_msg;
         free(err_msg);
         return ErrorCode::K8S_LEASE_OPERATION_ERROR;
     }
@@ -56,7 +57,7 @@ ErrorCode K8sLeaseHelper::WaitElected(const std::string& ns,
                                   const_cast<char*>(lease.c_str()), timeout_sec,
                                   &transitions, &err_msg);
     if (ret != 0) {
-        LOG(ERROR) << "WaitElected failed: " << err_msg;
+        LOG_ERROR << "WaitElected failed: " << err_msg;
         free(err_msg);
         return ErrorCode::K8S_LEASE_OPERATION_ERROR;
     }
@@ -70,7 +71,7 @@ ErrorCode K8sLeaseHelper::WaitLost(const std::string& ns,
     int ret = K8sLeaseWaitLost(const_cast<char*>(ns.c_str()),
                                const_cast<char*>(lease.c_str()), &err_msg);
     if (ret != 0) {
-        LOG(ERROR) << "WaitLost failed: " << err_msg;
+        LOG_ERROR << "WaitLost failed: " << err_msg;
         free(err_msg);
         return ErrorCode::K8S_LEASE_OPERATION_ERROR;
     }
@@ -84,7 +85,7 @@ ErrorCode K8sLeaseHelper::CancelElection(const std::string& ns,
         K8sLeaseCancelElection(const_cast<char*>(ns.c_str()),
                                const_cast<char*>(lease.c_str()), &err_msg);
     if (ret != 0) {
-        LOG(ERROR) << "CancelElection failed: " << err_msg;
+        LOG_ERROR << "CancelElection failed: " << err_msg;
         free(err_msg);
         return ErrorCode::K8S_LEASE_OPERATION_ERROR;
     }
@@ -107,7 +108,7 @@ ErrorCode K8sLeaseHelper::GetHolder(const std::string& ns,
         return ErrorCode::K8S_LEASE_NOT_FOUND;
     }
     if (ret != 0) {
-        LOG(ERROR) << "GetHolder failed: " << err_msg;
+        LOG_ERROR << "GetHolder failed: " << err_msg;
         free(err_msg);
         return ErrorCode::K8S_LEASE_OPERATION_ERROR;
     }
@@ -129,7 +130,7 @@ ErrorCode K8sLeaseHelper::WatchHolder(
                                   const_cast<char*>(lease.c_str()),
                                   callback_context, callback_func, &err_msg);
     if (ret != 0) {
-        LOG(ERROR) << "WatchHolder failed: " << err_msg;
+        LOG_ERROR << "WatchHolder failed: " << err_msg;
         free(err_msg);
         return ErrorCode::K8S_LEASE_OPERATION_ERROR;
     }
@@ -142,7 +143,7 @@ ErrorCode K8sLeaseHelper::CancelWatch(const std::string& ns,
     int ret = K8sLeaseCancelWatch(const_cast<char*>(ns.c_str()),
                                   const_cast<char*>(lease.c_str()), &err_msg);
     if (ret != 0) {
-        LOG(ERROR) << "CancelWatch failed: " << err_msg;
+        LOG_ERROR << "CancelWatch failed: " << err_msg;
         free(err_msg);
         return ErrorCode::K8S_LEASE_OPERATION_ERROR;
     }
@@ -152,36 +153,36 @@ ErrorCode K8sLeaseHelper::CancelWatch(const std::string& ns,
 #else  // !STORE_USE_K8S_LEASE
 
 ErrorCode K8sLeaseHelper::Init() {
-    LOG(FATAL) << "K8s Lease is not enabled in compilation";
+    LOG_FATAL << "K8s Lease is not enabled in compilation";
     return ErrorCode::K8S_LEASE_OPERATION_ERROR;
 }
 
 ErrorCode K8sLeaseHelper::RunElection(const std::string&, const std::string&,
                                       const std::string&, int, int, int) {
-    LOG(FATAL) << "K8s Lease is not enabled in compilation";
+    LOG_FATAL << "K8s Lease is not enabled in compilation";
     return ErrorCode::K8S_LEASE_OPERATION_ERROR;
 }
 
 ErrorCode K8sLeaseHelper::WaitElected(const std::string&, const std::string&,
                                       int, int64_t&) {
-    LOG(FATAL) << "K8s Lease is not enabled in compilation";
+    LOG_FATAL << "K8s Lease is not enabled in compilation";
     return ErrorCode::K8S_LEASE_OPERATION_ERROR;
 }
 
 ErrorCode K8sLeaseHelper::WaitLost(const std::string&, const std::string&) {
-    LOG(FATAL) << "K8s Lease is not enabled in compilation";
+    LOG_FATAL << "K8s Lease is not enabled in compilation";
     return ErrorCode::K8S_LEASE_OPERATION_ERROR;
 }
 
 ErrorCode K8sLeaseHelper::CancelElection(const std::string&,
                                          const std::string&) {
-    LOG(FATAL) << "K8s Lease is not enabled in compilation";
+    LOG_FATAL << "K8s Lease is not enabled in compilation";
     return ErrorCode::K8S_LEASE_OPERATION_ERROR;
 }
 
 ErrorCode K8sLeaseHelper::GetHolder(const std::string&, const std::string&,
                                     std::string&, int64_t&) {
-    LOG(FATAL) << "K8s Lease is not enabled in compilation";
+    LOG_FATAL << "K8s Lease is not enabled in compilation";
     return ErrorCode::K8S_LEASE_OPERATION_ERROR;
 }
 
@@ -189,12 +190,12 @@ ErrorCode K8sLeaseHelper::WatchHolder(const std::string&, const std::string&,
                                       void*,
                                       void (*)(void*, const char*, size_t,
                                                int64_t)) {
-    LOG(FATAL) << "K8s Lease is not enabled in compilation";
+    LOG_FATAL << "K8s Lease is not enabled in compilation";
     return ErrorCode::K8S_LEASE_OPERATION_ERROR;
 }
 
 ErrorCode K8sLeaseHelper::CancelWatch(const std::string&, const std::string&) {
-    LOG(FATAL) << "K8s Lease is not enabled in compilation";
+    LOG_FATAL << "K8s Lease is not enabled in compilation";
     return ErrorCode::K8S_LEASE_OPERATION_ERROR;
 }
 

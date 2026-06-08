@@ -13,8 +13,9 @@
 // limitations under the License.
 
 #include "transport/rdma_transport/rdma_endpoint.h"
+#include "log_macros.h"
 
-#include <glog/logging.h>
+
 
 #include <cassert>
 #include <cstddef>
@@ -54,7 +55,7 @@ int RdmaEndPoint::construct(ibv_cq *cq, size_t num_qp_list,
                             size_t max_sge_per_wr, size_t max_wr_depth,
                             size_t max_inline_bytes) {
     if (status_.load(std::memory_order_relaxed) != INITIALIZING) {
-        LOG(ERROR) << "Endpoint has already been constructed";
+        LOG_ERROR << "Endpoint has already been constructed";
         return ERR_ENDPOINT;
     }
 
@@ -67,7 +68,7 @@ int RdmaEndPoint::construct(ibv_cq *cq, size_t num_qp_list,
 
     wr_depth_list_ = new volatile int[num_qp_list];
     if (!wr_depth_list_) {
-        LOG(ERROR) << "Failed to allocate memory for work request depth list";
+        LOG_ERROR << "Failed to allocate memory for work request depth list";
         return ERR_MEMORY;
     }
     for (size_t i = 0; i < num_qp_list; ++i) {
@@ -84,7 +85,7 @@ int RdmaEndPoint::construct(ibv_cq *cq, size_t num_qp_list,
         attr.cap.max_inline_data = max_inline_bytes;
         qp_list_[i] = ibv_create_qp(context_.pd(), &attr);
         if (!qp_list_[i]) {
-            PLOG(ERROR) << "Failed to create QP";
+            LOG_ERROR << "Failed to create QP";
             return ERR_ENDPOINT;
         }
     }
@@ -104,14 +105,14 @@ int RdmaEndPoint::reconstruct() {
     // Use deconstructLocked because callers already hold lock_
     int ret = deconstructLocked();
     if (ret) {
-        LOG(ERROR) << "Failed to deconstruct endpoint: " << ret;
+        LOG_ERROR << "Failed to deconstruct endpoint: " << ret;
         return ret;
     }
 
     // Get CQ from context for reconstruction
     ibv_cq *cq = context_.cq();
     if (!cq) {
-        LOG(ERROR) << "No CQ available for endpoint reconstruction";
+        LOG_ERROR << "No CQ available for endpoint reconstruction";
         return ERR_ENDPOINT;
     }
 
@@ -135,7 +136,7 @@ int RdmaEndPoint::deconstructLocked() {
     for (size_t i = 0; i < qp_list_.size(); ++i) {
         if (wr_depth_list_[i] != 0) {
             if (!displayed) {
-                LOG(WARNING) << "Outstanding work requests found, CQ will not "
+                LOG_WARNING << "Outstanding work requests found, CQ will not "
                                 "be generated";
                 displayed = true;
             }
@@ -148,7 +149,7 @@ int RdmaEndPoint::deconstructLocked() {
     for (size_t i = 0; i < qp_list_.size(); ++i) {
         if (!qp_list_[i]) continue;  // already destroyed in a previous call
         if (ibv_destroy_qp(qp_list_[i])) {
-            PLOG(ERROR) << "Failed to destroy QP[" << i << "]";
+            LOG_ERROR << "Failed to destroy QP[" << i << "]";
             result = ERR_ENDPOINT;
         } else {
             qp_list_[i] = nullptr;
@@ -182,7 +183,7 @@ void RdmaEndPoint::beginDestroy() {
     attr.qp_state = IBV_QPS_ERR;
     for (size_t i = 0; i < qp_list_.size(); ++i) {
         if (ibv_modify_qp(qp_list_[i], &attr, IBV_QP_STATE)) {
-            PLOG(WARNING) << "Failed to modify QP to ERR during beginDestroy";
+            LOG_WARNING << "Failed to modify QP to ERR during beginDestroy";
         }
     }
 }
@@ -209,7 +210,7 @@ bool RdmaEndPoint::finishDestroy() {
             status_.store(DESTROYED, std::memory_order_relaxed);
             return true;
         }
-        LOG(WARNING) << "finishDestroy called in unexpected state: "
+        LOG_WARNING << "finishDestroy called in unexpected state: "
                      << current_status
                      << ", forcing destruction to avoid waiting_list_ leak";
         // Fall through to the unified destroy path.
@@ -227,7 +228,7 @@ bool RdmaEndPoint::finishDestroy() {
         if (has_outstanding) {
             double elapsed = (getCurrentTimeInNano() - inactive_time_) / 1e9;
             if (elapsed < kFinishDestroyTimeoutSec) return false;
-            LOG(WARNING) << "finishDestroy timed out after " << elapsed
+            LOG_WARNING << "finishDestroy timed out after " << elapsed
                          << "s with outstanding WRs, forcing destruction";
         }
     }
@@ -238,11 +239,11 @@ bool RdmaEndPoint::finishDestroy() {
     int ret = deconstructLocked();
     if (ret) {
         finish_destroy_retries_++;
-        LOG(ERROR) << "Failed to finish destroying endpoint (attempt "
+        LOG_ERROR << "Failed to finish destroying endpoint (attempt "
                    << finish_destroy_retries_ << "/" << kFinishDestroyMaxRetries
                    << "): " << ret;
         if (finish_destroy_retries_ < kFinishDestroyMaxRetries) return false;
-        LOG(ERROR) << "Giving up after " << finish_destroy_retries_
+        LOG_ERROR << "Giving up after " << finish_destroy_retries_
                    << " retries (possible resource leak)";
     }
     status_.store(DESTROYED, std::memory_order_relaxed);
@@ -252,7 +253,7 @@ bool RdmaEndPoint::finishDestroy() {
 void RdmaEndPoint::setPeerNicPath(const std::string &peer_nic_path) {
     RWSpinlock::WriteGuard guard(lock_);
     if (connected()) {
-        LOG(WARNING) << "Previous connection will be discarded";
+        LOG_WARNING << "Previous connection will be discarded";
         disconnectUnlocked();
     }
     peer_nic_path_ = peer_nic_path;
@@ -266,7 +267,7 @@ int RdmaEndPoint::setupConnectionsByActive() {
     {
         RWSpinlock::WriteGuard guard(lock_);
         if (connected()) {
-            LOG(INFO) << "Connection has been established";
+            LOG_INFO << "Connection has been established";
             return 0;
         }
 
@@ -286,7 +287,7 @@ int RdmaEndPoint::setupConnectionsByActive() {
             peer_server_name = getServerNameFromNicPath(peer_nic_path_);
             peer_nic_name = getNicNameFromNicPath(peer_nic_path_);
             if (peer_server_name.empty() || peer_nic_name.empty()) {
-                LOG(ERROR) << "Parse peer nic path failed: " << peer_nic_path_;
+                LOG_ERROR << "Parse peer nic path failed: " << peer_nic_path_;
                 disconnectUnlocked();
                 return ERR_INVALID_ARGUMENT;
             }
@@ -300,7 +301,7 @@ int RdmaEndPoint::setupConnectionsByActive() {
     }
 
     if (!do_rpc) {
-        LOG(INFO) << "Another thread is already performing the endpoint "
+        LOG_INFO << "Another thread is already performing the endpoint "
                      "handshake, waiting for it to complete";
         uint64_t start_time = getCurrentTimeInNano();
         uint32_t spin_count = 0;
@@ -360,7 +361,7 @@ int RdmaEndPoint::setupConnectionsByActive() {
     // reuse the existing endpoint.
     if (connected()) {
         if (peer_qp_num_list_ == peer_desc.qp_num) {
-            LOG(INFO) << "Received same peer QP numbers, reusing connection.";
+            LOG_INFO << "Received same peer QP numbers, reusing connection.";
             return 0;
         }
 
@@ -368,7 +369,7 @@ int RdmaEndPoint::setupConnectionsByActive() {
         // first sends us an Active RPC and establishes a connection,
         // then restarts, and eventually accepts and responds to our
         // Active RPC.
-        LOG(WARNING) << "Peer QP list mismatch on connected endpoint, "
+        LOG_WARNING << "Peer QP list mismatch on connected endpoint, "
                         "re-establishing connection: "
                      << toString();
 
@@ -377,7 +378,7 @@ int RdmaEndPoint::setupConnectionsByActive() {
     }
 
     if (!peer_desc.reply_msg.empty()) {
-        LOG(ERROR) << "Rejected handshake request by peer "
+        LOG_ERROR << "Rejected handshake request by peer "
                    << local_desc.peer_nic_path;
         disconnectUnlocked();
         return ERR_REJECT_HANDSHAKE;
@@ -385,7 +386,7 @@ int RdmaEndPoint::setupConnectionsByActive() {
 
     if (peer_desc.local_nic_path != peer_nic_path_ ||
         peer_desc.peer_nic_path != local_desc.local_nic_path) {
-        LOG(ERROR) << "Invalid argument: received packet mismatch, "
+        LOG_ERROR << "Invalid argument: received packet mismatch, "
                       "local.local_nic_path: "
                    << local_desc.local_nic_path
                    << ", local.peer_nic_path: " << local_desc.peer_nic_path
@@ -418,7 +419,7 @@ int RdmaEndPoint::setupConnectionsByActive() {
             }
         }
     }
-    LOG(ERROR) << "Peer NIC " << peer_nic_name << " not found in "
+    LOG_ERROR << "Peer NIC " << peer_nic_name << " not found in "
                << peer_server_name;
     disconnectUnlocked();
     return ERR_DEVICE_NOT_FOUND;
@@ -435,11 +436,11 @@ int RdmaEndPoint::setupConnectionsByPassive(const HandShakeDesc &peer_desc,
             local_desc.local_gid = context_.gid();
             local_desc.peer_nic_path = peer_nic_path_;
             local_desc.qp_num = qpNum();
-            LOG(INFO) << "Received same peer QP numbers, reusing connection.";
+            LOG_INFO << "Received same peer QP numbers, reusing connection.";
             return 0;
         }
         // Different peer (e.g., peer restarted)
-        LOG(WARNING) << "Re-establish connection: " << toString();
+        LOG_WARNING << "Re-establish connection: " << toString();
 
         int ret = resetConnection("re-establishing connection (passive)");
         if (ret) return ret;
@@ -461,7 +462,7 @@ int RdmaEndPoint::setupConnectionsByPassive(const HandShakeDesc &peer_desc,
             context_.nicPath() + " + " + peer_nic_path_ + ", while got " +
             peer_desc.peer_nic_path + " + " + peer_desc.local_nic_path;
 
-        LOG(ERROR) << local_desc.reply_msg;
+        LOG_ERROR << local_desc.reply_msg;
         return ERR_REJECT_HANDSHAKE;
     }
 
@@ -469,7 +470,7 @@ int RdmaEndPoint::setupConnectionsByPassive(const HandShakeDesc &peer_desc,
     auto peer_nic_name = getNicNameFromNicPath(peer_nic_path_);
     if (peer_server_name.empty() || peer_nic_name.empty()) {
         local_desc.reply_msg = "Parse peer nic path failed: " + peer_nic_path_;
-        LOG(ERROR) << local_desc.reply_msg;
+        LOG_ERROR << local_desc.reply_msg;
         return ERR_INVALID_ARGUMENT;
     }
 
@@ -505,7 +506,7 @@ int RdmaEndPoint::setupConnectionsByPassive(const HandShakeDesc &peer_desc,
     }
     local_desc.reply_msg =
         "Peer nic not found in that server: " + peer_nic_path_;
-    LOG(ERROR) << local_desc.reply_msg;
+    LOG_ERROR << local_desc.reply_msg;
     return ERR_DEVICE_NOT_FOUND;
 }
 
@@ -525,14 +526,14 @@ int RdmaEndPoint::disconnectUnlocked() {
     for (size_t i = 0; i < qp_list_.size(); ++i) {
         int curr_ret = ibv_modify_qp(qp_list_[i], &attr, IBV_QP_STATE);
         if (curr_ret) {
-            PLOG(ERROR) << "Failed to modify QP to RESET";
+            LOG_ERROR << "Failed to modify QP to RESET";
             ret = ERR_ENDPOINT;
         }
         // After resetting QP, the wr_depth_list_ won't change
         bool displayed = false;
         if (wr_depth_list_[i] != 0) {
             if (!displayed) {
-                LOG(WARNING) << "Outstanding work requests found, CQ will not "
+                LOG_WARNING << "Outstanding work requests found, CQ will not "
                                 "be generated";
                 displayed = true;
             }
@@ -556,10 +557,10 @@ int RdmaEndPoint::resetConnection(const std::string &reason) {
 #endif
 
     if (ret) {
-        LOG(ERROR) << "Failed to reset the endpoint (triggered by: " << reason
+        LOG_ERROR << "Failed to reset the endpoint (triggered by: " << reason
                    << "): error=" << ret;
     } else {
-        LOG(INFO) << "Successfully reset the endpoint (triggered by: " << reason
+        LOG_INFO << "Successfully reset the endpoint (triggered by: " << reason
                   << ").";
     }
     return ret;
@@ -643,7 +644,7 @@ int RdmaEndPoint::submitPostSend(
         __sync_fetch_and_add(cq_outstanding_, wr_count);
         int rc = ibv_post_send(qp_list_[qp_index], wr_list.data(), &bad_wr);
         if (rc) {
-            PLOG(ERROR) << "Failed to ibv_post_send";
+            LOG_ERROR << "Failed to ibv_post_send";
             while (bad_wr) {
                 int i = bad_wr - wr_list.data();
                 failed_slice_list.push_back(slice_list[start + i]);
@@ -675,7 +676,7 @@ std::vector<uint32_t> RdmaEndPoint::qpNum() const {
 
 static int parseGidString(const std::string &gid_str, ibv_gid &gid_out) {
     if (gid_str.empty()) {
-        LOG(ERROR) << "GID string is empty";
+        LOG_ERROR << "GID string is empty";
         return ERR_INVALID_ARGUMENT;
     }
 
@@ -683,7 +684,7 @@ static int parseGidString(const std::string &gid_str, ibv_gid &gid_out) {
     std::istringstream iss(":" + gid_str);
     for (size_t i = 0; i < sizeof(gid_out.raw); i++) {
         if (iss.get() != ':') {
-            LOG(ERROR) << "Invalid GID format at byte " << i
+            LOG_ERROR << "Invalid GID format at byte " << i
                        << ", peer_gid=" << gid_str;
             return ERR_INVALID_ARGUMENT;
         }
@@ -692,7 +693,7 @@ static int parseGidString(const std::string &gid_str, ibv_gid &gid_out) {
         iss >> std::hex >> byte;
 
         if (iss.fail() || byte > 0xFF) {
-            LOG(ERROR) << "Invalid GID format at byte " << i
+            LOG_ERROR << "Invalid GID format at byte " << i
                        << ", peer_gid=" << gid_str;
             return ERR_INVALID_ARGUMENT;
         }
@@ -703,7 +704,7 @@ static int parseGidString(const std::string &gid_str, ibv_gid &gid_out) {
     // Ensure no trailing data remains after 16 bytes
     char extra;
     if (iss.get(extra)) {
-        LOG(ERROR) << "GID string has trailing data after 16 bytes"
+        LOG_ERROR << "GID string has trailing data after 16 bytes"
                    << ", peer_gid=" << gid_str;
         return ERR_INVALID_ARGUMENT;
     }
@@ -719,7 +720,7 @@ int RdmaEndPoint::doSetupConnection(const std::string &peer_gid,
         std::string message =
             "QP count mismatch in peer and local endpoints, check "
             "MC_MAX_EP_PER_CTX";
-        LOG(ERROR) << "[Handshake] " << message;
+        LOG_ERROR << "[Handshake] " << message;
         if (reply_msg) *reply_msg = message;
         return ERR_INVALID_ARGUMENT;
     }
@@ -729,7 +730,7 @@ int RdmaEndPoint::doSetupConnection(const std::string &peer_gid,
     int ret = parseGidString(peer_gid, peer_gid_raw);
     if (ret) {
         std::string message = "Invalid peer GID: " + peer_gid;
-        LOG(ERROR) << "[Handshake] " << message;
+        LOG_ERROR << "[Handshake] " << message;
         if (reply_msg) *reply_msg = message;
         return ret;
     }
@@ -759,7 +760,7 @@ int RdmaEndPoint::doSetupConnection(int qp_index, const ibv_gid &peer_gid,
     int ret = ibv_modify_qp(qp, &attr, IBV_QP_STATE);
     if (ret) {
         std::string message = "Failed to modify QP to RESET";
-        PLOG(ERROR) << "[Handshake] " << message;
+        LOG_ERROR << "[Handshake] " << message;
         if (reply_msg) *reply_msg = message + ": " + strerror(errno);
         return ERR_ENDPOINT;
     }
@@ -777,7 +778,7 @@ int RdmaEndPoint::doSetupConnection(int qp_index, const ibv_gid &peer_gid,
     if (ret) {
         std::string message =
             "Failed to modify QP to INIT, check local context port num";
-        PLOG(ERROR) << "[Handshake] " << message;
+        LOG_ERROR << "[Handshake] " << message;
         if (reply_msg) *reply_msg = message + ": " + strerror(errno);
         return ERR_ENDPOINT;
     }
@@ -814,7 +815,7 @@ int RdmaEndPoint::doSetupConnection(int qp_index, const ibv_gid &peer_gid,
     if (ret) {
         std::string message =
             "Failed to modify QP to RTR, check mtu, gid, peer lid, peer qp num";
-        PLOG(ERROR) << "[Handshake] " << message;
+        LOG_ERROR << "[Handshake] " << message;
         if (reply_msg) *reply_msg = message + ": " + strerror(errno);
         return ERR_ENDPOINT;
     }
@@ -833,7 +834,7 @@ int RdmaEndPoint::doSetupConnection(int qp_index, const ibv_gid &peer_gid,
                             IBV_QP_MAX_QP_RD_ATOMIC);
     if (ret) {
         std::string message = "Failed to modify QP to RTS";
-        PLOG(ERROR) << "[Handshake] " << message;
+        LOG_ERROR << "[Handshake] " << message;
         if (reply_msg) *reply_msg = message + ": " + strerror(errno);
         return ERR_ENDPOINT;
     }
@@ -848,7 +849,7 @@ int RdmaEndPoint::doSetupConnection(int qp_index, const ibv_gid &peer_gid,
             uint8_t target = (uint8_t)(qp_index % n) + 1;
             int lag_ret = mlx5dv_modify_qp_lag_port(qp, target);
             if (lag_ret) {
-                LOG_FIRST_N(WARNING, 4)
+                LOG_WARNING
                     << "[RDMA] mlx5dv_modify_qp_lag_port failed"
                     << " (qp_index=" << qp_index
                     << ", target_port=" << (int)target
@@ -856,19 +857,19 @@ int RdmaEndPoint::doSetupConnection(int qp_index, const ibv_gid &peer_gid,
             } else {
                 uint8_t cfg = 0, active = 0;
                 if (mlx5dv_query_qp_lag_port(qp, &cfg, &active) == 0) {
-                    VLOG(1)
+                    LOG_INFO
                         << "[RDMA] QP[" << qp_index << "] qpn=" << qp->qp_num
                         << " lag_port cfg=" << (int)cfg
                         << " active=" << (int)active;
                 } else {
-                    LOG_FIRST_N(WARNING, 4)
+                    LOG_WARNING
                         << "[RDMA] mlx5dv_query_qp_lag_port failed"
                         << " (qp_index=" << qp_index << ")";
                 }
             }
         }
 #else
-        LOG_FIRST_N(WARNING, 1)
+        LOG_WARNING << "MC_MLX5_QP_LAG_PORT_BALANCE is set but binary was not built with USE_MLX5DV; ignoring"
             << "MC_MLX5_QP_LAG_PORT_BALANCE is set but binary was not built "
                "with USE_MLX5DV; ignoring";
 #endif
@@ -884,15 +885,15 @@ int RdmaEndPoint::doSetupConnection(int qp_index, const ibv_gid &peer_gid,
         uint16_t sport = sports[qp_index % sports.size()];
         int sp_ret = mlx5dv_modify_qp_udp_sport(qp, sport);
         if (sp_ret) {
-            LOG_FIRST_N(WARNING, 4)
+            LOG_WARNING
                 << "[RDMA] mlx5dv_modify_qp_udp_sport failed (qp_index="
                 << qp_index << ", sport=" << sport << "): " << strerror(sp_ret);
         } else {
-            VLOG(1) << "[RDMA] QP[" << qp_index << "] qpn=" << qp->qp_num
+            LOG_INFO << "[RDMA] QP[" << qp_index << "] qpn=" << qp->qp_num
                     << " udp_sport=" << sport;
         }
 #else
-        LOG_FIRST_N(WARNING, 1)
+        LOG_WARNING << "MC_MLX5_QP_LAG_PORT_BALANCE is set but binary was not built with USE_MLX5DV; ignoring"
             << "MC_MLX5_QP_UDP_SPORTS is set but binary was not built with "
                "USE_MLX5DV; ignoring";
 #endif

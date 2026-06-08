@@ -15,7 +15,7 @@
 #ifndef TENT_REDIS_H
 #define TENT_REDIS_H
 
-#include <glog/logging.h>
+
 #include <hiredis/hiredis.h>
 
 #include <atomic>

@@ -11,10 +11,8 @@
 #include <unistd.h>
 #include <vector>
 
-#include <glog/logging.h>
-#include <liburing.h>
-
 #include "file_interface.h"
+#include "log_macros.h"
 
 namespace mooncake {
 
@@ -79,7 +77,7 @@ class SharedUringRing {
         int ret = io_uring_register_buffers(&ring_, &iov, 1);
         if (ret < 0) {
             int err = -ret;
-            LOG(WARNING) << "[SharedUringRing] io_uring_register_buffers failed"
+            LOG_WARNING << "[SharedUringRing] io_uring_register_buffers failed"
                          << " errno=" << err << " (" << strerror(err) << ")"
                          << " buf=" << b << " size=" << s
                          << " pages=" << (s >> 12)
@@ -90,7 +88,7 @@ class SharedUringRing {
         buf_registered_ = true;
         buf_base_ = b;
         buf_size_ = s;
-        LOG(INFO) << "[SharedUringRing] tid registered buffer addr=" << b
+        LOG_INFO << "[SharedUringRing] tid registered buffer addr=" << b
                   << " size=" << s;
         return true;
     }
@@ -153,7 +151,7 @@ class SharedUringRing {
             for (int i = 0; i < batch; ++i) {
                 struct io_uring_sqe* sqe = io_uring_get_sqe(&ring_);
                 if (!sqe) {
-                    LOG(ERROR) << "[SharedUringRing] SQ full (batch_read)";
+                    LOG_ERROR << "[SharedUringRing] SQ full (batch_read)";
                     return tl::make_unexpected(ErrorCode::FILE_READ_FAIL);
                 }
                 const auto& d = descs[idx + i];
@@ -179,7 +177,7 @@ class SharedUringRing {
 
         struct io_uring_sqe* sqe = io_uring_get_sqe(&ring_);
         if (!sqe) {
-            LOG(ERROR) << "[SharedUringRing] SQ full (fsync)";
+            LOG_ERROR << "[SharedUringRing] SQ full (fsync)";
             return tl::make_unexpected(ErrorCode::INTERNAL_ERROR);
         }
         io_uring_prep_fsync(sqe, fd, IORING_FSYNC_DATASYNC);
@@ -197,12 +195,12 @@ class SharedUringRing {
     SharedUringRing() {
         int ret = io_uring_queue_init(QUEUE_DEPTH, &ring_, 0);
         if (ret < 0) {
-            LOG(ERROR) << "[SharedUringRing] io_uring_queue_init failed: "
+            LOG_ERROR << "[SharedUringRing] io_uring_queue_init failed: "
                        << strerror(-ret);
             return;
         }
         initialized_ = true;
-        LOG(INFO) << "[SharedUringRing] thread-local ring initialised "
+        LOG_INFO << "[SharedUringRing] thread-local ring initialised "
                      "queue_depth="
                   << QUEUE_DEPTH;
     }
@@ -246,7 +244,7 @@ class SharedUringRing {
     tl::expected<size_t, ErrorCode> collect(int expected) {
         int ret = io_uring_submit_and_wait(&ring_, expected);
         if (ret < 0) {
-            LOG(ERROR) << "[SharedUringRing] io_uring_submit_and_wait: "
+            LOG_ERROR << "[SharedUringRing] io_uring_submit_and_wait: "
                        << strerror(-ret);
             return tl::make_unexpected(ErrorCode::INTERNAL_ERROR);
         }
@@ -256,7 +254,7 @@ class SharedUringRing {
         struct io_uring_cqe* cqe;
         io_uring_for_each_cqe(&ring_, head, cqe) {
             if (cqe->res < 0) {
-                LOG(ERROR) << "[SharedUringRing] CQE error: "
+                LOG_ERROR << "[SharedUringRing] CQE error: "
                            << strerror(-cqe->res);
                 err = true;
             } else {
@@ -292,7 +290,7 @@ class SharedUringRing {
 
                 struct io_uring_sqe* sqe = io_uring_get_sqe(&ring_);
                 if (!sqe) {
-                    LOG(ERROR) << "[SharedUringRing] SQ full";
+                    LOG_ERROR << "[SharedUringRing] SQ full";
                     return tl::make_unexpected(err_code);
                 }
 
@@ -319,7 +317,7 @@ class SharedUringRing {
             total += res.value();
             if (!is_write && res.value() == 0) break;  // read EOF
             if (is_write && res.value() == 0) {
-                LOG(ERROR) << "[SharedUringRing] zero bytes written";
+                LOG_ERROR << "[SharedUringRing] zero bytes written";
                 return tl::make_unexpected(ErrorCode::FILE_WRITE_FAIL);
             }
         }
@@ -344,7 +342,7 @@ class SharedUringRing {
             for (int i = 0; i < batch; ++i) {
                 struct io_uring_sqe* sqe = io_uring_get_sqe(&ring_);
                 if (!sqe) {
-                    LOG(ERROR) << "[SharedUringRing] SQ full (vector)";
+                    LOG_ERROR << "[SharedUringRing] SQ full (vector)";
                     return tl::make_unexpected(err_code);
                 }
 
@@ -391,11 +389,11 @@ UringFile::UringFile(const std::string& filename, int fd,
         return;
     }
     if (!SharedUringRing::instance().is_initialized()) {
-        LOG(WARNING) << "[UringFile] thread-local ring not available for "
+        LOG_WARNING << "[UringFile] thread-local ring not available for "
                      << filename;
     }
     if (use_direct_io_) {
-        LOG(INFO) << "[UringFile] O_DIRECT mode enabled for " << filename;
+        LOG_INFO << "[UringFile] O_DIRECT mode enabled for " << filename;
     }
 }
 
@@ -404,14 +402,14 @@ UringFile::~UringFile() {
 
     if (fd_ >= 0) {
         if (close(fd_) != 0) {
-            LOG(WARNING) << "[UringFile] close failed: " << filename_;
+            LOG_WARNING << "[UringFile] close failed: " << filename_;
         }
         if (error_code_ == ErrorCode::FILE_WRITE_FAIL) {
             if (::unlink(filename_.c_str()) == -1)
-                LOG(ERROR) << "[UringFile] failed to delete corrupted file: "
+                LOG_ERROR << "[UringFile] failed to delete corrupted file: "
                            << filename_;
             else
-                LOG(INFO) << "[UringFile] deleted corrupted file: "
+                LOG_INFO << "[UringFile] deleted corrupted file: "
                           << filename_;
         }
     }
@@ -421,7 +419,7 @@ UringFile::~UringFile() {
                           std::chrono::steady_clock::now() - t0)
                           .count();
     if (elapsed_ms > 1) {
-        LOG(WARNING) << "[UringFile::~UringFile] cleanup took " << elapsed_ms
+        LOG_WARNING << "[UringFile::~UringFile] cleanup took " << elapsed_ms
                      << "ms for " << filename_;
     }
 }
@@ -434,7 +432,7 @@ void* UringFile::alloc_aligned_buffer(size_t size) const {
     size_t aligned = ((size + ALIGNMENT_ - 1) / ALIGNMENT_) * ALIGNMENT_;
     void* ptr = nullptr;
     if (posix_memalign(&ptr, ALIGNMENT_, aligned) != 0) {
-        LOG(ERROR) << "[UringFile] posix_memalign(" << aligned << ") failed";
+        LOG_ERROR << "[UringFile] posix_memalign(" << aligned << ") failed";
         return nullptr;
     }
     return ptr;
@@ -603,7 +601,7 @@ tl::expected<size_t, ErrorCode> UringFile::vector_write(const iovec* iov,
                   std::chrono::steady_clock::now() - start)
                   .count();
     if (us > 1000)
-        LOG(INFO) << "[UringFile::vector_write] fd=" << fd_
+        LOG_INFO << "[UringFile::vector_write] fd=" << fd_
                   << " iovcnt=" << iovcnt << " time=" << us << "us";
     return res;
 }
@@ -628,14 +626,14 @@ tl::expected<size_t, ErrorCode> UringFile::vector_read(const iovec* iov,
                           ? (static_cast<double>(expected_bytes) / 1048576.0) /
                                 (static_cast<double>(us) / 1e6)
                           : 0;
-        LOG(INFO) << "[UringFile::vector_read] fd=" << fd_
+        LOG_INFO << "[UringFile::vector_read] fd=" << fd_
                   << " iovcnt=" << iovcnt << " bytes=" << expected_bytes
                   << " time=" << us << "us (" << (us / 1000.0) << "ms)"
                   << " throughput=" << mbps << "MB/s";
     }
 
     if (!res) {
-        LOG(ERROR) << "[UringFile::vector_read] FAILED fd=" << fd_
+        LOG_ERROR << "[UringFile::vector_read] FAILED fd=" << fd_
                    << " offset=" << offset << " iovcnt=" << iovcnt
                    << " expected=" << expected_bytes;
     }
@@ -650,7 +648,7 @@ tl::expected<void, ErrorCode> UringFile::datasync() {
     if (fd_ < 0) return make_error<void>(ErrorCode::FILE_NOT_FOUND);
     auto res = SharedUringRing::instance().fsync(fd_);
     if (!res) {
-        LOG(ERROR) << "[UringFile::datasync] fsync failed for: " << filename_;
+        LOG_ERROR << "[UringFile::datasync] fsync failed for: " << filename_;
         return make_error<void>(ErrorCode::FILE_WRITE_FAIL);
     }
     return {};
@@ -662,7 +660,7 @@ tl::expected<void, ErrorCode> UringFile::datasync() {
 
 bool UringFile::register_global_buffer(void* buffer, size_t length) {
     if (!buffer || length == 0) {
-        LOG(ERROR)
+        LOG_ERROR
             << "[UringFile::register_global_buffer] invalid buffer or length";
         return false;
     }
@@ -673,7 +671,7 @@ bool UringFile::register_global_buffer(void* buffer, size_t length) {
     // MADV_NOHUGEPAGE prevents the kernel from backing this range with THPs,
     // making pin_user_pages() reliable regardless of system THP policy.
     if (madvise(buffer, length, MADV_NOHUGEPAGE) != 0) {
-        LOG(WARNING)
+        LOG_WARNING
             << "[UringFile::register_global_buffer] madvise(NOHUGEPAGE)"
             << " failed errno=" << errno << " (" << strerror(errno)
             << ") — continuing anyway";
@@ -682,11 +680,11 @@ bool UringFile::register_global_buffer(void* buffer, size_t length) {
     g_buf.size.store(length, std::memory_order_release);
     bool ok = SharedUringRing::instance().ensure_buf_registered();
     if (ok) {
-        LOG(INFO) << "[UringFile::register_global_buffer] registered"
+        LOG_INFO << "[UringFile::register_global_buffer] registered"
                   << " addr=" << buffer << " size=" << length
                   << " pages=" << (length >> 12);
     } else {
-        LOG(WARNING)
+        LOG_WARNING
             << "[UringFile::register_global_buffer] registration failed"
             << " addr=" << buffer << " size=" << length
             << " — I/O will use regular (non-fixed-buffer) io_uring,"
@@ -703,16 +701,16 @@ void UringFile::unregister_global_buffer() {
 
 bool UringFile::register_buffer(void* buffer, size_t length) {
     if (!buffer || length == 0) {
-        LOG(ERROR) << "[UringFile::register_buffer] invalid buffer or length";
+        LOG_ERROR << "[UringFile::register_buffer] invalid buffer or length";
         return false;
     }
     if (use_direct_io_) {
         if (reinterpret_cast<uintptr_t>(buffer) % ALIGNMENT_) {
-            LOG(ERROR) << "[UringFile::register_buffer] buffer not aligned";
+            LOG_ERROR << "[UringFile::register_buffer] buffer not aligned";
             return false;
         }
         if (length % ALIGNMENT_) {
-            LOG(ERROR) << "[UringFile::register_buffer] length not aligned";
+            LOG_ERROR << "[UringFile::register_buffer] length not aligned";
             return false;
         }
     }
@@ -721,7 +719,7 @@ bool UringFile::register_buffer(void* buffer, size_t length) {
     g_buf.size.store(length, std::memory_order_release);
     // Register on the calling thread's ring immediately.
     bool ok = SharedUringRing::instance().ensure_buf_registered();
-    LOG(INFO) << "[UringFile::register_buffer] addr=" << buffer
+    LOG_INFO << "[UringFile::register_buffer] addr=" << buffer
               << " size=" << length << " calling-thread-registered=" << ok;
     return ok;
 }

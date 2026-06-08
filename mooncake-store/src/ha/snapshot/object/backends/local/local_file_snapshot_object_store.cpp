@@ -1,4 +1,5 @@
 #include "ha/snapshot/object/backends/local/local_file_snapshot_object_store.h"
+#include "log_macros.h"
 
 #include <algorithm>
 #include <cstdlib>
@@ -6,7 +7,7 @@
 #include <sstream>
 
 #include <fmt/format.h>
-#include <glog/logging.h>
+
 
 namespace mooncake {
 
@@ -44,7 +45,7 @@ LocalFileSnapshotObjectStore::LocalFileSnapshotObjectStore() {
             "base_path '{}' is not a directory", base_path_.string()));
     }
 
-    LOG(INFO) << "LocalFileSnapshotObjectStore initialized with path: "
+    LOG_INFO << "LocalFileSnapshotObjectStore initialized with path: "
               << base_path_;
 }
 
@@ -75,7 +76,7 @@ LocalFileSnapshotObjectStore::LocalFileSnapshotObjectStore(
             "base_path '{}' is not a directory", base_path_.string()));
     }
 
-    LOG(INFO) << "LocalFileSnapshotObjectStore initialized with path: "
+    LOG_INFO << "LocalFileSnapshotObjectStore initialized with path: "
               << base_path_;
 }
 
@@ -148,7 +149,7 @@ tl::expected<void, std::string> LocalFileSnapshotObjectStore::UploadBuffer(
     }
 
     file.close();
-    VLOG(1) << "Successfully uploaded buffer to: " << full_path
+    LOG_INFO << "Successfully uploaded buffer to: " << full_path
             << ", size: " << buffer.size();
     return {};
 }
@@ -188,7 +189,7 @@ tl::expected<void, std::string> LocalFileSnapshotObjectStore::DownloadBuffer(
             "Failed to read data from file: {}", full_path.string()));
     }
 
-    VLOG(1) << "Successfully downloaded buffer from: " << full_path
+    LOG_INFO << "Successfully downloaded buffer from: " << full_path
             << ", size: " << buffer.size();
     return {};
 }
@@ -220,7 +221,7 @@ tl::expected<void, std::string> LocalFileSnapshotObjectStore::UploadString(
     }
 
     file.close();
-    VLOG(1) << "Successfully uploaded string to: " << full_path;
+    LOG_INFO << "Successfully uploaded string to: " << full_path;
     return {};
 }
 
@@ -247,7 +248,7 @@ tl::expected<void, std::string> LocalFileSnapshotObjectStore::DownloadString(
     buffer << file.rdbuf();
     data = buffer.str();
 
-    VLOG(1) << "Successfully downloaded string from: " << full_path;
+    LOG_INFO << "Successfully downloaded string from: " << full_path;
     return {};
 }
 
@@ -256,7 +257,7 @@ LocalFileSnapshotObjectStore::DeleteObjectsWithPrefix(
     const std::string& prefix) {
     fs::path target_dir = KeyToPath(prefix);
     if (!IsPathWithinBase(target_dir)) {
-        LOG(ERROR) << "Security violation: Attempted to delete path outside "
+        LOG_ERROR << "Security violation: Attempted to delete path outside "
                       "base directory. base_path="
                    << base_path_ << ", target_path=" << target_dir;
         return tl::make_unexpected(
@@ -267,7 +268,7 @@ LocalFileSnapshotObjectStore::DeleteObjectsWithPrefix(
     std::error_code ec;
     fs::path canonical_target = fs::weakly_canonical(target_dir, ec);
     if (!ec && canonical_target == base_path_) {
-        LOG(ERROR) << "Security violation: Attempted to delete base "
+        LOG_ERROR << "Security violation: Attempted to delete base "
                       "directory itself. base_path="
                    << base_path_;
         return tl::make_unexpected(
@@ -289,7 +290,7 @@ LocalFileSnapshotObjectStore::DeleteObjectsWithPrefix(
             fmt::format("Failed to remove directory {}: {}",
                         target_dir.string(), ec.message()));
     }
-    VLOG(1) << "Removed directory: " << target_dir
+    LOG_INFO << "Removed directory: " << target_dir
             << ", items removed: " << removed_count;
     return {};
 }
@@ -319,7 +320,7 @@ LocalFileSnapshotObjectStore::ListObjectsWithPrefix(
         }
     }
 
-    VLOG(1) << "Listed " << object_keys.size()
+    LOG_INFO << "Listed " << object_keys.size()
             << " objects with prefix: " << prefix;
     return {};
 }

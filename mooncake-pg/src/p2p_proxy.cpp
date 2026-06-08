@@ -1,4 +1,5 @@
 #include <memory>
+#include "log_macros.h"
 #include <mutex>
 #include <p2p_proxy.h>
 #include <ATen/cuda/CUDAContext.h>
@@ -178,7 +179,7 @@ P2PProxy::P2PProxy(TransferEngine* engine, const Options& options)
 
 P2PProxy::~P2PProxy() {
     if (resource_abandoned_) {
-        LOG(WARNING) << "Resource leak in P2PProxy: cleanup skipped due to "
+        LOG_WARNING << "Resource leak in P2PProxy: cleanup skipped due to "
                         "hung operations.";
         return;
     }
@@ -323,7 +324,7 @@ void P2PProxy::reportBrokenPeer(int peer_rank) {
     meta_->peerConnected[peer_rank] = false;
     meta_->activeRanks[peer_rank] = false;
     meta_->activeRanksTensor[peer_rank] = 0;
-    LOG(ERROR) << "Rank " << meta_->rank << " marking peer " << peer_rank
+    LOG_ERROR << "Rank " << meta_->rank << " marking peer " << peer_rank
                << " as broken during P2P transfer.";
 }
 
@@ -661,7 +662,7 @@ bool P2PProxy::stepRecvIssueCredit(RecvTransferTask& task) {
     }
 
     if (credit_status.s == TransferStatusEnum::FAILED || isTimeout(task)) {
-        LOG(ERROR) << "P2P credit transfer failed/timeout, seq="
+        LOG_ERROR << "P2P credit transfer failed/timeout, seq="
                    << task.sequence_;
         engine_->freeBatchID(task.credit_batch_id_.value());
         task.credit_batch_id_.reset();
@@ -707,7 +708,7 @@ bool P2PProxy::stepRecvCopyOut(RecvTransferTask& task) {
 bool P2PProxy::tryIssueSendTask(SendOpContext& op_ctx, SendPeerLane& lane) {
     // Check for timeout while waiting for the peer's CreditSlot.
     if (isTimeout(op_ctx)) {
-        LOG(ERROR) << "P2P wait-for-credit timeout, peer=" << op_ctx.peer_rank_;
+        LOG_ERROR << "P2P wait-for-credit timeout, peer=" << op_ctx.peer_rank_;
         op_ctx.status_->store(OpStatus::kFailed, std::memory_order_release);
         return false;
     }
@@ -739,7 +740,7 @@ bool P2PProxy::tryIssueSendTask(SendOpContext& op_ctx, SendPeerLane& lane) {
     const uint32_t curr_epoch =
         peer_epoch_[op_ctx.peer_rank_].load(std::memory_order_acquire);
     if (slot_epoch != curr_epoch) {
-        LOG(WARNING) << "[P2PProxy][Send] tryIssueSendTask peer="
+        LOG_WARNING << "[P2PProxy][Send] tryIssueSendTask peer="
                      << op_ctx.peer_rank_ << " STALE_EPOCH seq=" << seq
                      << " slot.epoch=" << slot_epoch
                      << " curr_epoch=" << curr_epoch;
@@ -885,7 +886,7 @@ bool P2PProxy::stepSendWriteRemote(SendOpContext& op_ctx,
         did_work = true;
     } else if (transfer_status.s == TransferStatusEnum::FAILED ||
                isTimeout(task)) {
-        LOG(ERROR) << "P2P send transfer failed/timeout, peer="
+        LOG_ERROR << "P2P send transfer failed/timeout, peer="
                    << op_ctx.peer_rank_ << ", seq=" << task.sequence_;
         engine_->freeBatchID(task.transfer_batch_id_.value());
         task.transfer_batch_id_.reset();
@@ -933,7 +934,7 @@ bool P2PProxy::stepSendAck(SendOpContext& op_ctx, SendTransferTask& task) {
         task.state_ = SendTaskState::kFinished;
         did_work = true;
     } else if (ack_status.s == TransferStatusEnum::FAILED || isTimeout(task)) {
-        LOG(ERROR) << "P2P ack transfer failed/timeout, peer="
+        LOG_ERROR << "P2P ack transfer failed/timeout, peer="
                    << op_ctx.peer_rank_ << ", seq=" << task.sequence_;
         engine_->freeBatchID(task.ack_batch_id_.value());
         task.ack_batch_id_.reset();
@@ -1067,7 +1068,7 @@ bool P2PProxy::pollRecvAckSlot(RecvOpContext& op_ctx, RecvPeerLane& lane,
                                RecvTransferTask& head_task) {
     // Check for timeout while waiting for the peer's AckSlot.
     if (isTimeout(head_task)) {
-        LOG(ERROR) << "P2P wait-for-ack timeout, peer=" << op_ctx.peer_rank_
+        LOG_ERROR << "P2P wait-for-ack timeout, peer=" << op_ctx.peer_rank_
                    << " seq=" << head_task.sequence_;
         head_task.state_ = RecvTaskState::kFailed;
         return true;
@@ -1091,7 +1092,7 @@ bool P2PProxy::pollRecvAckSlot(RecvOpContext& op_ctx, RecvPeerLane& lane,
     // Step 2 -- Stale packet: data from a previous epoch (before Reset).
     // Clear the slot so the fresh ack can land safely.
     if (slot_epoch != curr_epoch) {
-        LOG(WARNING) << "[P2PProxy][Recv] pollRecvAckSlot peer="
+        LOG_WARNING << "[P2PProxy][Recv] pollRecvAckSlot peer="
                      << op_ctx.peer_rank_
                      << " front-seq=" << head_task.sequence_
                      << " EPOCH_MISMATCH slot.epoch=" << slot_epoch

@@ -1,9 +1,10 @@
 #include "ha/oplog/oplog_manager.h"
+#include "log_macros.h"
 
 #include <algorithm>
 #include <chrono>
 #include <xxhash.h>
-#include <glog/logging.h>
+
 
 #include "ha/oplog/oplog_store.h"
 
@@ -53,7 +54,7 @@ uint64_t OpLogManager::Append(OpType type, const std::string& key,
         }
         ErrorCode err = oplog_store_->WriteOpLog(entry, sync);
         if (err != ErrorCode::OK) {
-            LOG(WARNING) << "Failed to write OpLog to store, sequence_id="
+            LOG_WARNING << "Failed to write OpLog to store, sequence_id="
                          << seq << ", but entry is in memory buffer";
         }
     }
@@ -117,9 +118,9 @@ void OpLogManager::SetInitialSequenceId(uint64_t sequence_id) {
         last_seq_id_ = sequence_id;
         first_seq_id_ = sequence_id +
                         1;  // first_seq_id_ should be > last_seq_id_ when empty
-        LOG(INFO) << "OpLogManager initial sequence_id set to " << sequence_id;
+        LOG_INFO << "OpLogManager initial sequence_id set to " << sequence_id;
     } else {
-        LOG(WARNING)
+        LOG_WARNING
             << "Cannot set initial sequence_id: OpLogManager is not empty "
             << "(last_seq_id_=" << last_seq_id_
             << ", buffer_size=" << buffer_.size() << ")";

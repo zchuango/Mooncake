@@ -1,5 +1,6 @@
 #include <gflags/gflags.h>
-#include <glog/logging.h>
+#include "log_macros.h"
+
 
 #include <algorithm>
 #include <array>
@@ -653,9 +654,7 @@ void FreeThreadSlots(mooncake::SpdkWrapper &wrapper,
 
 }  // namespace
 
-int main(int argc, char **argv) {
-    google::InitGoogleLogging(argv[0]);
-    FLAGS_logtostderr = true;
+int main(int argc, char **argv) { 
     gflags::SetUsageMessage(
         "NoF worker pool benchmark. Use --helpshort to list benchmark "
         "parameters.");
@@ -692,19 +691,19 @@ int main(int argc, char **argv) {
 
         BenchOp op_mode = ParseBenchOp(FLAGS_op);
         if (FLAGS_endpoints.empty()) {
-            LOG(ERROR) << "--endpoints is required";
+            LOG_ERROR << "--endpoints is required";
             return 1;
         }
         if (FLAGS_iodepth == 0) {
-            LOG(ERROR) << "--iodepth must be greater than 0";
+            LOG_ERROR << "--iodepth must be greater than 0";
             return 1;
         }
         if (FLAGS_submit_threads == 0) {
-            LOG(ERROR) << "--submit_threads must be greater than 0";
+            LOG_ERROR << "--submit_threads must be greater than 0";
             return 1;
         }
         if (FLAGS_duration_sec == 0) {
-            LOG(ERROR) << "--duration_sec must be greater than 0";
+            LOG_ERROR << "--duration_sec must be greater than 0";
             return 1;
         }
 
@@ -716,13 +715,13 @@ int main(int argc, char **argv) {
 
         auto endpoint_strings = mooncake::splitString(FLAGS_endpoints);
         if (endpoint_strings.empty()) {
-            LOG(ERROR) << "No valid endpoints parsed from --endpoints";
+            LOG_ERROR << "No valid endpoints parsed from --endpoints";
             return 1;
         }
 
         auto &wrapper = mooncake::SpdkWrapper::GetInstance();
         if (!wrapper.InitializeEnv()) {
-            LOG(ERROR) << "Failed to initialize SPDK environment";
+            LOG_ERROR << "Failed to initialize SPDK environment";
             return 1;
         }
 
@@ -733,26 +732,26 @@ int main(int argc, char **argv) {
             EndpointContext endpoint(endpoint_strings[i], FLAGS_seed + i);
             endpoint.seg_handle = wrapper.OpenNofSegment(endpoint.endpoint);
             if (!endpoint.seg_handle) {
-                LOG(ERROR) << "Failed to open NoF endpoint: "
+                LOG_ERROR << "Failed to open NoF endpoint: "
                            << endpoint.endpoint;
                 return 1;
             }
             endpoint.block_size = wrapper.GetBlockSize(endpoint.seg_handle);
             if (endpoint.block_size == INVALID_BLOCK_SIZE ||
                 endpoint.block_size == 0) {
-                LOG(ERROR) << "Invalid block size for endpoint: "
+                LOG_ERROR << "Invalid block size for endpoint: "
                            << endpoint.endpoint;
                 return 1;
             }
             if (FLAGS_io_size % endpoint.block_size != 0) {
-                LOG(ERROR) << "--io_size=" << FLAGS_io_size
+                LOG_ERROR << "--io_size=" << FLAGS_io_size
                            << " is not aligned to block size "
                            << endpoint.block_size << " for endpoint "
                            << endpoint.endpoint;
                 return 1;
             }
             if (FLAGS_range_bytes % endpoint.block_size != 0) {
-                LOG(ERROR) << "--range_bytes=" << FLAGS_range_bytes
+                LOG_ERROR << "--range_bytes=" << FLAGS_range_bytes
                            << " is not aligned to block size "
                            << endpoint.block_size;
                 return 1;
@@ -760,7 +759,7 @@ int main(int argc, char **argv) {
             endpoint.io_blocks = FLAGS_io_size / endpoint.block_size;
             endpoint.range_blocks = FLAGS_range_bytes / endpoint.block_size;
             if (endpoint.range_blocks < endpoint.io_blocks) {
-                LOG(ERROR)
+                LOG_ERROR
                     << "--range_bytes is smaller than one I/O for endpoint "
                     << endpoint.endpoint;
                 return 1;
@@ -774,7 +773,7 @@ int main(int argc, char **argv) {
         const uint64_t total_iodepth =
             static_cast<uint64_t>(endpoints.size()) * FLAGS_iodepth;
 
-        LOG(INFO) << "Bench config: endpoints=" << endpoints.size()
+        LOG_INFO << "Bench config: endpoints=" << endpoints.size()
                   << ", unique_handles=" << unique_handles.size()
                   << ", configured_nof_workers="
                   << (FLAGS_nof_workers == 0 ? mooncake::kDefaultSpdkNofWorkers
@@ -791,7 +790,7 @@ int main(int argc, char **argv) {
                   << ", warmup_sec=" << FLAGS_warmup_sec
                   << ", duration_sec=" << FLAGS_duration_sec;
         if (unique_handles.size() < endpoints.size()) {
-            LOG(WARNING)
+            LOG_WARNING
                 << "Some endpoints resolved to the same nof_seg_handle. In the "
                    "current SpdkNofWorkerPool implementation, the same handle "
                    "binds to a single worker thread, so duplicate endpoints "
@@ -822,7 +821,7 @@ int main(int argc, char **argv) {
                     slot.buffer = wrapper.Alloc(slot.buffer_size, 0x1000,
                                                 FLAGS_socket_id);
                     if (!slot.buffer) {
-                        LOG(ERROR) << "Failed to allocate DMA buffer of size "
+                        LOG_ERROR << "Failed to allocate DMA buffer of size "
                                    << slot.buffer_size;
                         FreeThreadSlots(wrapper, thread_contexts);
                         return 1;
@@ -885,7 +884,7 @@ int main(int argc, char **argv) {
                     DeltaCounters(total_current, total_last);
                 ThroughputView total_view =
                     ComputeThroughput(delta_total, report_window_sec);
-                LOG(INFO) << "interval bw="
+                LOG_INFO << "interval bw="
                           << FormatBytesPerSecond(
                                  total_view.bandwidth_bytes_per_sec)
                           << ", iops=" << std::fixed << std::setprecision(2)
@@ -903,7 +902,7 @@ int main(int argc, char **argv) {
                         current, last_endpoint_snapshots[endpoint_index]);
                     ThroughputView endpoint_view =
                         ComputeThroughput(delta, report_window_sec);
-                    LOG(INFO)
+                    LOG_INFO
                         << "interval endpoint[" << endpoint_index << "] bw="
                         << FormatBytesPerSecond(
                                endpoint_view.bandwidth_bytes_per_sec)
@@ -1007,13 +1006,10 @@ int main(int argc, char **argv) {
             std::cout << "endpoint[" << endpoint_index << "].clat_p99="
                       << FormatLatencyNs(endpoint_latency.p99_ns) << "\n";
         }
-        std::cout << "==========================================\n";
-
-        google::ShutdownGoogleLogging();
+        std::cout << "==========================================\n"; 
         return 0;
     } catch (const std::exception &e) {
-        LOG(ERROR) << "Benchmark failed: " << e.what();
-        google::ShutdownGoogleLogging();
+        LOG_ERROR << "Benchmark failed: " << e.what(); 
         return 1;
     }
 }

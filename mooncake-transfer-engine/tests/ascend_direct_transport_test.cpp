@@ -13,7 +13,7 @@
 // limitations under the License.
 
 #include <gtest/gtest.h>
-#include <glog/logging.h>
+
 
 #include <acl/acl.h>
 #include <acl/acl_rt.h>

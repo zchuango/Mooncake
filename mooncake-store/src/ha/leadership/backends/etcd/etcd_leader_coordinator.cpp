@@ -8,7 +8,7 @@
 #include <optional>
 #include <thread>
 
-#include <glog/logging.h>
+
 #include <ylt/util/tl/expected.hpp>
 
 namespace mooncake {

@@ -15,11 +15,11 @@
 #include <thread>
 #include <vector>
 
-#include "transfer_engine.h"
 #include "types.h"
 #include "replica.h"
 #include "storage_backend.h"
 #include "client_metric.h"
+#include "transfer_engine.h"
 #ifdef USE_NOF
 #include "spdk/spdk_wrapper.h"
 #endif

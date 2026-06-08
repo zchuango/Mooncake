@@ -26,7 +26,8 @@
 //   --expect_remote_location=maca:0
 
 #include <gflags/gflags.h>
-#include <glog/logging.h>
+#include "log_macros.h"
+
 #include <sys/time.h>
 
 #include <cstdlib>
@@ -56,7 +57,7 @@
 
 static void checkCudaError(cudaError_t result, const char *message) {
     if (result != cudaSuccess) {
-        LOG(ERROR) << message << " (Error code: " << result << " - "
+        LOG_ERROR << message << " (Error code: " << result << " - "
                    << cudaGetErrorString(result) << ")" << std::endl;
         exit(EXIT_FAILURE);
     }
@@ -138,7 +139,7 @@ void validateBackend(const std::string &backend) {
         return;
     }
 #endif
-    LOG(ERROR) << "Unsupported mem_backend=" << backend;
+    LOG_ERROR << "Unsupported mem_backend=" << backend;
     std::exit(EXIT_FAILURE);
 }
 
@@ -161,11 +162,11 @@ std::string registrationLocation(const std::string &backend) {
 
 bool validateTransferSizes() {
     if (FLAGS_data_length == 0) {
-        LOG(ERROR) << "data_length must be greater than 0";
+        LOG_ERROR << "data_length must be greater than 0";
         return false;
     }
     if (FLAGS_buffer_size < FLAGS_data_length * 2) {
-        LOG(ERROR) << "buffer_size must be at least 2 * data_length";
+        LOG_ERROR << "buffer_size must be at least 2 * data_length";
         return false;
     }
     return true;
@@ -180,7 +181,7 @@ bool validateTransferSizes() {
     defined(USE_COREX)
     checkCudaError(cudaSetDevice(pickDevId(backend)), "Failed to set device");
 #else
-    LOG(FATAL) << "Device memory backend is not available in this build";
+    LOG_FATAL << "Device memory backend is not available in this build";
 #endif
 }
 
@@ -196,7 +197,7 @@ void *allocateMemoryPool(size_t size, int socket_id,
                        "Failed to allocate device memory");
         return d_buf;
 #else
-        LOG(FATAL) << "Device memory backend is not available in this build";
+        LOG_FATAL << "Device memory backend is not available in this build";
         return nullptr;
 #endif
     }
@@ -211,7 +212,7 @@ void freeMemoryPool(void *addr, size_t size, const std::string &backend) {
         cudaFree(addr);
         return;
 #else
-        LOG(FATAL) << "Device memory backend is not available in this build";
+        LOG_FATAL << "Device memory backend is not available in this build";
 #endif
     }
     numa_free(addr, size);
@@ -227,7 +228,7 @@ void copyFromHost(void *dst, const void *src, size_t size,
                        "Failed to copy host data to device");
         return;
 #else
-        LOG(FATAL) << "Device memory backend is not available in this build";
+        LOG_FATAL << "Device memory backend is not available in this build";
 #endif
     }
     std::memcpy(dst, src, size);
@@ -243,7 +244,7 @@ void copyToHost(void *dst, const void *src, size_t size,
                        "Failed to copy device data to host");
         return;
 #else
-        LOG(FATAL) << "Device memory backend is not available in this build";
+        LOG_FATAL << "Device memory backend is not available in this build";
 #endif
     }
     std::memcpy(dst, src, size);
@@ -258,7 +259,7 @@ bool waitForTransfer(TransferEngine *engine, BatchID batch_id) {
         if (status.s == TransferStatusEnum::COMPLETED) {
             completed = true;
         } else if (status.s == TransferStatusEnum::FAILED) {
-            LOG(ERROR) << "Transfer failed";
+            LOG_ERROR << "Transfer failed";
             return false;
         }
     }
@@ -272,8 +273,8 @@ int initiatorWorker(TransferEngine *engine, SegmentID segment_id, int thread_id,
     auto segment_desc = engine->getMetadata()->getSegmentDescByID(segment_id);
     LOG_ASSERT(segment_desc);
     LOG_ASSERT(!segment_desc->buffers.empty());
-    LOG(INFO) << "Remote segment protocol: " << segment_desc->protocol;
-    LOG(INFO) << "Remote buffer location: " << segment_desc->buffers[0].name;
+    LOG_INFO << "Remote segment protocol: " << segment_desc->protocol;
+    LOG_INFO << "Remote buffer location: " << segment_desc->buffers[0].name;
     if (!FLAGS_expect_remote_location.empty()) {
         LOG_ASSERT(segment_desc->buffers[0].name ==
                    FLAGS_expect_remote_location);
@@ -284,11 +285,11 @@ int initiatorWorker(TransferEngine *engine, SegmentID segment_id, int thread_id,
     auto write_buf = std::make_unique<char[]>(kDataLength);
     auto read_buf = std::make_unique<char[]>(kDataLength);
     {
-        LOG(INFO) << "Stage 1: Write Data";
+        LOG_INFO << "Stage 1: Write Data";
         for (size_t offset = 0; offset < kDataLength; ++offset)
             write_buf[offset] = 'a' + lrand48() % 26;
 
-        LOG(INFO) << "Write Data: " << std::string(write_buf.get(), 16)
+        LOG_INFO << "Write Data: " << std::string(write_buf.get(), 16)
                   << "...";
         copyFromHost(addr, write_buf.get(), kDataLength, backend);
 
@@ -303,7 +304,7 @@ int initiatorWorker(TransferEngine *engine, SegmentID segment_id, int thread_id,
         entry.target_offset = remote_base;
         s = engine->submitTransfer(batch_id, {entry});
         if (!s.ok()) {
-            LOG(ERROR) << "WRITE submit failed: " << s.ToString();
+            LOG_ERROR << "WRITE submit failed: " << s.ToString();
             engine->freeBatchID(batch_id);
             return EXIT_FAILURE;
         }
@@ -316,7 +317,7 @@ int initiatorWorker(TransferEngine *engine, SegmentID segment_id, int thread_id,
     }
 
     {
-        LOG(INFO) << "Stage 2: Read Data";
+        LOG_INFO << "Stage 2: Read Data";
         auto batch_id = engine->allocateBatchID(1);
         Status s;
 
@@ -328,7 +329,7 @@ int initiatorWorker(TransferEngine *engine, SegmentID segment_id, int thread_id,
         entry.target_offset = remote_base;
         s = engine->submitTransfer(batch_id, {entry});
         if (!s.ok()) {
-            LOG(ERROR) << "READ submit failed: " << s.ToString();
+            LOG_ERROR << "READ submit failed: " << s.ToString();
             engine->freeBatchID(batch_id);
             return EXIT_FAILURE;
         }
@@ -343,8 +344,8 @@ int initiatorWorker(TransferEngine *engine, SegmentID segment_id, int thread_id,
     copyToHost(read_buf.get(), (uint8_t *)(addr) + kDataLength, kDataLength,
                backend);
     int ret = memcmp(write_buf.get(), read_buf.get(), kDataLength);
-    LOG(INFO) << "Read Data: " << std::string(read_buf.get(), 16) << "...";
-    LOG(INFO) << "RDMA compare: " << (ret == 0 ? "OK" : "FAILED");
+    LOG_INFO << "Read Data: " << std::string(read_buf.get(), 16) << "...";
+    LOG_INFO << "RDMA compare: " << (ret == 0 ? "OK" : "FAILED");
 
     return ret == 0 ? 0 : EXIT_FAILURE;
 }
@@ -405,7 +406,7 @@ Transport *installTransport(TransferEngine *engine,
     if (FLAGS_protocol == "nvmeof") {
         return engine->installTransport("nvmeof", nullptr);
     }
-    LOG(ERROR) << "Unsupported protocol: must be rdma, tcp, or nvmeof";
+    LOG_ERROR << "Unsupported protocol: must be rdma, tcp, or nvmeof";
     return nullptr;
 }
 
@@ -417,7 +418,7 @@ int initiator() {
         return EXIT_FAILURE;
     }
     if (FLAGS_protocol != "rdma" && usesDeviceMemory(backend)) {
-        LOG(ERROR) << "protocol=" << FLAGS_protocol
+        LOG_ERROR << "protocol=" << FLAGS_protocol
                    << " currently supports only mem_backend=cpu in this test";
         return EXIT_FAILURE;
     }
@@ -456,7 +457,7 @@ int target() {
         return EXIT_FAILURE;
     }
     if (FLAGS_protocol != "rdma" && usesDeviceMemory(backend)) {
-        LOG(ERROR) << "protocol=" << FLAGS_protocol
+        LOG_ERROR << "protocol=" << FLAGS_protocol
                    << " currently supports only mem_backend=cpu in this test";
         return EXIT_FAILURE;
     }
@@ -493,6 +494,6 @@ int main(int argc, char **argv) {
     else if (FLAGS_mode == "target")
         return target();
 
-    LOG(ERROR) << "Unsupported mode: must be 'initiator' or 'target'";
+    LOG_ERROR << "Unsupported mode: must be 'initiator' or 'target'";
     return EXIT_FAILURE;
 }

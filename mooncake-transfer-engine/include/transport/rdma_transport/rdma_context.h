@@ -16,7 +16,7 @@
 #define RDMA_CONTEXT_H
 
 #include <gflags/gflags.h>
-#include <glog/logging.h>
+
 #include <infiniband/verbs.h>
 
 #ifdef USE_MLX5DV

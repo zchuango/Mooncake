@@ -6,13 +6,19 @@
 #include <type_traits>
 #include <vector>
 #include <variant>
-#include <cstdlib>
 #include <boost/functional/hash.hpp>
 #include <ylt/coro_rpc/coro_rpc_client.hpp>
 #include <ylt/coro_io/client_pool.hpp>
+#ifdef YLT_ENABLE_IBV
 #include <ylt/coro_io/ibverbs/ib_socket.hpp>
+#endif
+#ifdef YLT_ENABLE_URMA
+#include <ylt/coro_io/urma/urma_socket.hpp>
+#endif
 
 #include "client_metric.h"
+#include "log_macros.h"
+#include "rpc_protocol.h"
 #include "replica.h"
 #include "segment.h"
 #include "types.h"
@@ -38,10 +44,54 @@ inline constexpr bool variant_contains_v =
     variant_contains<std::decay_t<Variant>, T>::value;
 
 template <typename SocketConfigVariant>
-inline void MaybeEnableRdmaSocketConfig(SocketConfigVariant& socket_config) {
+inline bool MaybeEnableRdmaSocketConfig(SocketConfigVariant& socket_config) {
+#ifdef YLT_ENABLE_IBV
     if constexpr (variant_contains_v<SocketConfigVariant,
                                      coro_io::ib_socket_t::config_t>) {
         socket_config = coro_io::ib_socket_t::config_t{};
+        return true;
+    }
+#endif
+    return false;
+}
+
+template <typename SocketConfigVariant>
+inline bool MaybeEnableUrmaSocketConfig(SocketConfigVariant& socket_config) {
+#ifdef YLT_ENABLE_URMA
+    if constexpr (variant_contains_v<SocketConfigVariant,
+                                     coro_io::urma_socket_t::config_t>) {
+        socket_config = coro_io::urma_socket_t::config_t{};
+        return true;
+    }
+#endif
+    return false;
+}
+
+template <typename SocketConfigVariant>
+inline void ApplyRpcProtocolSocketConfig(SocketConfigVariant& socket_config) {
+    switch (GetRpcProtocolFromEnv()) {
+        case RpcProtocol::Urma:
+            if (!MaybeEnableUrmaSocketConfig(socket_config)) {
+                MC_LOG_WARNING
+                    << "MC_RPC_PROTOCOL=urma requested but yalantinglibs was "
+                       "not built with YLT_ENABLE_URMA; using TCP";
+            }
+            break;
+        case RpcProtocol::Rdma:
+            if (!MaybeEnableRdmaSocketConfig(socket_config)) {
+                if (MaybeEnableUrmaSocketConfig(socket_config)) {
+                    MC_LOG_WARNING
+                        << "MC_RPC_PROTOCOL=rdma requested but "
+                           "YLT_ENABLE_IBV is unavailable; using URMA";
+                } else {
+                    MC_LOG_WARNING
+                        << "MC_RPC_PROTOCOL=rdma requested but no RDMA RPC "
+                           "transport is enabled; using TCP";
+                }
+            }
+            break;
+        case RpcProtocol::Tcp:
+            break;
     }
 }
 
@@ -62,11 +112,8 @@ class MasterClient {
         // would otherwise continue probing failed addresses indefinitely. See
         // PR #1642.
         pool_conf.host_alive_detect_duration = std::chrono::seconds(0);
-        const char* value = std::getenv("MC_RPC_PROTOCOL");
-        if (value && std::string_view(value) == "rdma") {
-            detail::MaybeEnableRdmaSocketConfig(
-                pool_conf.client_config.socket_config);
-        }
+        detail::ApplyRpcProtocolSocketConfig(
+            pool_conf.client_config.socket_config);
         client_pools_ =
             std::make_shared<coro_io::client_pools<coro_rpc::coro_rpc_client>>(
                 pool_conf);

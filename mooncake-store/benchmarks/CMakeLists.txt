@@ -10,7 +10,7 @@ target_link_libraries(master_bench PRIVATE cachelib_memory_allocator
 
 # Add file interface benchmark executable
 add_executable(file_interface_bench file_interface_bench.cpp)
-target_link_libraries(file_interface_bench PRIVATE mooncake_store glog::glog)
+target_link_libraries(file_interface_bench PRIVATE mooncake_store)
 
 # Add storage backend benchmark executable
 # This benchmark tests all storage backends (OffsetAllocator, Bucket, FilePerKey)
@@ -18,7 +18,7 @@ target_link_libraries(file_interface_bench PRIVATE mooncake_store glog::glog)
 add_executable(storage_backend_bench storage_backend_bench.cpp)
 target_link_libraries(
   storage_backend_bench PRIVATE mooncake_store cachelib_memory_allocator
-                                gflags::gflags glog::glog pthread)
+                                gflags::gflags pthread)
 
 # Add allocation strategy benchmark executable
 # This benchmark tests AllocationStrategy performance with configurable
@@ -26,16 +26,16 @@ target_link_libraries(
 add_executable(allocation_strategy_bench allocation_strategy_bench.cpp)
 target_link_libraries(
   allocation_strategy_bench PRIVATE mooncake_store cachelib_memory_allocator
-                                    gflags::gflags glog::glog pthread)
+                                    gflags::gflags pthread)
 
 add_executable(stress_cluster_bench stress_cluster_bench.cpp)
 target_link_libraries(
   stress_cluster_bench PRIVATE mooncake_store transfer_engine asio_shared
-                               gflags::gflags glog::glog pthread)
+                               gflags::gflags pthread)
 
 # Add NoF worker pool benchmark executable
 if(USE_NOF)
   add_executable(nof_worker_pool_bench nof_worker_pool_bench.cpp)
-  target_link_libraries(nof_worker_pool_bench PRIVATE mooncake_store glog::glog
+  target_link_libraries(nof_worker_pool_bench PRIVATE mooncake_store
                                                        gflags::gflags)
 endif()

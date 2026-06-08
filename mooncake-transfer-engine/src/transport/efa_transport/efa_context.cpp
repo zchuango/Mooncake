@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include "transport/efa_transport/efa_context.h"
+#include "log_macros.h"
 
 #include <fcntl.h>
 #include <sys/epoll.h>
@@ -68,7 +69,7 @@ int EfaContext::construct(size_t num_cq_list, size_t max_cqe,
     // Setup hints for EFA provider
     hints_ = fi_allocinfo();
     if (!hints_) {
-        LOG(ERROR) << "Failed to allocate fi_info hints";
+        LOG_ERROR << "Failed to allocate fi_info hints";
         return ERR_CONTEXT;
     }
 
@@ -113,7 +114,7 @@ int EfaContext::construct(size_t num_cq_list, size_t max_cqe,
     int ret =
         fi_getinfo(FI_VERSION(1, 18), nullptr, nullptr, 0, hints_, &fi_info_);
     if (ret) {
-        LOG(ERROR) << "fi_getinfo failed for device " << device_name_ << ": "
+        LOG_ERROR << "fi_getinfo failed for device " << device_name_ << ": "
                    << fi_strerror(-ret);
         fi_freeinfo(hints_);
         hints_ = nullptr;
@@ -123,7 +124,7 @@ int EfaContext::construct(size_t num_cq_list, size_t max_cqe,
     // Open fabric
     ret = fi_fabric(fi_info_->fabric_attr, &fabric_, nullptr);
     if (ret) {
-        LOG(ERROR) << "fi_fabric failed: " << fi_strerror(-ret);
+        LOG_ERROR << "fi_fabric failed: " << fi_strerror(-ret);
         fi_freeinfo(fi_info_);
         fi_freeinfo(hints_);
         fi_info_ = nullptr;
@@ -134,7 +135,7 @@ int EfaContext::construct(size_t num_cq_list, size_t max_cqe,
     // Open domain
     ret = fi_domain(fabric_, fi_info_, &domain_, nullptr);
     if (ret) {
-        LOG(ERROR) << "fi_domain failed: " << fi_strerror(-ret);
+        LOG_ERROR << "fi_domain failed: " << fi_strerror(-ret);
         fi_close(&fabric_->fid);
         fi_freeinfo(fi_info_);
         fi_freeinfo(hints_);
@@ -153,7 +154,7 @@ int EfaContext::construct(size_t num_cq_list, size_t max_cqe,
 
     ret = fi_av_open(domain_, &av_attr, &av_, nullptr);
     if (ret) {
-        LOG(ERROR) << "fi_av_open failed: " << fi_strerror(-ret);
+        LOG_ERROR << "fi_av_open failed: " << fi_strerror(-ret);
         fi_close(&domain_->fid);
         fi_close(&fabric_->fid);
         fi_freeinfo(fi_info_);
@@ -177,7 +178,7 @@ int EfaContext::construct(size_t num_cq_list, size_t max_cqe,
 
         ret = fi_cq_open(domain_, &cq_attr, &cq->cq, nullptr);
         if (ret) {
-            LOG(ERROR) << "fi_cq_open failed: " << fi_strerror(-ret);
+            LOG_ERROR << "fi_cq_open failed: " << fi_strerror(-ret);
             return ERR_CONTEXT;
         }
         cq_list_[i] = cq;
@@ -186,12 +187,12 @@ int EfaContext::construct(size_t num_cq_list, size_t max_cqe,
     // Build the shared endpoint that services every peer through AV lookup.
     ret = buildSharedEndpoint(globalConfig().max_wr, 64);
     if (ret) {
-        LOG(ERROR) << "EfaContext::construct: buildSharedEndpoint failed for "
+        LOG_ERROR << "EfaContext::construct: buildSharedEndpoint failed for "
                    << device_name_;
         return ret;
     }
 
-    LOG(INFO) << "EFA device (libfabric): " << device_name_
+    LOG_INFO << "EFA device (libfabric): " << device_name_
               << ", domain: " << fi_info_->domain_attr->name
               << ", provider: " << fi_info_->fabric_attr->prov_name
               << " (shared endpoint, max_wr=" << max_wr_depth_ << ")";
@@ -205,21 +206,21 @@ int EfaContext::buildSharedEndpoint(size_t max_wr, size_t max_inline) {
 
     shared_cq_ = cq_list_.empty() ? nullptr : cq_list_[0];
     if (!shared_cq_) {
-        LOG(ERROR) << "EfaContext::buildSharedEndpoint: no CQ available";
+        LOG_ERROR << "EfaContext::buildSharedEndpoint: no CQ available";
         return ERR_CONTEXT;
     }
     max_wr_depth_ = static_cast<int>(max_wr);
 
     int ret = fi_endpoint(domain_, fi_info_, &shared_ep_, nullptr);
     if (ret) {
-        LOG(ERROR) << "fi_endpoint failed: " << fi_strerror(-ret);
+        LOG_ERROR << "fi_endpoint failed: " << fi_strerror(-ret);
         shared_ep_ = nullptr;
         return ERR_ENDPOINT;
     }
 
     ret = fi_ep_bind(shared_ep_, &av_->fid, 0);
     if (ret) {
-        LOG(ERROR) << "fi_ep_bind(av) failed: " << fi_strerror(-ret);
+        LOG_ERROR << "fi_ep_bind(av) failed: " << fi_strerror(-ret);
         fi_close(&shared_ep_->fid);
         shared_ep_ = nullptr;
         return ERR_ENDPOINT;
@@ -227,7 +228,7 @@ int EfaContext::buildSharedEndpoint(size_t max_wr, size_t max_inline) {
 
     ret = fi_ep_bind(shared_ep_, &shared_cq_->cq->fid, FI_TRANSMIT);
     if (ret) {
-        LOG(ERROR) << "fi_ep_bind(tx_cq) failed: " << fi_strerror(-ret);
+        LOG_ERROR << "fi_ep_bind(tx_cq) failed: " << fi_strerror(-ret);
         fi_close(&shared_ep_->fid);
         shared_ep_ = nullptr;
         return ERR_ENDPOINT;
@@ -235,7 +236,7 @@ int EfaContext::buildSharedEndpoint(size_t max_wr, size_t max_inline) {
 
     ret = fi_ep_bind(shared_ep_, &shared_cq_->cq->fid, FI_RECV);
     if (ret) {
-        LOG(ERROR) << "fi_ep_bind(rx_cq) failed: " << fi_strerror(-ret);
+        LOG_ERROR << "fi_ep_bind(rx_cq) failed: " << fi_strerror(-ret);
         fi_close(&shared_ep_->fid);
         shared_ep_ = nullptr;
         return ERR_ENDPOINT;
@@ -243,7 +244,7 @@ int EfaContext::buildSharedEndpoint(size_t max_wr, size_t max_inline) {
 
     ret = fi_enable(shared_ep_);
     if (ret) {
-        LOG(ERROR) << "fi_enable failed: " << fi_strerror(-ret);
+        LOG_ERROR << "fi_enable failed: " << fi_strerror(-ret);
         fi_close(&shared_ep_->fid);
         shared_ep_ = nullptr;
         return ERR_ENDPOINT;
@@ -254,7 +255,7 @@ int EfaContext::buildSharedEndpoint(size_t max_wr, size_t max_inline) {
     local_ep_addr_.assign(addr_len, 0);
     ret = fi_getname(&shared_ep_->fid, local_ep_addr_.data(), &addr_len);
     if (ret) {
-        LOG(ERROR) << "fi_getname failed: " << fi_strerror(-ret);
+        LOG_ERROR << "fi_getname failed: " << fi_strerror(-ret);
         fi_close(&shared_ep_->fid);
         shared_ep_ = nullptr;
         local_ep_addr_.clear();
@@ -335,7 +336,7 @@ int EfaContext::registerMemoryRegionInternal(void* addr, size_t length,
                                              EfaMemoryRegionMeta& mrMeta) {
     (void)access;
     if (length > (size_t)globalConfig().max_mr_size) {
-        LOG(ERROR) << "Buffer length " << length
+        LOG_ERROR << "Buffer length " << length
                    << " exceeds device max_mr_size "
                    << globalConfig().max_mr_size
                    << ". Use EfaTransport::registerLocalMemory() which "
@@ -385,7 +386,7 @@ int EfaContext::registerMemoryRegionInternal(void* addr, size_t length,
 
         ret = fi_mr_regattr(domain_, &attr, 0, &mrMeta.mr);
         if (ret) {
-            LOG(ERROR) << "fi_mr_regattr failed for GPU memory " << addr
+            LOG_ERROR << "fi_mr_regattr failed for GPU memory " << addr
                        << " (device " << device_ordinal
                        << "): " << fi_strerror(-ret);
             return ERR_CONTEXT;
@@ -395,7 +396,7 @@ int EfaContext::registerMemoryRegionInternal(void* addr, size_t length,
         ret = fi_mr_reg(domain_, addr, length, fi_access, 0, 0, 0, &mrMeta.mr,
                         nullptr);
         if (ret) {
-            LOG(ERROR) << "fi_mr_reg failed for " << addr << ": "
+            LOG_ERROR << "fi_mr_reg failed for " << addr << ": "
                        << fi_strerror(-ret);
             return ERR_CONTEXT;
         }
@@ -589,7 +590,7 @@ static inline int hexNibble(char c) {
 int EfaContext::insertPeerAddr(const std::string& peer_hex_addr,
                                fi_addr_t& out) {
     if (peer_hex_addr.empty() || (peer_hex_addr.size() % 2) != 0) {
-        LOG(ERROR) << "insertPeerAddr: invalid hex length "
+        LOG_ERROR << "insertPeerAddr: invalid hex length "
                    << peer_hex_addr.size();
         return ERR_INVALID_ARGUMENT;
     }
@@ -599,7 +600,7 @@ int EfaContext::insertPeerAddr(const std::string& peer_hex_addr,
         int hi = hexNibble(peer_hex_addr[2 * i]);
         int lo = hexNibble(peer_hex_addr[2 * i + 1]);
         if (hi < 0 || lo < 0) {
-            LOG(ERROR) << "insertPeerAddr: non-hex char at offset " << (2 * i);
+            LOG_ERROR << "insertPeerAddr: non-hex char at offset " << (2 * i);
             return ERR_INVALID_ARGUMENT;
         }
         bin[i] = static_cast<uint8_t>((hi << 4) | lo);
@@ -612,7 +613,7 @@ int EfaContext::insertPeerAddrBytes(const uint8_t* addr, size_t len,
     if (!addr || len == 0) return ERR_INVALID_ARGUMENT;
     int ret = fi_av_insert(av_, addr, 1, &out, 0, nullptr);
     if (ret != 1) {
-        LOG(ERROR) << "fi_av_insert failed: " << fi_strerror(-ret);
+        LOG_ERROR << "fi_av_insert failed: " << fi_strerror(-ret);
         return ERR_ENDPOINT;
     }
     return 0;
@@ -622,7 +623,7 @@ void EfaContext::removePeerAddr(fi_addr_t fi_addr) {
     if (fi_addr == FI_ADDR_UNSPEC) return;
     int ret = fi_av_remove(av_, &fi_addr, 1, 0);
     if (ret) {
-        LOG(WARNING) << "fi_av_remove failed: " << fi_strerror(-ret);
+        LOG_WARNING << "fi_av_remove failed: " << fi_strerror(-ret);
     }
 }
 
@@ -646,7 +647,7 @@ int EfaContext::submitPostSend(
         auto peer_segment_desc =
             engine_.meta()->getSegmentDescByID(slice->target_id);
         if (!peer_segment_desc) {
-            LOG(ERROR) << "Cannot get segment descriptor for target "
+            LOG_ERROR << "Cannot get segment descriptor for target "
                        << slice->target_id;
             slice->markFailed();
             continue;
@@ -656,7 +657,7 @@ int EfaContext::submitPostSend(
         if (EfaTransport::selectDevice(peer_segment_desc.get(),
                                        slice->rdma.dest_addr, slice->length,
                                        buffer_id, device_id)) {
-            LOG(ERROR) << "Cannot select device for dest_addr "
+            LOG_ERROR << "Cannot select device for dest_addr "
                        << (void*)slice->rdma.dest_addr;
             slice->markFailed();
             continue;
@@ -677,7 +678,7 @@ int EfaContext::submitPostSend(
 
         auto ep = endpoint(peer_nic_path);
         if (!ep) {
-            LOG(ERROR) << "Cannot create peer handle for " << peer_nic_path;
+            LOG_ERROR << "Cannot create peer handle for " << peer_nic_path;
             for (auto* slice : peer_slices) slice->markFailed();
             continue;
         }
@@ -789,7 +790,7 @@ int EfaContext::submitSlicesOnPeer(
         }
 
         if (timed_out) {
-            LOG(WARNING) << "EFA submitSlicesOnPeer: timed out waiting for CQ"
+            LOG_WARNING << "EFA submitSlicesOnPeer: timed out waiting for CQ"
                          << " drain (wr_depth="
                          << wr_depth_.load(std::memory_order_relaxed)
                          << ", max=" << max_wr_depth_ << ", cq_outstanding="
@@ -811,7 +812,7 @@ int EfaContext::submitSlicesOnPeer(
             Transport::Slice* slice = slice_list[cursor + i];
             void* local_desc = mrDesc(slice->source_addr);
             if (!local_desc) {
-                LOG(ERROR) << "No MR descriptor found for address "
+                LOG_ERROR << "No MR descriptor found for address "
                            << slice->source_addr;
                 failed_slice_list.push_back(slice);
                 continue;
@@ -865,7 +866,7 @@ int EfaContext::submitSlicesOnPeer(
                     }
                     break;
                 } else {
-                    LOG(ERROR)
+                    LOG_ERROR
                         << "fi_read/fi_write failed: " << fi_strerror(-ret)
                         << " (source=" << entry.slice->source_addr
                         << ", len=" << entry.slice->length
@@ -931,7 +932,7 @@ int EfaContext::pollCq(int max_entries, int cq_index) {
             EfaOpContext* op_ctx =
                 reinterpret_cast<EfaOpContext*>(err_entry.op_context);
             if (op_ctx && op_ctx->slice) {
-                LOG(ERROR) << "EFA CQ error: "
+                LOG_ERROR << "EFA CQ error: "
                            << fi_cq_strerror(cq, err_entry.prov_errno,
                                              err_entry.err_data, nullptr, 0)
                            << " for slice at " << op_ctx->slice->source_addr;

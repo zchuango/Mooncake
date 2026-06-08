@@ -1,5 +1,6 @@
 #include <gflags/gflags.h>
-#include <glog/logging.h>
+#include "log_macros.h"
+
 
 #include <atomic>
 #include <chrono>
@@ -44,7 +45,7 @@ bool g_etcd_available = false;
 void ProbeEtcdAvailability() {
     ErrorCode err = EtcdHelper::ConnectToEtcdStoreClient(FLAGS_etcd_endpoints);
     if (err != ErrorCode::OK) {
-        LOG(WARNING) << "Failed to initialize etcd client, skipping tests.";
+        LOG_WARNING << "Failed to initialize etcd client, skipping tests.";
         g_etcd_available = false;
         return;
     }
@@ -53,7 +54,7 @@ void ProbeEtcdAvailability() {
     EtcdRevisionId rev;
     err = EtcdHelper::Get("probe_connection_key", 20, val, rev);
     if (err == ErrorCode::ETCD_OPERATION_ERROR) {
-        LOG(WARNING) << "Failed to connect to Etcd at " << FLAGS_etcd_endpoints
+        LOG_WARNING << "Failed to connect to Etcd at " << FLAGS_etcd_endpoints
                      << " (Error: " << static_cast<int>(err)
                      << "). Integration tests will be skipped.";
         g_etcd_available = false;

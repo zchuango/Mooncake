@@ -14,10 +14,11 @@
 // limitations under the License.
 
 #include "transport/ascend_transport/ascend_direct_transport/ascend_direct_transport.h"
+#include "log_macros.h"
 #include "transport/ascend_transport/ascend_direct_transport/context_manager.h"
 #include "transport/ascend_transport/ascend_direct_transport/utils.h"
 
-#include <glog/logging.h>
+
 
 #include <cassert>
 #include <memory>
@@ -41,7 +42,7 @@ int32_t ResolveCurrentEngineId(bool dummy_real_mode) {
     }
     int32_t current_device_id = 0;
     if (aclrtGetDevice(&current_device_id) != ACL_ERROR_NONE) {
-        LOG(ERROR) << "aclrtGetDevice failed, errmsg: " << aclGetRecentErrMsg();
+        LOG_ERROR << "aclrtGetDevice failed, errmsg: " << aclGetRecentErrMsg();
         return -1;
     }
     return current_device_id;
@@ -66,7 +67,7 @@ void InitializeSlice(const Transport::TransferRequest &request,
 AscendDirectTransport::AscendDirectTransport() = default;
 
 AscendDirectTransport::~AscendDirectTransport() {
-    LOG(INFO) << "AscendDirectTransport destructor called";
+    LOG_INFO << "AscendDirectTransport destructor called";
 
     if (dispatcher_) {
         dispatcher_->stop();
@@ -80,23 +81,23 @@ AscendDirectTransport::~AscendDirectTransport() {
 int AscendDirectTransport::install(std::string &local_server_name,
                                    std::shared_ptr<TransferMetadata> meta,
                                    std::shared_ptr<Topology> topo) {
-    LOG(INFO) << "install AscendDirectTransport for: " << local_server_name;
+    LOG_INFO << "install AscendDirectTransport for: " << local_server_name;
     // Call base class install method
     int ret = Transport::install(local_server_name, meta, topo);
     if (ret != 0) {
-        LOG(ERROR) << "Failed to install base transport";
+        LOG_ERROR << "Failed to install base transport";
         return ret;
     }
     ret = allocateLocalSegmentID();
     if (ret) {
-        LOG(ERROR)
+        LOG_ERROR
             << "AscendDirectTransport: cannot allocate local segment, ret: "
             << ret;
         return ret;
     }
     ret = metadata_->updateLocalSegmentDesc();
     if (ret) {
-        LOG(ERROR) << "cannot publish segments, "
+        LOG_ERROR << "cannot publish segments, "
                       "check the availability of metadata storage, ret: "
                    << ret;
         return ret;
@@ -111,7 +112,7 @@ int AscendDirectTransport::install(std::string &local_server_name,
     transfer_executor_ = TransferExecutorBase::Create(exec_params);
     ret = transfer_executor_->initialize();
     if (ret) {
-        LOG(ERROR)
+        LOG_ERROR
             << "AscendDirectTransport: TransferExecutor init failed, ret: "
             << ret;
         return ret;
@@ -133,7 +134,7 @@ int AscendDirectTransport::addEngineToSegmentDesc(int32_t device_id,
                                                   SegmentDesc *desc) {
     uint16_t listen_port = FindAdxlListenPort(base_port_, device_id);
     if (listen_port == 0) {
-        LOG(ERROR) << "Find available port failed for device: " << device_id;
+        LOG_ERROR << "Find available port failed for device: " << device_id;
         return FAILED;
     }
     local_engine_contexts_.push_back(context);
@@ -155,9 +156,9 @@ int AscendDirectTransport::allocateLocalSegmentID() {
             parseFromString<int32_t>(roce_enable_str);
         if (roce_enable.has_value() && roce_enable.value() == 1) {
             roce_mode_ = true;
-            LOG(INFO) << "Roce mode is enabled.";
+            LOG_INFO << "Roce mode is enabled.";
         } else {
-            LOG(WARNING) << "HCCL_INTRA_ROCE_ENABLE is not valid, value:"
+            LOG_WARNING << "HCCL_INTRA_ROCE_ENABLE is not valid, value:"
                          << roce_enable_str;
         }
     }
@@ -167,9 +168,9 @@ int AscendDirectTransport::allocateLocalSegmentID() {
             parseFromString<int32_t>(adxl_base_port);
         if (base_port.has_value()) {
             base_port_ = base_port.value();
-            LOG(INFO) << "Set base port to:" << base_port_;
+            LOG_INFO << "Set base port to:" << base_port_;
         } else {
-            LOG(WARNING) << "ASCEND_BASE_PORT is not valid, value:"
+            LOG_WARNING << "ASCEND_BASE_PORT is not valid, value:"
                          << adxl_base_port;
         }
     }
@@ -180,11 +181,11 @@ int AscendDirectTransport::allocateLocalSegmentID() {
     if (dummy_real_mode_) {
         auto &ctx_mgr = ContextManager::getInstance();
         if (!ctx_mgr.isInitialized()) {
-            LOG(ERROR) << "ContextManager is not initialized.";
+            LOG_ERROR << "ContextManager is not initialized.";
             return -1;
         }
         if (device_count != ctx_mgr.getDeviceCount()) {
-            LOG(WARNING) << "ACL device count " << device_count
+            LOG_WARNING << "ACL device count " << device_count
                          << " differs from ContextManager device count "
                          << ctx_mgr.getDeviceCount();
         }
@@ -216,7 +217,7 @@ Status AscendDirectTransport::submitTransfer(
     BatchID batch_id, const std::vector<TransferRequest> &entries) {
     auto &batch_desc = *((BatchDesc *)(batch_id));
     if (batch_desc.task_list.size() + entries.size() > batch_desc.batch_size) {
-        LOG(ERROR) << "AscendDirectTransport: Exceed the limitation of current "
+        LOG_ERROR << "AscendDirectTransport: Exceed the limitation of current "
                       "batch's capacity";
         return Status::InvalidArgument(
             "AscendDirectTransport: Exceed the limitation of capacity, batch "
@@ -314,7 +315,7 @@ int AscendDirectTransport::registerLocalMemory(void *addr, size_t length,
     (void)remote_accessible;
     aclrtContext saved_ctx = nullptr;
     if (aclrtGetCurrentContext(&saved_ctx) != ACL_ERROR_NONE) {
-        LOG(ERROR) << "aclrtGetCurrentContext failed, errmsg: "
+        LOG_ERROR << "aclrtGetCurrentContext failed, errmsg: "
                    << aclGetRecentErrMsg();
         return -1;
     }
@@ -339,18 +340,18 @@ int AscendDirectTransport::registerLocalMemory(void *addr, size_t length,
         } else if (attributes.location.type == ACL_MEM_LOCATION_TYPE_DEVICE) {
             mem_type = adxl::MEM_DEVICE;
         } else {
-            LOG(ERROR) << "mem addr:" << addr
+            LOG_ERROR << "mem addr:" << addr
                        << " can not be recognized, try set to host mem.";
             mem_type = adxl::MEM_HOST;
         }
     } else {
-        LOG(ERROR) << "location:" << location << " is not supported.";
+        LOG_ERROR << "location:" << location << " is not supported.";
         return ERR_INVALID_ARGUMENT;
     }
 
     int ret = metadata_->addLocalMemoryBuffer(buffer_desc, update_metadata);
     if (ret) {
-        LOG(ERROR) << "addLocalMemoryBuffer failed, ret: " << ret;
+        LOG_ERROR << "addLocalMemoryBuffer failed, ret: " << ret;
         return ret;
     }
 
@@ -364,7 +365,7 @@ int AscendDirectTransport::registerLocalMemory(void *addr, size_t length,
     const int rollback_ret =
         metadata_->removeLocalMemoryBuffer(addr, update_metadata);
     if (rollback_ret != 0) {
-        LOG(ERROR) << "removeLocalMemoryBuffer rollback failed, ret: "
+        LOG_ERROR << "removeLocalMemoryBuffer rollback failed, ret: "
                    << rollback_ret;
     }
     return register_ret;
@@ -374,7 +375,7 @@ int AscendDirectTransport::unregisterLocalMemory(void *addr,
                                                  bool update_metadata) {
     aclrtContext saved_ctx = nullptr;
     if (aclrtGetCurrentContext(&saved_ctx) != ACL_ERROR_NONE) {
-        LOG(ERROR) << "aclrtGetCurrentContext failed, errmsg: "
+        LOG_ERROR << "aclrtGetCurrentContext failed, errmsg: "
                    << aclGetRecentErrMsg();
         return -1;
     }
@@ -392,7 +393,7 @@ int AscendDirectTransport::unregisterLocalMemory(void *addr,
 int AscendDirectTransport::registerLocalMemoryBatch(
     const std::vector<Transport::BufferEntry> &buffer_list,
     const std::string &location) {
-    LOG(INFO) << "AscendDirectTransport::registerLocalMemoryBatch called with "
+    LOG_INFO << "AscendDirectTransport::registerLocalMemoryBatch called with "
                  "buffer count: "
               << buffer_list.size() << ", location: " << location;
 
@@ -400,7 +401,7 @@ int AscendDirectTransport::registerLocalMemoryBatch(
         int ret = registerLocalMemory(buffer.addr, buffer.length, location,
                                       true, false);
         if (ret != 0) {
-            LOG(ERROR) << "Failed to register memory in batch, addr: "
+            LOG_ERROR << "Failed to register memory in batch, addr: "
                        << buffer.addr;
             return ret;
         }
@@ -412,14 +413,14 @@ int AscendDirectTransport::registerLocalMemoryBatch(
 
 int AscendDirectTransport::unregisterLocalMemoryBatch(
     const std::vector<void *> &addr_list) {
-    LOG(INFO) << "AscendDirectTransport::unregisterLocalMemoryBatch called "
+    LOG_INFO << "AscendDirectTransport::unregisterLocalMemoryBatch called "
                  "with addr count: "
               << addr_list.size();
 
     for (void *addr : addr_list) {
         int ret = unregisterLocalMemory(addr, false);
         if (ret != 0) {
-            LOG(ERROR) << "Failed to unregister memory in batch, addr: "
+            LOG_ERROR << "Failed to unregister memory in batch, addr: "
                        << addr;
             return ret;
         }

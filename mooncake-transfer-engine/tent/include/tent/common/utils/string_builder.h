@@ -15,7 +15,7 @@
 #ifndef TENT_STRING_BUILDER_H
 #define TENT_STRING_BUILDER_H
 
-#include <glog/logging.h>
+
 #include <numa.h>
 #include <sys/mman.h>
 #include <sys/time.h>

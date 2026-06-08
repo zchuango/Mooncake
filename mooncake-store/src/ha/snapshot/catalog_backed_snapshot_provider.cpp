@@ -1,4 +1,5 @@
 #include "ha/snapshot/catalog_backed_snapshot_provider.h"
+#include "log_macros.h"
 
 #include <chrono>
 #include <memory>
@@ -8,7 +9,7 @@
 #include <utility>
 #include <vector>
 
-#include <glog/logging.h>
+
 #include <msgpack.hpp>
 
 #include "ha/snapshot/catalog/backends/embedded/embedded_snapshot_catalog_store.h"
@@ -74,7 +75,7 @@ ErrorCode ValidateManifest(std::string_view snapshot_id,
                             ? std::string_view::npos
                             : manifest.find('|', first + 1);
     if (first == std::string_view::npos || second == std::string_view::npos) {
-        LOG(ERROR) << "Invalid snapshot manifest format, snapshot_id="
+        LOG_ERROR << "Invalid snapshot manifest format, snapshot_id="
                    << snapshot_id << ", manifest=" << manifest;
         return ErrorCode::DESERIALIZE_FAIL;
     }
@@ -82,13 +83,13 @@ ErrorCode ValidateManifest(std::string_view snapshot_id,
     const auto protocol = manifest.substr(0, first);
     const auto version = manifest.substr(first + 1, second - first - 1);
     if (protocol != kSnapshotSerializerType) {
-        LOG(ERROR) << "Unsupported snapshot manifest protocol, snapshot_id="
+        LOG_ERROR << "Unsupported snapshot manifest protocol, snapshot_id="
                    << snapshot_id << ", protocol=" << protocol
                    << ", expected=" << kSnapshotSerializerType;
         return ErrorCode::DESERIALIZE_FAIL;
     }
     if (version != kSnapshotSerializerVersion) {
-        LOG(ERROR) << "Unsupported snapshot manifest version, snapshot_id="
+        LOG_ERROR << "Unsupported snapshot manifest version, snapshot_id="
                    << snapshot_id << ", version=" << version
                    << ", expected=" << kSnapshotSerializerVersion;
         return ErrorCode::DESERIALIZE_FAIL;
@@ -103,11 +104,11 @@ DeserializeStandbyObjectMetadata(
     uint64_t snapshot_sequence_id,
     const std::chrono::system_clock::time_point& now) {
     if (object.type != msgpack::type::ARRAY) {
-        LOG(ERROR) << "Snapshot metadata entry is not an array";
+        LOG_ERROR << "Snapshot metadata entry is not an array";
         return tl::make_unexpected(ErrorCode::DESERIALIZE_FAIL);
     }
     if (object.via.array.size < 7) {
-        LOG(ERROR) << "Snapshot metadata entry is too short, size="
+        LOG_ERROR << "Snapshot metadata entry is too short, size="
                    << object.via.array.size;
         return tl::make_unexpected(ErrorCode::DESERIALIZE_FAIL);
     }
@@ -119,7 +120,7 @@ DeserializeStandbyObjectMetadata(
         std::string client_id_string = array[index++].as<std::string>();
         UUID client_id;
         if (!StringToUuid(client_id_string, client_id)) {
-            LOG(ERROR) << "Snapshot metadata entry has invalid client UUID: "
+            LOG_ERROR << "Snapshot metadata entry has invalid client UUID: "
                        << client_id_string;
             return tl::make_unexpected(ErrorCode::DESERIALIZE_FAIL);
         }
@@ -133,7 +134,7 @@ DeserializeStandbyObjectMetadata(
 
         if (object.via.array.size != 7 + replica_count &&
             object.via.array.size != 8 + replica_count) {
-            LOG(ERROR) << "Snapshot metadata entry replica count mismatch, "
+            LOG_ERROR << "Snapshot metadata entry replica count mismatch, "
                        << "replicas=" << replica_count
                        << ", total_fields=" << object.via.array.size;
             return tl::make_unexpected(ErrorCode::DESERIALIZE_FAIL);
@@ -159,7 +160,7 @@ DeserializeStandbyObjectMetadata(
             auto replica_result =
                 Serializer<Replica>::deserialize(array[index++], segment_view);
             if (!replica_result) {
-                LOG(ERROR) << "Failed to deserialize snapshot replica: "
+                LOG_ERROR << "Failed to deserialize snapshot replica: "
                            << replica_result.error().message;
                 return tl::make_unexpected(replica_result.error().code);
             }
@@ -185,7 +186,7 @@ DeserializeStandbyObjectMetadata(
         metadata.last_sequence_id = snapshot_sequence_id;
         return std::optional<StandbyObjectMetadata>(std::move(metadata));
     } catch (const std::exception& ex) {
-        LOG(ERROR) << "Failed to parse snapshot metadata entry: " << ex.what();
+        LOG_ERROR << "Failed to parse snapshot metadata entry: " << ex.what();
         return tl::make_unexpected(ErrorCode::DESERIALIZE_FAIL);
     }
 }
@@ -200,7 +201,7 @@ DeserializeStandbySnapshotMetadata(const std::vector<uint8_t>& data,
         root_handle = msgpack::unpack(
             reinterpret_cast<const char*>(data.data()), data.size());
     } catch (const std::exception& ex) {
-        LOG(ERROR) << "Failed to unpack snapshot metadata payload: "
+        LOG_ERROR << "Failed to unpack snapshot metadata payload: "
                    << ex.what();
         return tl::make_unexpected(ErrorCode::DESERIALIZE_FAIL);
     }
@@ -208,7 +209,7 @@ DeserializeStandbySnapshotMetadata(const std::vector<uint8_t>& data,
     const auto& root = root_handle.get();
     const auto* shards = FindMapField(root, "shards");
     if (shards == nullptr || shards->type != msgpack::type::MAP) {
-        LOG(ERROR) << "Snapshot metadata payload misses shards map";
+        LOG_ERROR << "Snapshot metadata payload misses shards map";
         return tl::make_unexpected(ErrorCode::DESERIALIZE_FAIL);
     }
 
@@ -217,7 +218,7 @@ DeserializeStandbySnapshotMetadata(const std::vector<uint8_t>& data,
     for (uint32_t i = 0; i < shards->via.map.size; ++i) {
         const auto& shard_blob = shards->via.map.ptr[i].val;
         if (shard_blob.type != msgpack::type::BIN) {
-            LOG(ERROR) << "Snapshot shard payload is not binary";
+            LOG_ERROR << "Snapshot shard payload is not binary";
             return tl::make_unexpected(ErrorCode::DESERIALIZE_FAIL);
         }
 
@@ -227,7 +228,7 @@ DeserializeStandbySnapshotMetadata(const std::vector<uint8_t>& data,
                 reinterpret_cast<const uint8_t*>(shard_blob.via.bin.ptr),
                 shard_blob.via.bin.size);
         } catch (const std::exception& ex) {
-            LOG(ERROR) << "Failed to decompress snapshot shard payload: "
+            LOG_ERROR << "Failed to decompress snapshot shard payload: "
                        << ex.what();
             return tl::make_unexpected(ErrorCode::DESERIALIZE_FAIL);
         }
@@ -238,7 +239,7 @@ DeserializeStandbySnapshotMetadata(const std::vector<uint8_t>& data,
                 reinterpret_cast<const char*>(decompressed_shard.data()),
                 decompressed_shard.size());
         } catch (const std::exception& ex) {
-            LOG(ERROR) << "Failed to unpack snapshot shard payload: "
+            LOG_ERROR << "Failed to unpack snapshot shard payload: "
                        << ex.what();
             return tl::make_unexpected(ErrorCode::DESERIALIZE_FAIL);
         }
@@ -247,14 +248,14 @@ DeserializeStandbySnapshotMetadata(const std::vector<uint8_t>& data,
         const auto* metadata_entries = FindMapField(shard, "metadata");
         if (metadata_entries == nullptr ||
             metadata_entries->type != msgpack::type::ARRAY) {
-            LOG(ERROR) << "Snapshot shard misses metadata array";
+            LOG_ERROR << "Snapshot shard misses metadata array";
             return tl::make_unexpected(ErrorCode::DESERIALIZE_FAIL);
         }
 
         for (uint32_t j = 0; j < metadata_entries->via.array.size; ++j) {
             const auto& item = metadata_entries->via.array.ptr[j];
             if (item.type != msgpack::type::ARRAY || item.via.array.size != 2) {
-                LOG(ERROR) << "Snapshot metadata item has invalid shape";
+                LOG_ERROR << "Snapshot metadata item has invalid shape";
                 return tl::make_unexpected(ErrorCode::DESERIALIZE_FAIL);
             }
 
@@ -271,7 +272,7 @@ DeserializeStandbySnapshotMetadata(const std::vector<uint8_t>& data,
                 }
                 snapshot.emplace_back(key, std::move(metadata_result->value()));
             } catch (const std::exception& ex) {
-                LOG(ERROR) << "Failed to parse snapshot metadata item: "
+                LOG_ERROR << "Failed to parse snapshot metadata item: "
                            << ex.what();
                 return tl::make_unexpected(ErrorCode::DESERIALIZE_FAIL);
             }
@@ -331,14 +332,14 @@ class CatalogBackedSnapshotProvider final : public SnapshotProvider {
     tl::expected<std::optional<LoadedSnapshot>, ErrorCode> LoadLatestSnapshot(
         const std::string& cluster_id) override {
         if (!cluster_id.empty() && cluster_id != cluster_id_) {
-            LOG(ERROR) << "Snapshot provider cluster mismatch, requested="
+            LOG_ERROR << "Snapshot provider cluster mismatch, requested="
                        << cluster_id << ", configured=" << cluster_id_;
             return tl::make_unexpected(ErrorCode::INVALID_PARAMS);
         }
 
         auto latest_result = catalog_store_->GetLatest();
         if (!latest_result) {
-            LOG(ERROR) << "Failed to resolve latest snapshot from catalog, "
+            LOG_ERROR << "Failed to resolve latest snapshot from catalog, "
                        << "cluster_id=" << cluster_id_
                        << ", error=" << toString(latest_result.error());
             return tl::make_unexpected(latest_result.error());
@@ -364,7 +365,7 @@ class CatalogBackedSnapshotProvider final : public SnapshotProvider {
         auto manifest_result =
             object_store_->DownloadString(manifest_path, manifest_content);
         if (!manifest_result) {
-            LOG(ERROR) << "Failed to download snapshot manifest, snapshot_id="
+            LOG_ERROR << "Failed to download snapshot manifest, snapshot_id="
                        << descriptor.snapshot_id << ", path=" << manifest_path
                        << ", error=" << manifest_result.error();
             return tl::make_unexpected(ErrorCode::PERSISTENT_FAIL);
@@ -381,7 +382,7 @@ class CatalogBackedSnapshotProvider final : public SnapshotProvider {
         auto segments_result =
             object_store_->DownloadBuffer(segments_path, segments_content);
         if (!segments_result) {
-            LOG(ERROR) << "Failed to download snapshot segments payload, "
+            LOG_ERROR << "Failed to download snapshot segments payload, "
                        << "snapshot_id=" << descriptor.snapshot_id
                        << ", path=" << segments_path
                        << ", error=" << segments_result.error();
@@ -393,7 +394,7 @@ class CatalogBackedSnapshotProvider final : public SnapshotProvider {
         auto metadata_result =
             object_store_->DownloadBuffer(metadata_path, metadata_content);
         if (!metadata_result) {
-            LOG(ERROR) << "Failed to download snapshot metadata payload, "
+            LOG_ERROR << "Failed to download snapshot metadata payload, "
                        << "snapshot_id=" << descriptor.snapshot_id
                        << ", path=" << metadata_path
                        << ", error=" << metadata_result.error();
@@ -405,7 +406,7 @@ class CatalogBackedSnapshotProvider final : public SnapshotProvider {
         auto deserialize_segments =
             segment_serializer.Deserialize(segments_content);
         if (!deserialize_segments) {
-            LOG(ERROR) << "Failed to deserialize snapshot segments payload, "
+            LOG_ERROR << "Failed to deserialize snapshot segments payload, "
                        << "snapshot_id=" << descriptor.snapshot_id
                        << ", error=" << deserialize_segments.error().message;
             return tl::make_unexpected(deserialize_segments.error().code);
@@ -415,7 +416,7 @@ class CatalogBackedSnapshotProvider final : public SnapshotProvider {
             metadata_content, segment_manager.getView(),
             descriptor.last_included_seq);
         if (!deserialize_metadata) {
-            LOG(ERROR) << "Failed to deserialize snapshot metadata payload, "
+            LOG_ERROR << "Failed to deserialize snapshot metadata payload, "
                        << "snapshot_id=" << descriptor.snapshot_id
                        << ", error=" << toString(deserialize_metadata.error());
             return tl::make_unexpected(deserialize_metadata.error());
@@ -443,10 +444,10 @@ CreateCatalogBackedSnapshotProvider(
         return std::unique_ptr<SnapshotProvider>(
             std::make_unique<CatalogBackedSnapshotProvider>(config));
     } catch (const std::invalid_argument& ex) {
-        LOG(ERROR) << "Invalid snapshot provider configuration: " << ex.what();
+        LOG_ERROR << "Invalid snapshot provider configuration: " << ex.what();
         return tl::make_unexpected(ErrorCode::INVALID_PARAMS);
     } catch (const std::exception& ex) {
-        LOG(ERROR) << "Failed to create catalog-backed snapshot provider: "
+        LOG_ERROR << "Failed to create catalog-backed snapshot provider: "
                    << ex.what();
         return tl::make_unexpected(ErrorCode::INTERNAL_ERROR);
     }

@@ -13,9 +13,10 @@
 // limitations under the License.
 
 #include "tent/transport/rdma/ibv_loader.h"
+#include "log_macros.h"
 
 #include <dlfcn.h>
-#include <glog/logging.h>
+
 
 namespace mooncake {
 namespace tent {
@@ -24,7 +25,7 @@ template <typename Fn>
 bool LoadSymbol(void* handle, const char* name, Fn& out) {
     void* sym = dlsym(handle, name);
     if (!sym) {
-        LOG(WARNING) << "libibverbs missing required symbol: " << name
+        LOG_WARNING << "libibverbs missing required symbol: " << name
                      << ", error: " << dlerror();
         return false;
     }
@@ -40,7 +41,7 @@ IbvLoader& IbvLoader::Instance() {
 IbvLoader::IbvLoader() {
     handle_ = dlopen("libibverbs.so.1", RTLD_NOW | RTLD_LOCAL);
     if (!handle_) {
-        LOG(INFO) << "IbvLoader: libibverbs.so.1 not available: " << dlerror();
+        LOG_INFO << "IbvLoader: libibverbs.so.1 not available: " << dlerror();
         return;
     }
 
@@ -83,7 +84,7 @@ IbvLoader::IbvLoader() {
     ok &= LoadSymbol(handle_, "ibv_fork_init", symbols_.ibv_fork_init);
 
     if (!ok) {
-        LOG(WARNING) << "IbvLoader: missing required verbs symbols, "
+        LOG_WARNING << "IbvLoader: missing required verbs symbols, "
                      << "RDMA will be disabled.";
         dlclose(handle_);
         handle_ = nullptr;
@@ -96,7 +97,7 @@ IbvLoader::IbvLoader() {
         if (dev_list) {
             symbols_.ibv_free_device_list(dev_list);
         }
-        LOG(INFO) << "IbvLoader: no RDMA devices found, "
+        LOG_INFO << "IbvLoader: no RDMA devices found, "
                      "RDMA will be unavailable.";
         dlclose(handle_);
         handle_ = nullptr;
@@ -105,7 +106,7 @@ IbvLoader::IbvLoader() {
 
     symbols_.ibv_free_device_list(dev_list);
     available_ = true;
-    LOG(INFO) << "IbvLoader: libibverbs loaded successfully, devices="
+    LOG_INFO << "IbvLoader: libibverbs loaded successfully, devices="
               << num_devices;
 }
 

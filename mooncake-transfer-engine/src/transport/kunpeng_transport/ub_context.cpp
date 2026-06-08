@@ -12,14 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <glog/logging.h>
+
 #include <atomic>
 #include <memory>
 #include <utility>
 #include <cassert>
 #include <sys/epoll.h>
 #include "config.h"
-#include "mooncake_logging.h"
+#include "log_macros.h"
 #include "transport/kunpeng_transport/ub_context.h"
 #include "transport/kunpeng_transport/ub_endpoint.h"
 
@@ -51,13 +51,13 @@ std::shared_ptr<UbEndPoint> UbSIEVEEndpointStore::insertEndpoint(
     const std::string& peer_nic_path, UbContext* context) {
     RWSpinlock::WriteGuard guard(endpoint_map_lock_);
     if (endpoint_map_.find(peer_nic_path) != endpoint_map_.end()) {
-        LOG(INFO) << "Endpoint " << peer_nic_path
+        LOG_INFO << "Endpoint " << peer_nic_path
                   << " already exists in SIEVEEndpointStore";
         return endpoint_map_[peer_nic_path].first;
     }
     auto endpoint = context->makeEndpoint();
     if (!endpoint) {
-        LOG(ERROR) << "Failed to allocate memory for UbEndPoint";
+        LOG_ERROR << "Failed to allocate memory for UbEndPoint";
         return nullptr;
     }
     auto& config = globalConfig();
@@ -189,7 +189,7 @@ int UbWorkerPool::submitPostSend(
                 context_.engine().meta()->getSegmentDescByID(target_id);
             if (!segment_desc_map[target_id]) {
                 segment_desc_map.clear();
-                LOG(ERROR) << "Cannot get target segment description #"
+                LOG_ERROR << "Cannot get target segment description #"
                            << target_id;
                 return ERR_INVALID_ARGUMENT;
             }
@@ -230,7 +230,7 @@ int UbWorkerPool::submitPostSend(
             peer_segment_desc = context_.engine().meta()->getSegmentDescByID(
                 slice->target_id, true);
             if (!peer_segment_desc) {
-                LOG(ERROR) << "Cannot reload target segment #"
+                LOG_ERROR << "Cannot reload target segment #"
                            << slice->target_id;
                 slice->markFailed();
                 failed_target_ids[slice->target_id] = getCurrentTimeInNano();
@@ -242,7 +242,7 @@ int UbWorkerPool::submitPostSend(
                                           hint, buffer_id, device_id)) {
                 slice->markFailed();
                 for (const auto& dev_desc : peer_segment_desc.get()->devices) {
-                    LOG(ERROR) << "peer device : " << dev_desc.name;
+                    LOG_ERROR << "peer device : " << dev_desc.name;
                 }
                 context_.engine().meta()->dumpMetadataContent(
                     peer_segment_desc->name, slice->ub.dest_addr,
@@ -258,7 +258,7 @@ int UbWorkerPool::submitPostSend(
             peer_segment_desc->buffers[buffer_id].tseg[device_id];
         slice->ub.r_seg = context_.retrieveRemoteSeg(targetSegment);
         if (!slice->ub.r_seg) {
-            LOG(ERROR) << "[UB] retrieveRemoteSeg failed for target_id="
+            LOG_ERROR << "[UB] retrieveRemoteSeg failed for target_id="
                        << slice->target_id << " buffer_id=" << buffer_id
                        << " device_id" << device_id
                        << " dest_addr=" << slice->ub.dest_addr;
@@ -359,14 +359,14 @@ void UbWorkerPool::performPostSend(int thread_id) {
             continue;
         }
         if (!endpoint->connected() && endpoint->setupConnectionsByActive()) {
-            LOG(ERROR) << "Worker: Cannot make connection for endpoint: "
+            LOG_ERROR << "Worker: Cannot make connection for endpoint: "
                        << entry.first << ", mark it inactive";
             for (auto& slice : entry.second) failed_slice_list.push_back(slice);
             endpoint->set_active(false);
             failed_nr_polls++;
             if (context_.active() && failed_nr_polls > 32 &&
                 !success_nr_polls) {
-                LOG(WARNING)
+                LOG_WARNING
                     << "Failed to establish peer endpoints in local RNIC "
                     << context_.nicPath() << ", mark it inactive";
                 context_.set_active(false);
@@ -393,7 +393,7 @@ void UbWorkerPool::performPoll(int thread_id) {
         UbTransport::Slice* cr[kPollCount];
         int nr_poll = context_.poll(kPollCount, cr, jfc_index);
         if (nr_poll < 0) {
-            LOG(ERROR) << "Worker: Failed to poll jetty for complete";
+            LOG_ERROR << "Worker: Failed to poll jetty for complete";
             continue;
         }
         for (int i = 0; i < nr_poll; ++i) {
@@ -407,7 +407,7 @@ void UbWorkerPool::performPoll(int thread_id) {
                 failed_nr_polls++;
                 if (context_.active() && failed_nr_polls > 32 &&
                     !success_nr_polls) {
-                    LOG(WARNING) << "Too many errors found in local RNIC "
+                    LOG_WARNING << "Too many errors found in local RNIC "
                                  << context_.nicPath() << ", mark it inactive";
                     context_.set_active(false);
                 }
@@ -526,7 +526,7 @@ void UbWorkerPool::monitorWorker() {
         int num_events = epoll_wait(context_.eventFd(), &event, 1, 100);
         if (num_events < 0) {
             if (errno != EWOULDBLOCK && errno != EINTR)
-                PLOG(ERROR) << "Worker: epoll_wait()";
+                PLOG_ERROR << "Worker: epoll_wait()";
             continue;
         }
 

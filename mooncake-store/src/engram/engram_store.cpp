@@ -1,4 +1,5 @@
 #include "engram/engram_store.h"
+#include "log_macros.h"
 
 #include <cstring>
 #include <limits>
@@ -239,18 +240,18 @@ int EngramStore::populate(const std::vector<void*>& embedding_buffers,
 
     std::vector<int> exists_results = store_->batchIsExist(embed_keys_);
     if (exists_results.size() != embed_keys_.size()) {
-        LOG(ERROR) << "Failed to preflight EngramStore populate key existence";
+        LOG_ERROR << "Failed to preflight EngramStore populate key existence";
         return -1;
     }
     for (size_t i = 0; i < exists_results.size(); ++i) {
         const int exists = exists_results[i];
         if (exists < 0) {
-            LOG(ERROR) << "Failed to query EngramStore key '" << embed_keys_[i]
+            LOG_ERROR << "Failed to query EngramStore key '" << embed_keys_[i]
                        << "' before populate, rc=" << exists;
             return -1;
         }
         if (exists != 0) {
-            LOG(ERROR)
+            LOG_ERROR
                 << "EngramStore populate requires empty destination key '"
                 << embed_keys_[i] << "'. Remove the existing layer first.";
             return -1;
@@ -263,7 +264,7 @@ int EngramStore::populate(const std::vector<void*>& embedding_buffers,
             int rc = store_->unregister_buffer(embedding_buffers[i]);
             if (rc != 0) {
                 cleanup_failed = true;
-                LOG(ERROR) << "Failed to unregister embedding buffer at index "
+                LOG_ERROR << "Failed to unregister embedding buffer at index "
                            << i << ", rc=" << rc;
             }
         }
@@ -275,7 +276,7 @@ int EngramStore::populate(const std::vector<void*>& embedding_buffers,
             store_->register_buffer(embedding_buffers[i], buffer_sizes[i]);
         if (ret != 0) {
             if (cleanup_registered_buffers(i)) {
-                LOG(ERROR) << "Failed to clean up registered embedding buffers "
+                LOG_ERROR << "Failed to clean up registered embedding buffers "
                               "after register_buffer error";
             }
             return -1;
@@ -302,13 +303,13 @@ int EngramStore::populate(const std::vector<void*>& embedding_buffers,
             int rc = store_->remove(embed_keys_[i], true);
             if (rc != 0 &&
                 rc != static_cast<int>(ErrorCode::OBJECT_NOT_FOUND)) {
-                LOG(ERROR)
+                LOG_ERROR
                     << "Failed to roll back partially populated EngramStore "
                     << "key '" << embed_keys_[i] << "', rc=" << rc;
             }
         }
         if (unregister_failed) {
-            LOG(ERROR)
+            LOG_ERROR
                 << "Rolling back EngramStore populate because buffer cleanup "
                    "failed after publish";
         }

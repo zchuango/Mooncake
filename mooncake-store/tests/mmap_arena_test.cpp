@@ -3,7 +3,8 @@
 // correctness tests
 
 #include <gtest/gtest.h>
-#include <glog/logging.h>
+#include "log_macros.h"
+
 #include "mmap_arena.h"
 #include "utils.h"
 #include <thread>
@@ -180,7 +181,7 @@ TEST_F(MmapArenaTest, ConcurrentOOMStressTest) {
     EXPECT_EQ(succeeded.load() + failed.load(),
               num_threads * allocs_per_thread);
 
-    LOG(INFO) << "OOM stress test: " << succeeded.load() << " succeeded, "
+    LOG_INFO << "OOM stress test: " << succeeded.load() << " succeeded, "
               << failed.load() << " failed, pool utilization: "
               << (100.0 * stats.reserved_bytes / stats.pool_size) << "%";
 }
@@ -362,7 +363,7 @@ TEST_F(MmapArenaTest, ConcurrentAllocations) {
         }
     }
 
-    LOG(INFO) << "Concurrent allocations: " << unique_ptrs.size()
+    LOG_INFO << "Concurrent allocations: " << unique_ptrs.size()
               << " unique allocations from " << num_threads << " threads";
 }
 
@@ -411,7 +412,7 @@ TEST_F(MmapArenaTest, StatsConsistencyUnderLoad) {
     // After all threads finish, peak should be >= final allocated
     EXPECT_GE(stats.peak_reserved_bytes, stats.reserved_bytes);
 
-    LOG(INFO) << "Stats consistency test: " << stats.num_allocations
+    LOG_INFO << "Stats consistency test: " << stats.num_allocations
               << " allocations, " << stats.num_failed_allocs << " failures";
 }
 
@@ -434,7 +435,7 @@ TEST_F(MmapArenaTest, NearOOMAllocation) {
     EXPECT_LE(stats.reserved_bytes, stats.pool_size);
     EXPECT_GT(stats.num_failed_allocs, 0);
 
-    LOG(INFO) << "Near-OOM test: " << ptrs.size() << " allocations, "
+    LOG_INFO << "Near-OOM test: " << ptrs.size() << " allocations, "
               << stats.reserved_bytes << " / " << stats.pool_size
               << " bytes used";
 }
@@ -464,7 +465,7 @@ TEST_F(MmapArenaTest, MixedSizeAllocations) {
         EXPECT_TRUE(arena.owns(ptr));
     }
 
-    LOG(INFO) << "Mixed-size test: " << ptrs.size() << " allocations";
+    LOG_INFO << "Mixed-size test: " << ptrs.size() << " allocations";
 }
 
 TEST_F(MmapArenaTest, PeakAllocationTracking) {
@@ -482,7 +483,7 @@ TEST_F(MmapArenaTest, PeakAllocationTracking) {
     EXPECT_GE(stats2.peak_reserved_bytes, stats1.peak_reserved_bytes);
     EXPECT_GE(stats2.peak_reserved_bytes, 512 + 1024);
 
-    LOG(INFO) << "Peak tracking: " << stats2.peak_reserved_bytes << " bytes";
+    LOG_INFO << "Peak tracking: " << stats2.peak_reserved_bytes << " bytes";
 }
 
 TEST_F(MmapArenaTest, ReservedBytesRemainMonotonic) {
@@ -642,12 +643,12 @@ TEST_F(MmapArenaTest, PagesArePhysicallyBackedAfterInit) {
             << "Only " << pct
             << "% of pages resident; MAP_POPULATE may not be working. "
             << resident << "/" << num_pages << " pages.";
-        LOG(INFO) << "mincore: " << resident << "/" << num_pages
+        LOG_INFO << "mincore: " << resident << "/" << num_pages
                   << " pages resident (" << pct << "%)";
     } else {
         // mincore may fail on some kernels for MAP_HUGETLB regions.
         // Fall back to verifying that we can read every byte without SIGSEGV.
-        LOG(WARNING) << "mincore() returned " << ret << " (errno=" << errno
+        LOG_WARNING << "mincore() returned " << ret << " (errno=" << errno
                      << "), falling back to read-verification";
         // Read every page — if MAP_POPULATE didn't work, this would trigger
         // page faults (which is fine for CPU but would crash GPU DMA).

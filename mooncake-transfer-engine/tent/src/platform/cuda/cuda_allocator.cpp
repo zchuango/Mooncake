@@ -13,12 +13,13 @@
 // limitations under the License.
 
 #include "tent/platform/cuda.h"
+#include "log_macros.h"
 #include "tent/common/status.h"
 
 #include <bits/stdint-uintn.h>
 #include <cuda_runtime.h>
 #include <numa.h>
-#include <glog/logging.h>
+
 
 namespace mooncake {
 namespace tent {
@@ -50,7 +51,7 @@ Status CudaPlatform::free(void* ptr, size_t size) {
                attributes.type == cudaMemoryTypeUnregistered) {
         numa_free(ptr, size);
     } else {
-        LOG(ERROR) << "Unknown memory type, " << ptr << " " << attributes.type;
+        LOG_ERROR << "Unknown memory type, " << ptr << " " << attributes.type;
     }
     return Status::OK();
 }

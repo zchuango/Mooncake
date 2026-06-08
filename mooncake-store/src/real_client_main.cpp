@@ -1,11 +1,16 @@
 #include <gflags/gflags.h>
 #include <csignal>
+#include <cstdlib>
+#include <filesystem>
 #include <ylt/coro_rpc/coro_rpc_server.hpp>
+#include <spdlog/spdlog.h>
 
 #include "client_service.h"
 #include "config.h"
-#include "mooncake_logging.h"
 #include "real_client.h"
+#include "logger.h"
+#include "log_config.h"
+#include "log_macros.h"
 
 using namespace mooncake;
 
@@ -98,10 +103,15 @@ int main(int argc, char *argv[]) {
     mooncake::ResourceTracker::getInstance();
 
     gflags::ParseCommandLineFlags(&argc, &argv, true);
-    if (!FLAGS_log_dir.empty()) {
-        google::InitGoogleLogging(argv[0]);
+
+    // Initialize spdlog async logger
+    mooncake::LogConfig logConfig;
+    if (const char* log_dir = std::getenv("MC_LOG_DIR");
+        log_dir && *log_dir != '\0') {
+        logConfig.logDir = log_dir;
     }
-    mooncake::logging::ApplyMooncakeLogEnableToGlog();
+    logConfig.fileName = "mooncake_client";
+    mooncake::Logger::Instance().Init(logConfig);
 
     size_t global_segment_size = string_to_byte_size(FLAGS_global_segment_size);
 #ifdef USE_ASCEND_DIRECT
@@ -116,19 +126,19 @@ int main(int argc, char *argv[]) {
         nullptr, "@mooncake_client_" + std::to_string(FLAGS_port) + ".sock",
         FLAGS_port, FLAGS_enable_offload, FLAGS_start_offload_rpc_server);
     if (!res) {
-        LOG(FATAL) << "Failed to setup client: " << toString(res.error());
+        LOG_ERROR << "Failed to setup client: " << toString(res.error());
         return -1;
     }
 
     if (client_inst->start_dummy_client_monitor()) {
-        LOG(FATAL) << "Failed to start dummy client monitor thread";
+        LOG_ERROR << "Failed to start dummy client monitor thread";
         return -1;
     }
 
     coro_rpc::coro_rpc_server server(FLAGS_threads, FLAGS_port, FLAGS_host);
     RegisterClientRpcService(server, *client_inst);
 
-    LOG(INFO) << "Starting real client service on " << FLAGS_host << ":"
+    LOG_INFO << "Starting real client service on " << FLAGS_host << ":"
               << FLAGS_port;
 
     return server.start();

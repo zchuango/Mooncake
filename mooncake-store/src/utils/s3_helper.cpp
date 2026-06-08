@@ -1,4 +1,5 @@
 #include "utils/s3_helper.h"
+#include "log_macros.h"
 
 #include <aws/s3/model/PutObjectRequest.h>
 #include <aws/s3/model/GetObjectRequest.h>
@@ -17,7 +18,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <cctype>
-#include <glog/logging.h>
+
 #include <thread>
 #include <mutex>
 #include <atomic>
@@ -74,7 +75,7 @@ void AssignBoolFromEnv(const char *env_name, bool &target) {
             target = parsed;
             return;
         }
-        LOG(WARNING) << "Invalid " << env_name << " value: " << env_value;
+        LOG_WARNING << "Invalid " << env_name << " value: " << env_value;
     }
 }
 
@@ -87,7 +88,7 @@ void AssignTimeoutFromEnv(const char *env_name, int64_t default_value,
             target = parsed;
             return;
         }
-        LOG(WARNING) << "Invalid " << env_name << " value: " << env_value;
+        LOG_WARNING << "Invalid " << env_name << " value: " << env_value;
     }
     target = default_value;
 }

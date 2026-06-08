@@ -2,9 +2,10 @@
 // Simple arena allocator implementation
 
 #include "mmap_arena.h"
+#include "log_macros.h"
 #include "utils.h"
 #include <sys/mman.h>
-#include <glog/logging.h>
+
 #include <cerrno>
 #include <cstring>
 #include <algorithm>
@@ -45,7 +46,7 @@ MmapArena::~MmapArena() {
     if (pool_base != nullptr) {
         size_t pool_size = pool_size_.load(std::memory_order_acquire);
         if (munmap(pool_base, pool_size) != 0) {
-            LOG(ERROR) << "Arena munmap failed: " << strerror(errno);
+            LOG_ERROR << "Arena munmap failed: " << strerror(errno);
         }
         pool_base_.store(nullptr, std::memory_order_release);
     }
@@ -60,17 +61,17 @@ bool MmapArena::initialize(size_t pool_size, size_t alignment,
     std::lock_guard<std::mutex> lock(init_mutex_);
 
     if (pool_size == 0) {
-        LOG(ERROR) << "Arena pool size must be > 0";
+        LOG_ERROR << "Arena pool size must be > 0";
         return false;
     }
 
     if (alignment != 0 && (alignment & (alignment - 1)) != 0) {
-        LOG(ERROR) << "Arena alignment must be a power of 2, got " << alignment;
+        LOG_ERROR << "Arena alignment must be a power of 2, got " << alignment;
         return false;
     }
 
     if (pool_base_.load(std::memory_order_acquire) != nullptr) {
-        LOG(WARNING) << "Arena already initialized";
+        LOG_WARNING << "Arena already initialized";
         return false;
     }
 
@@ -79,7 +80,7 @@ bool MmapArena::initialize(size_t pool_size, size_t alignment,
     // Align pool size to 2MB for huge pages with overflow protection
     size_t aligned_pool_size;
     if (!safe_align_up(pool_size, SZ_2MB, &aligned_pool_size)) {
-        LOG(ERROR) << "Arena pool size overflow: requested=" << pool_size;
+        LOG_ERROR << "Arena pool size overflow: requested=" << pool_size;
         return false;
     }
 
@@ -100,7 +101,7 @@ bool MmapArena::initialize(size_t pool_size, size_t alignment,
     if (pool_base == MAP_FAILED) {
         const int mmap_errno = errno;
         if (!allow_regular_page_fallback) {
-            LOG(ERROR) << "Arena hugepage mmap failed for pool_size="
+            LOG_ERROR << "Arena hugepage mmap failed for pool_size="
                        << aligned_pool_size << " bytes"
                        << ", errno=" << mmap_errno << " ("
                        << strerror(mmap_errno)
@@ -112,7 +113,7 @@ bool MmapArena::initialize(size_t pool_size, size_t alignment,
 
         // Retry without huge pages
         flags &= ~MAP_HUGETLB;
-        LOG(WARNING) << "Arena hugepage mmap failed for pool_size="
+        LOG_WARNING << "Arena hugepage mmap failed for pool_size="
                      << aligned_pool_size << " bytes"
                      << ", errno=" << mmap_errno << " (" << strerror(mmap_errno)
                      << "); retrying without huge pages";
@@ -120,15 +121,15 @@ bool MmapArena::initialize(size_t pool_size, size_t alignment,
                          flags, -1, 0);
 
         if (pool_base == MAP_FAILED) {
-            LOG(ERROR) << "Arena mmap failed: size=" << aligned_pool_size
+            LOG_ERROR << "Arena mmap failed: size=" << aligned_pool_size
                        << ", errno=" << errno << " (" << strerror(errno) << ")";
             return false;
         }
-        LOG(WARNING) << "Arena initialized without huge pages for pool_size="
+        LOG_WARNING << "Arena initialized without huge pages for pool_size="
                      << aligned_pool_size
                      << " bytes; MAP_POPULATE will prefault regular pages";
     } else {
-        LOG(INFO) << "Arena initialized with huge pages";
+        LOG_INFO << "Arena initialized with huge pages";
     }
 
     // Prevent child processes from inheriting this mapping on fork().
@@ -138,7 +139,7 @@ bool MmapArena::initialize(size_t pool_size, size_t alignment,
     // Child processes don't need the parent's DMA buffers — they exec()
     // or initialize their own arena.
     if (madvise(pool_base, aligned_pool_size, MADV_DONTFORK) != 0) {
-        LOG(WARNING) << "madvise(MADV_DONTFORK) failed: " << strerror(errno)
+        LOG_WARNING << "madvise(MADV_DONTFORK) failed: " << strerror(errno)
                      << " for pool_size=" << aligned_pool_size
                      << " bytes (fork safety not guaranteed)";
     }
@@ -150,7 +151,7 @@ bool MmapArena::initialize(size_t pool_size, size_t alignment,
     pool_size_.store(aligned_pool_size, std::memory_order_relaxed);
     pool_base_.store(pool_base, std::memory_order_release);
 
-    LOG(INFO) << "Arena initialized: " << (aligned_pool_size / BYTES_PER_GIB)
+    LOG_INFO << "Arena initialized: " << (aligned_pool_size / BYTES_PER_GIB)
               << " GiB, alignment=" << actual_alignment << " bytes";
 
     return true;
@@ -159,7 +160,7 @@ bool MmapArena::initialize(size_t pool_size, size_t alignment,
 void* MmapArena::allocate(size_t size, size_t alignment) {
     void* pool_base = pool_base_.load(std::memory_order_acquire);
     if (pool_base == nullptr) {
-        LOG(ERROR) << "Arena not initialized";
+        LOG_ERROR << "Arena not initialized";
         return nullptr;
     }
 
@@ -179,7 +180,7 @@ void* MmapArena::allocate(size_t size, size_t alignment) {
     size_t aligned_size;
     if (!safe_align_up(size, effective_alignment, &aligned_size)) {
         num_failed_allocs_.fetch_add(1, std::memory_order_relaxed);
-        LOG(ERROR) << "Arena allocation size overflow: size=" << size
+        LOG_ERROR << "Arena allocation size overflow: size=" << size
                    << ", alignment=" << effective_alignment;
         return nullptr;
     }
@@ -198,7 +199,7 @@ void* MmapArena::allocate(size_t size, size_t alignment) {
         // Align the offset up to effective_alignment
         if (!safe_align_up(raw, effective_alignment, &aligned_offset)) {
             num_failed_allocs_.fetch_add(1, std::memory_order_relaxed);
-            LOG(ERROR) << "Arena offset alignment overflow: raw=" << raw
+            LOG_ERROR << "Arena offset alignment overflow: raw=" << raw
                        << ", alignment=" << effective_alignment;
             return nullptr;
         }
@@ -208,7 +209,7 @@ void* MmapArena::allocate(size_t size, size_t alignment) {
         // Check for overflow (next wrapped) and OOM BEFORE modifying cursor
         if (next < aligned_offset || next > pool_size) {
             num_failed_allocs_.fetch_add(1, std::memory_order_relaxed);
-            LOG(ERROR) << "Arena OOM: requested=" << size
+            LOG_ERROR << "Arena OOM: requested=" << size
                        << ", aligned_size=" << aligned_size
                        << ", aligned_offset=" << aligned_offset
                        << ", pool_size=" << pool_size;
@@ -240,7 +241,7 @@ void* MmapArena::allocate(size_t size, size_t alignment) {
 
     void* ptr = static_cast<char*>(pool_base) + aligned_offset;
 
-    VLOG(2) << "[ARENA] Allocated: size=" << size
+    LOG_INFO << "[ARENA] Allocated: size=" << size
             << ", aligned_size=" << aligned_size
             << ", aligned_offset=" << aligned_offset << ", ptr=" << ptr
             << ", utilization=" << (100.0 * next / pool_size) << "%";

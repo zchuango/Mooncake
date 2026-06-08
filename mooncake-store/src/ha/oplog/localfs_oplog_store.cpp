@@ -1,6 +1,7 @@
 #include "ha/oplog/localfs_oplog_store.h"
+#include "log_macros.h"
 
-#include <glog/logging.h>
+
 
 #include <algorithm>
 #include <cstring>
@@ -31,7 +32,7 @@ LocalFsOpLogStore::LocalFsOpLogStore(const std::string& cluster_id,
       enable_batch_write_(enable_batch_write),
       poll_interval_ms_(poll_interval_ms) {
     if (!NormalizeAndValidateClusterId(cluster_id_)) {
-        LOG(FATAL) << "Invalid cluster_id for LocalFsOpLogStore: '"
+        LOG_FATAL << "Invalid cluster_id for LocalFsOpLogStore: '"
                    << cluster_id
                    << "'. Allowed chars: [A-Za-z0-9_.-], max_len=128.";
     }
@@ -63,7 +64,7 @@ ErrorCode LocalFsOpLogStore::Init() {
     try {
         fs::create_directories(SegmentsDir());
     } catch (const fs::filesystem_error& e) {
-        LOG(ERROR) << "LocalFsOpLogStore::Init: failed to create directories: "
+        LOG_ERROR << "LocalFsOpLogStore::Init: failed to create directories: "
                    << e.what();
         return ErrorCode::INTERNAL_ERROR;
     }
@@ -76,7 +77,7 @@ ErrorCode LocalFsOpLogStore::Init() {
         if (!fs::exists(latest_path)) {
             auto err = AtomicWriteFile(latest_path, "0");
             if (err != ErrorCode::OK) {
-                LOG(ERROR) << "LocalFsOpLogStore::Init: failed to create "
+                LOG_ERROR << "LocalFsOpLogStore::Init: failed to create "
                               "latest file";
                 return err;
             }
@@ -84,7 +85,7 @@ ErrorCode LocalFsOpLogStore::Init() {
 
         auto recover_err = RecoverPersistedState();
         if (recover_err != ErrorCode::OK) {
-            LOG(ERROR) << "LocalFsOpLogStore::Init: failed to recover "
+            LOG_ERROR << "LocalFsOpLogStore::Init: failed to recover "
                           "persisted state";
             return recover_err;
         }
@@ -140,7 +141,7 @@ ErrorCode LocalFsOpLogStore::AtomicWriteFile(const std::string& target_path,
     std::string tmp_path = target_path + ".tmp";
     int fd = ::open(tmp_path.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0644);
     if (fd < 0) {
-        LOG(ERROR) << "AtomicWriteFile: open failed: " << tmp_path
+        LOG_ERROR << "AtomicWriteFile: open failed: " << tmp_path
                    << ", errno=" << errno;
         return ErrorCode::INTERNAL_ERROR;
     }
@@ -151,7 +152,7 @@ ErrorCode LocalFsOpLogStore::AtomicWriteFile(const std::string& target_path,
         ssize_t written = ::write(fd, ptr, remaining);
         if (written < 0) {
             if (errno == EINTR) continue;
-            LOG(ERROR) << "AtomicWriteFile: write failed: " << tmp_path
+            LOG_ERROR << "AtomicWriteFile: write failed: " << tmp_path
                        << ", errno=" << errno;
             ::close(fd);
             ::unlink(tmp_path.c_str());
@@ -162,7 +163,7 @@ ErrorCode LocalFsOpLogStore::AtomicWriteFile(const std::string& target_path,
     }
 
     if (::fsync(fd) != 0) {
-        LOG(ERROR) << "AtomicWriteFile: fsync failed: " << tmp_path
+        LOG_ERROR << "AtomicWriteFile: fsync failed: " << tmp_path
                    << ", errno=" << errno;
         ::close(fd);
         ::unlink(tmp_path.c_str());
@@ -171,7 +172,7 @@ ErrorCode LocalFsOpLogStore::AtomicWriteFile(const std::string& target_path,
     ::close(fd);
 
     if (::rename(tmp_path.c_str(), target_path.c_str()) != 0) {
-        LOG(ERROR) << "AtomicWriteFile: rename failed: " << tmp_path << " -> "
+        LOG_ERROR << "AtomicWriteFile: rename failed: " << tmp_path << " -> "
                    << target_path << ", errno=" << errno;
         ::unlink(tmp_path.c_str());
         return ErrorCode::INTERNAL_ERROR;
@@ -201,12 +202,12 @@ void LocalFsOpLogStore::CleanupTempFiles() {
             for (auto& entry : fs::directory_iterator(dir)) {
                 if (entry.path().extension() == ".tmp") {
                     fs::remove(entry.path());
-                    LOG(INFO) << "Cleaned up temp file: " << entry.path();
+                    LOG_INFO << "Cleaned up temp file: " << entry.path();
                 }
             }
         }
     } catch (const fs::filesystem_error& e) {
-        LOG(WARNING) << "CleanupTempFiles: " << e.what();
+        LOG_WARNING << "CleanupTempFiles: " << e.what();
     }
 }
 
@@ -225,7 +226,7 @@ ErrorCode LocalFsOpLogStore::ReadUint64FromFile(const std::string& filepath,
     try {
         value = std::stoull(content);
     } catch (...) {
-        LOG(ERROR) << "ReadUint64FromFile: invalid content in " << filepath
+        LOG_ERROR << "ReadUint64FromFile: invalid content in " << filepath
                    << ": " << content;
         return ErrorCode::INTERNAL_ERROR;
     }
@@ -279,7 +280,7 @@ std::vector<LocalFsOpLogStore::SegmentInfo> LocalFsOpLogStore::ListSegments()
             }
         }
     } catch (const fs::filesystem_error& e) {
-        LOG(WARNING) << "ListSegments: " << e.what();
+        LOG_WARNING << "ListSegments: " << e.what();
     }
 
     // Sort by min_seq
@@ -311,7 +312,7 @@ ErrorCode LocalFsOpLogStore::NormalizeBatchEntries(
         }
 
         if (normalized.back().serialized_value != entry.serialized_value) {
-            LOG(ERROR) << "NormalizeBatchEntries: fencing violation for seq="
+            LOG_ERROR << "NormalizeBatchEntries: fencing violation for seq="
                        << entry.sequence_id << " inside pending batch";
             return ErrorCode::INTERNAL_ERROR;
         }
@@ -329,7 +330,7 @@ ErrorCode LocalFsOpLogStore::VerifyPersistedEntryMatches(
     ErrorCode err = ReadOpLog(sequence_id, existing_entry);
     if (err != ErrorCode::OK) {
         if (err != ErrorCode::OPLOG_ENTRY_NOT_FOUND) {
-            LOG(ERROR) << "VerifyPersistedEntryMatches: seq=" << sequence_id
+            LOG_ERROR << "VerifyPersistedEntryMatches: seq=" << sequence_id
                        << " marked persisted but read failed, err="
                        << static_cast<int>(err);
         }
@@ -337,7 +338,7 @@ ErrorCode LocalFsOpLogStore::VerifyPersistedEntryMatches(
     }
 
     if (SerializeOpLogEntry(existing_entry) != serialized_value) {
-        LOG(ERROR) << "VerifyPersistedEntryMatches: fencing violation for "
+        LOG_ERROR << "VerifyPersistedEntryMatches: fencing violation for "
                    << "persisted seq=" << sequence_id;
         return ErrorCode::INTERNAL_ERROR;
     }
@@ -353,7 +354,7 @@ ErrorCode LocalFsOpLogStore::RecoverPersistedState() {
         return UpdateLatestSequenceId(0);
     }
     if (err != ErrorCode::OK) {
-        LOG(ERROR) << "RecoverPersistedState: failed to inspect segments, err="
+        LOG_ERROR << "RecoverPersistedState: failed to inspect segments, err="
                    << static_cast<int>(err);
         return err;
     }
@@ -365,7 +366,7 @@ ErrorCode LocalFsOpLogStore::RecoverPersistedState() {
     if (latest_err != ErrorCode::OK || latest_seq != max_seq) {
         ErrorCode update_err = UpdateLatestSequenceId(max_seq);
         if (update_err != ErrorCode::OK) {
-            LOG(ERROR) << "RecoverPersistedState: failed to refresh latest "
+            LOG_ERROR << "RecoverPersistedState: failed to refresh latest "
                           "file to seq="
                        << max_seq;
             return update_err;
@@ -422,23 +423,23 @@ ErrorCode LocalFsOpLogStore::ReadSegmentHeader(const std::string& filepath,
                                                SegmentHeader& header) {
     std::ifstream f(filepath, std::ios::binary);
     if (!f) {
-        LOG(ERROR) << "ReadSegmentHeader: cannot open " << filepath;
+        LOG_ERROR << "ReadSegmentHeader: cannot open " << filepath;
         return ErrorCode::INTERNAL_ERROR;
     }
 
     f.read(reinterpret_cast<char*>(&header), sizeof(header));
     if (!f || static_cast<size_t>(f.gcount()) < sizeof(header)) {
-        LOG(ERROR) << "ReadSegmentHeader: truncated header in " << filepath;
+        LOG_ERROR << "ReadSegmentHeader: truncated header in " << filepath;
         return ErrorCode::INTERNAL_ERROR;
     }
 
     if (std::memcmp(header.magic, kSegmentMagic, 4) != 0) {
-        LOG(ERROR) << "ReadSegmentHeader: bad magic in " << filepath;
+        LOG_ERROR << "ReadSegmentHeader: bad magic in " << filepath;
         return ErrorCode::INTERNAL_ERROR;
     }
 
     if (header.version != kSegmentVersion) {
-        LOG(ERROR) << "ReadSegmentHeader: unsupported version "
+        LOG_ERROR << "ReadSegmentHeader: unsupported version "
                    << header.version << " in " << filepath;
         return ErrorCode::INTERNAL_ERROR;
     }
@@ -455,7 +456,7 @@ ErrorCode LocalFsOpLogStore::ReadSegmentEntries(
     // Re-open and skip past header to read entries
     std::ifstream f(filepath, std::ios::binary);
     if (!f) {
-        LOG(ERROR) << "ReadSegmentEntries: cannot open " << filepath;
+        LOG_ERROR << "ReadSegmentEntries: cannot open " << filepath;
         return ErrorCode::INTERNAL_ERROR;
     }
     f.seekg(sizeof(SegmentHeader));
@@ -464,7 +465,7 @@ ErrorCode LocalFsOpLogStore::ReadSegmentEntries(
         uint32_t len = 0;
         f.read(reinterpret_cast<char*>(&len), sizeof(len));
         if (!f) {
-            LOG(ERROR) << "ReadSegmentEntries: truncated entry length at "
+            LOG_ERROR << "ReadSegmentEntries: truncated entry length at "
                        << "entry " << i << " in " << filepath;
             return ErrorCode::INTERNAL_ERROR;
         }
@@ -472,14 +473,14 @@ ErrorCode LocalFsOpLogStore::ReadSegmentEntries(
         std::string buf(len, '\0');
         f.read(buf.data(), len);
         if (!f) {
-            LOG(ERROR) << "ReadSegmentEntries: truncated entry data at "
+            LOG_ERROR << "ReadSegmentEntries: truncated entry data at "
                        << "entry " << i << " in " << filepath;
             return ErrorCode::INTERNAL_ERROR;
         }
 
         OpLogEntry entry;
         if (!DeserializeOpLogEntry(buf, entry)) {
-            LOG(ERROR) << "ReadSegmentEntries: failed to deserialize entry "
+            LOG_ERROR << "ReadSegmentEntries: failed to deserialize entry "
                        << i << " in " << filepath;
             return ErrorCode::INTERNAL_ERROR;
         }
@@ -495,12 +496,12 @@ ErrorCode LocalFsOpLogStore::ReadSegmentEntries(
 
 ErrorCode LocalFsOpLogStore::WriteOpLog(const OpLogEntry& entry, bool sync) {
     if (!enable_batch_write_) {
-        LOG(ERROR) << "WriteOpLog called on READER instance";
+        LOG_ERROR << "WriteOpLog called on READER instance";
         return ErrorCode::INVALID_PARAMS;
     }
 
     if (!batch_write_running_.load()) {
-        LOG(ERROR) << "WriteOpLog called after shutdown";
+        LOG_ERROR << "WriteOpLog called after shutdown";
         return ErrorCode::INTERNAL_ERROR;
     }
 
@@ -542,7 +543,7 @@ ErrorCode LocalFsOpLogStore::WriteOpLog(const OpLogEntry& entry, bool sync) {
                                                    serialized) == ErrorCode::OK;
             });
         if (!flushed) {
-            LOG(ERROR) << "WriteOpLog sync wait timed out for seq="
+            LOG_ERROR << "WriteOpLog sync wait timed out for seq="
                        << entry.sequence_id;
             return ErrorCode::INTERNAL_ERROR;
         }
@@ -580,7 +581,7 @@ void LocalFsOpLogStore::FlushBatch() {
         std::make_move_iterator(batch_to_write.end()));
     ErrorCode normalize_err = NormalizeBatchEntries(entries);
     if (normalize_err != ErrorCode::OK) {
-        LOG(ERROR) << "FlushBatch: invalid duplicate sequence detected in "
+        LOG_ERROR << "FlushBatch: invalid duplicate sequence detected in "
                       "pending batch";
         cv_sync_completed_.notify_all();
         return;
@@ -591,7 +592,7 @@ void LocalFsOpLogStore::FlushBatch() {
     for (int retry = 0; retry < kFlushRetryCount; ++retry) {
         err = WriteSegmentFile(entries);
         if (err == ErrorCode::OK) break;
-        LOG(WARNING) << "FlushBatch: WriteSegmentFile failed, retry "
+        LOG_WARNING << "FlushBatch: WriteSegmentFile failed, retry "
                      << (retry + 1) << "/" << kFlushRetryCount;
         if (retry + 1 < kFlushRetryCount) {
             std::this_thread::sleep_for(
@@ -600,7 +601,7 @@ void LocalFsOpLogStore::FlushBatch() {
     }
 
     if (err != ErrorCode::OK) {
-        LOG(ERROR) << "FlushBatch: all retries failed, " << entries.size()
+        LOG_ERROR << "FlushBatch: all retries failed, " << entries.size()
                    << " entries lost (seq " << entries.front().sequence_id
                    << " - " << entries.back().sequence_id << ")";
         // Notify sync waiters so they don't block forever
@@ -674,7 +675,7 @@ ErrorCode LocalFsOpLogStore::ReadOpLogSince(uint64_t start_sequence_id,
         std::vector<OpLogEntry> seg_entries;
         auto err = ReadSegmentEntries(filepath, seg_entries);
         if (err != ErrorCode::OK) {
-            LOG(ERROR) << "ReadOpLogSince: corrupted segment " << it->filename
+            LOG_ERROR << "ReadOpLogSince: corrupted segment " << it->filename
                        << ", aborting read to prevent oplog gaps";
             return err;
         }
@@ -732,7 +733,7 @@ ErrorCode LocalFsOpLogStore::RecordSnapshotSequenceId(
     try {
         fs::create_directories(SnapshotsDir());
     } catch (const fs::filesystem_error& e) {
-        LOG(ERROR) << "RecordSnapshotSequenceId: failed to create dir: "
+        LOG_ERROR << "RecordSnapshotSequenceId: failed to create dir: "
                    << e.what();
         return ErrorCode::INTERNAL_ERROR;
     }
@@ -767,7 +768,7 @@ ErrorCode LocalFsOpLogStore::CleanupOpLogBefore(uint64_t before_sequence_id) {
             try {
                 fs::remove(filepath);
             } catch (const fs::filesystem_error& e) {
-                LOG(WARNING) << "CleanupOpLogBefore: failed to remove "
+                LOG_WARNING << "CleanupOpLogBefore: failed to remove "
                              << filepath << ": " << e.what();
             }
         }

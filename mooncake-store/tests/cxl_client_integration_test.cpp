@@ -1,5 +1,6 @@
 #include <gflags/gflags.h>
-#include <glog/logging.h>
+#include "log_macros.h"
+
 #include <gtest/gtest.h>
 
 #include <cstdint>
@@ -53,10 +54,10 @@ UUID ParseClientId(const std::string& client_id_str) {
             client_id.first = std::stoull(client_id_str.substr(0, dash_pos));
             client_id.second = std::stoull(client_id_str.substr(dash_pos + 1));
         } catch (const std::exception& e) {
-            LOG(ERROR) << "Failed to parse client_id: " << e.what();
+            LOG_ERROR << "Failed to parse client_id: " << e.what();
         }
     } else {
-        LOG(ERROR) << "Invalid client_id format. Expected format: first-second";
+        LOG_ERROR << "Invalid client_id format. Expected format: first-second";
     }
     return client_id;
 }
@@ -130,7 +131,7 @@ class ClientIntegrationTestCxl : public ::testing::Test {
         } else {
             default_kv_lease_ttl_ = FLAGS_default_kv_lease_ttl;
         }
-        LOG(INFO) << "Default KV lease TTL: " << default_kv_lease_ttl_;
+        LOG_INFO << "Default KV lease TTL: " << default_kv_lease_ttl_;
 
         // Start in-proc master
         InProcMasterConfig config = InProcMasterConfigBuilder()
@@ -143,7 +144,7 @@ class ClientIntegrationTestCxl : public ::testing::Test {
 
         ASSERT_TRUE(master_.Start(config)) << "Failed to start InProcMaster!";
         master_address_ = master_.master_address();
-        LOG(INFO) << "Started in-proc master at " << master_address_;
+        LOG_INFO << "Started in-proc master at " << master_address_;
         InitializeClients();
         InitializeSegment();
     }
@@ -175,7 +176,7 @@ class ClientIntegrationTestCxl : public ::testing::Test {
             if (end != env_cxl_size && *end == '\0')
                 cxl_dev_size = static_cast<size_t>(val);
         } else {
-            LOG(FATAL) << "MC_CXL_DEV_SIZE environment variable not set "
+            LOG_FATAL << "MC_CXL_DEV_SIZE environment variable not set "
                           "(required for CXL protocol)";
             return;
         }
@@ -183,16 +184,16 @@ class ClientIntegrationTestCxl : public ::testing::Test {
         test_client_segment_ptr_ = test_client_->GetBaseAddr();
 
         LOG_ASSERT(test_client_segment_ptr_);
-        LOG(INFO) << "test_client_segment_ptr_: " << test_client_segment_ptr_;
+        LOG_INFO << "test_client_segment_ptr_: " << test_client_segment_ptr_;
 
         auto test_client_mount_result = test_client_->MountSegment(
             test_client_segment_ptr_, test_client_ram_buffer_size_,
             FLAGS_protocol);
         if (!test_client_mount_result.has_value()) {
-            LOG(ERROR) << "Failed to mount CXL segment for test_client_: "
+            LOG_ERROR << "Failed to mount CXL segment for test_client_: "
                        << toString(test_client_mount_result.error());
         }
-        LOG(INFO) << "Test client CXL segment mounted successfully";
+        LOG_INFO << "Test client CXL segment mounted successfully";
     }
 
     static void InitializeClients() {
@@ -213,7 +214,7 @@ class ClientIntegrationTestCxl : public ::testing::Test {
                 ParseClientId(test_client_sink->captured_client_id);
             if (extracted_id.first != 0 || extracted_id.second != 0) {
                 test_client_id_ = extracted_id;
-                LOG(INFO) << "Captured test_client_id: "
+                LOG_INFO << "Captured test_client_id: "
                           << FormatClientId(test_client_id_);
             }
         }
@@ -233,7 +234,7 @@ class ClientIntegrationTestCxl : public ::testing::Test {
                      ->UnmountSegment(test_client_segment_ptr_,
                                       test_client_ram_buffer_size_)
                      .has_value()) {
-                LOG(ERROR) << "Failed to unmount test client CXL segment";
+                LOG_ERROR << "Failed to unmount test client CXL segment";
             }
         }
     }
@@ -346,7 +347,7 @@ TEST_F(ClientIntegrationTestCxl, BatchPutGetOperations) {
         ASSERT_TRUE(result.has_value()) << "BatchPut operation failed";
     }
     auto end = std::chrono::high_resolution_clock::now();
-    LOG(INFO) << "Time taken for BatchPut: "
+    LOG_INFO << "Time taken for BatchPut: "
               << std::chrono::duration_cast<std::chrono::microseconds>(end -
                                                                        start)
                      .count()
@@ -365,7 +366,7 @@ TEST_F(ClientIntegrationTestCxl, BatchPutGetOperations) {
                                              test_data_list[i].size());
     }
     end = std::chrono::high_resolution_clock::now();
-    LOG(INFO) << "Time taken for single Get: "
+    LOG_INFO << "Time taken for single Get: "
               << std::chrono::duration_cast<std::chrono::microseconds>(end -
                                                                        start)
                      .count()
@@ -387,7 +388,7 @@ TEST_F(ClientIntegrationTestCxl, BatchPutGetOperations) {
         ASSERT_TRUE(result.has_value()) << "BatchGet operation failed";
     }
     end = std::chrono::high_resolution_clock::now();
-    LOG(INFO) << "Time taken for BatchGet: "
+    LOG_INFO << "Time taken for BatchGet: "
               << std::chrono::duration_cast<std::chrono::microseconds>(end -
                                                                        start)
                      .count()
@@ -434,16 +435,16 @@ TEST_F(ClientIntegrationTestCxl, EvictOperation) {
         test_put_size += test_data_size;
 
         if (i % 100 == 0) {
-            LOG(INFO) << "put count=" << i + 1
+            LOG_INFO << "put count=" << i + 1
                       << ", total_put_size=" << test_put_size / 1048576 << "MB";
             std::this_thread::sleep_for(std::chrono::milliseconds(200));
         }
         if (test_put_size >= test_total_size) {
-            LOG(INFO) << "stop";
+            LOG_INFO << "stop";
             break;
         }
     }
-    LOG(INFO) << "Test finished, put_data=" << test_put_size / 1048576 << "MB";
+    LOG_INFO << "Test finished, put_data=" << test_put_size / 1048576 << "MB";
 
     // Verify that some keys were actually evicted.
     std::this_thread::sleep_for(std::chrono::seconds(5));
@@ -454,7 +455,7 @@ TEST_F(ClientIntegrationTestCxl, EvictOperation) {
 
         if (!exist_result.value()) {
             evict_worked = true;
-            LOG(INFO) << "Key " << key << " was evicted.";
+            LOG_INFO << "Key " << key << " was evicted.";
             break;
         }
     }

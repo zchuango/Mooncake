@@ -1,5 +1,6 @@
 #include <gflags/gflags.h>
-#include <glog/logging.h>
+#include "log_macros.h"
+
 #include <gtest/gtest.h>
 #include <unistd.h>
 
@@ -65,11 +66,11 @@ class ChaosRandTest : public ::testing::Test {
 
         FLAGS_logtostderr = 1;
 
-        LOG(INFO) << "Protocol: " << FLAGS_protocol
+        LOG_INFO << "Protocol: " << FLAGS_protocol
                   << ", Device name: " << FLAGS_device_name
                   << ", Metadata URL: " << FLAGS_engine_meta_url;
 
-        LOG(INFO) << "Random seed: " << FLAGS_rand_seed;
+        LOG_INFO << "Random seed: " << FLAGS_rand_seed;
         srand(FLAGS_rand_seed);
 
         auto backend_type = ParseConfiguredHABackendType();

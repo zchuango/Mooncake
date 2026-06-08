@@ -17,6 +17,7 @@
 #define ASCEND_DIRECT_UTIL_H
 
 #include <atomic>
+#include "log_macros.h"
 #include <condition_variable>
 #include <functional>
 #include <mutex>
@@ -33,7 +34,7 @@ namespace mooncake {
     do {                                                      \
         auto err = (call);                                    \
         if (err != ACL_ERROR_NONE) {                          \
-            LOG(ERROR) << "Call acl failed, "                 \
+            LOG_ERROR << "Call acl failed, "                 \
                        << "detail: " << aclGetRecentErrMsg(); \
             return -1;                                        \
         }                                                     \

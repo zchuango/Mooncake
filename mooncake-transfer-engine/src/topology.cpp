@@ -12,9 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <glog/logging.h>
+
 
 #include <fstream>
+#include "log_macros.h"
 #include <iostream>
 #include <map>
 #include <set>
@@ -48,20 +49,20 @@ static bool isIbDeviceAccessible(struct ibv_device *device) {
              device->dev_name);
 
     if (stat(device_path, &st) != 0) {
-        LOG(WARNING) << "Device " << ibv_get_device_name(device) << " path "
+        LOG_WARNING << "Device " << ibv_get_device_name(device) << " path "
                      << device_path << " does not exist";
         return false;
     }
 
     if (!S_ISCHR(st.st_mode)) {
-        LOG(WARNING) << "Device path " << device_path
+        LOG_WARNING << "Device path " << device_path
                      << " is not a character device (mode: " << std::oct
                      << st.st_mode << std::dec << ")";
         return false;
     }
 
     if (access(device_path, R_OK | W_OK) != 0) {
-        LOG(WARNING) << "Device " << device_path
+        LOG_WARNING << "Device " << device_path
                      << " is not accessible for read/write";
         return false;
     }
@@ -75,19 +76,19 @@ static bool checkIbDevicePort(struct ibv_context *context,
     struct ibv_port_attr port_attr;
 
     if (ibv_query_port(context, port_num, &port_attr) != 0) {
-        PLOG(WARNING) << "Failed to query port " << static_cast<int>(port_num)
+        PLOG_WARNING << "Failed to query port " << static_cast<int>(port_num)
                       << " on " << device_name;
         return false;
     }
 
     if (port_attr.gid_tbl_len == 0) {
-        LOG(WARNING) << device_name << ":" << static_cast<int>(port_num)
+        LOG_WARNING << device_name << ":" << static_cast<int>(port_num)
                      << " has no GID table entries";
         return false;
     }
 
     if (port_attr.state != IBV_PORT_ACTIVE) {
-        LOG(INFO) << device_name << ":" << static_cast<int>(port_num)
+        LOG_INFO << device_name << ":" << static_cast<int>(port_num)
                   << " is not active (state: "
                   << static_cast<int>(port_attr.state) << ")";
         return false;
@@ -105,13 +106,13 @@ static bool isIbDeviceAvailable(struct ibv_device *device) {
 
     struct ibv_context *context = ibv_open_device(device);
     if (!context) {
-        PLOG(WARNING) << "Failed to open device " << device_name;
+        PLOG_WARNING << "Failed to open device " << device_name;
         return false;
     }
 
     struct ibv_device_attr device_attr;
     if (ibv_query_device(context, &device_attr) != 0) {
-        PLOG(WARNING) << "Failed to query device attributes for "
+        PLOG_WARNING << "Failed to query device attributes for "
                       << device_name;
         ibv_close_device(context);
         return false;
@@ -121,7 +122,7 @@ static bool isIbDeviceAvailable(struct ibv_device *device) {
     for (uint8_t port = 1; port <= device_attr.phys_port_cnt; ++port) {
         if (checkIbDevicePort(context, device_name, port)) {
             has_active_port = true;
-            LOG(INFO) << "Device " << device_name << " port "
+            LOG_INFO << "Device " << device_name << " port "
                       << static_cast<int>(port) << " is available";
         }
     }
@@ -129,7 +130,7 @@ static bool isIbDeviceAvailable(struct ibv_device *device) {
     ibv_close_device(context);
 
     if (!has_active_port) {
-        LOG(WARNING) << "Device " << device_name
+        LOG_WARNING << "Device " << device_name
                      << " has no active ports, skipping";
     }
 
@@ -149,11 +150,11 @@ static std::vector<InfinibandDevice> listInfiniBandDevices(
 
     struct ibv_device **device_list = ibv_get_device_list(&num_devices);
     if (!device_list) {
-        LOG(WARNING) << "No RDMA devices found, check your device installation";
+        LOG_WARNING << "No RDMA devices found, check your device installation";
         return {};
     }
     if (device_list && num_devices <= 0) {
-        LOG(WARNING) << "No RDMA devices found, check your device installation";
+        LOG_WARNING << "No RDMA devices found, check your device installation";
         ibv_free_device_list(device_list);
         return {};
     }
@@ -166,7 +167,7 @@ static std::vector<InfinibandDevice> listInfiniBandDevices(
 
         // Check device availability before adding to the list
         if (!isIbDeviceAvailable(device_list[i])) {
-            LOG(WARNING) << "Skipping unavailable device: " << device_name;
+            LOG_WARNING << "Skipping unavailable device: " << device_name;
             continue;
         }
 
@@ -178,7 +179,7 @@ static std::vector<InfinibandDevice> listInfiniBandDevices(
         snprintf(path, sizeof(path), "/sys/class/infiniband/%s/../..",
                  device_name.c_str());
         if (realpath(path, resolved_path) == NULL) {
-            PLOG(ERROR) << "listInfiniBandDevices: realpath " << path
+            PLOG_ERROR << "listInfiniBandDevices: realpath " << path
                         << " failed";
             continue;
         }
@@ -210,18 +211,18 @@ static std::vector<UBDevice> listUBDevices(
 
     urma_init_attr_t init_attr = {};
     if (urma_init(&init_attr) != URMA_SUCCESS) {
-        LOG(WARNING) << "Failed to urma init";
+        LOG_WARNING << "Failed to urma init";
         return {};
     }
-    LOG(INFO) << "URMA module init success";
+    LOG_INFO << "URMA module init success";
     urma_device_t **device_list = urma_get_device_list(&num_devices);
     if (!device_list) {
-        LOG(WARNING) << "No UB devices found, check your device installation";
+        LOG_WARNING << "No UB devices found, check your device installation";
         urma_uninit();
         return {};
     }
     if (device_list && num_devices <= 0) {
-        LOG(WARNING) << "No UB devices found, check your device installation";
+        LOG_WARNING << "No UB devices found, check your device installation";
         urma_free_device_list(device_list);
         return {};
     }
@@ -236,21 +237,21 @@ static std::vector<UBDevice> listUBDevices(
         // Get the PCI bus id for the infiniband device. Note that
         snprintf(path, sizeof(path), "/sys/class/ubcore/%s",
                  device_list[i]->name);
-        LOG(INFO) << "listUBDevices: path " << path;
+        LOG_INFO << "listUBDevices: path " << path;
         if (realpath(path, resolved_path) == NULL) {
-            LOG(ERROR) << "listUBDevices: realpath " << resolved_path
+            LOG_ERROR << "listUBDevices: realpath " << resolved_path
                        << " failed";
             continue;
         }
-        LOG(INFO) << "listUBDevices: realpath " << resolved_path;
+        LOG_INFO << "listUBDevices: realpath " << resolved_path;
         std::string pci_bus_id = basename(resolved_path);
 
         int numa_node = -1;
         snprintf(path, sizeof(path), "%s/numa",
                  dirname(dirname(resolved_path)));
-        LOG(INFO) << "listUBDevices: numanodepath " << path;
+        LOG_INFO << "listUBDevices: numanodepath " << path;
         std::ifstream(path) >> numa_node;
-        LOG(INFO) << "UBDevices : performation node ----"
+        LOG_INFO << "UBDevices : performation node ----"
                   << device_list[i]->name << " : " << numa_node;
 
         devices.push_back(UBDevice{.name = std::move(device_name),
@@ -269,7 +270,7 @@ static std::vector<TopologyEntry> discoverCpuTopology(
     std::vector<TopologyEntry> topology;
 
     if (dir == NULL) {
-        PLOG(WARNING)
+        PLOG_WARNING
             << "discoverCpuTopology: open /sys/devices/system/node failed";
         return {};
     }
@@ -307,7 +308,7 @@ static std::vector<TopologyEntry> discoverCpuTopology(
     std::vector<TopologyEntry> topology;
 
     if (dir == NULL) {
-        PLOG(WARNING)
+        PLOG_WARNING
             << "discoverCpuTopology: open /sys/devices/system/node failed";
         return {};
     }
@@ -509,7 +510,7 @@ int Topology::parse(const std::string &topology_json) {
     if (!reader->parse(topology_json.data(),
                        topology_json.data() + topology_json.size(), &root,
                        &errs)) {
-        LOG(ERROR) << "Topology::parse: JSON parse error: " << errs;
+        LOG_ERROR << "Topology::parse: JSON parse error: " << errs;
         return ERR_MALFORMED_JSON;
     }
 

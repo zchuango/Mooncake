@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include "transfer_engine_impl.h"
+#include "log_macros.h"
 
 #include <algorithm>
 #include <cctype>
@@ -46,7 +47,7 @@ bool overlapWithRegion(uintptr_t addr, uint64_t length, void* region_addr,
 static bool setFilesLimit() {
     struct rlimit filesLimit;
     if (getrlimit(RLIMIT_NOFILE, &filesLimit) != 0) {
-        LOG(ERROR) << "getrlimit failed: " << strerror(errno);
+        LOG_ERROR << "getrlimit failed: " << strerror(errno);
         return false;
     }
     rlim_t target_limit = filesLimit.rlim_max;
@@ -56,7 +57,7 @@ static bool setFilesLimit() {
     }
     filesLimit.rlim_cur = target_limit;
     if (setrlimit(RLIMIT_NOFILE, &filesLimit) != 0) {
-        LOG(ERROR) << "setrlimit failed: " << strerror(errno);
+        LOG_ERROR << "setrlimit failed: " << strerror(errno);
         return false;
     }
     return true;
@@ -82,7 +83,7 @@ int TransferEngineImpl::init(const std::string& metadata_conn_string,
     std::string rpc_binding_method;
 
     if (!setFilesLimit()) {
-        LOG(WARNING) << "Failed to set file descriptor limit. Continuing "
+        LOG_WARNING << "Failed to set file descriptor limit. Continuing "
                         "initialization, but this may cause issues if too many "
                         "files are opened.";
     }
@@ -106,13 +107,13 @@ int TransferEngineImpl::init(const std::string& metadata_conn_string,
     int devicePhyId = -1;
     auto [host_name, port] =
         parseHostNameWithPortAscend(local_server_name, &devicePhyId);
-    LOG(INFO) << "Transfer Engine parseHostNameWithPortAscend. server_name: "
+    LOG_INFO << "Transfer Engine parseHostNameWithPortAscend. server_name: "
               << host_name << " port: " << port
               << " devicePhyId: " << devicePhyId;
     local_server_name_ = host_name + ":" + std::to_string(port);
 #else
     auto [host_name, port] = parseHostNameWithPort(local_server_name);
-    LOG(INFO) << "Transfer Engine parseHostNameWithPort. server_name: "
+    LOG_INFO << "Transfer Engine parseHostNameWithPort. server_name: "
               << host_name << " port: " << port;
     local_server_name_ = local_server_name;
 #endif
@@ -128,7 +129,7 @@ int TransferEngineImpl::init(const std::string& metadata_conn_string,
             int tmp_fd = -1;
             desc.barex_port = findAvailableTcpPort(tmp_fd, true);
             if (desc.barex_port == 0) {
-                LOG(ERROR)
+                LOG_ERROR
                     << "Barex: No valid port found for local barex service.";
                 return -1;
             }
@@ -140,7 +141,7 @@ int TransferEngineImpl::init(const std::string& metadata_conn_string,
             rpc_binding_method = "P2P handshake";
             desc.rpc_port = findAvailableTcpPort(desc.sockfd);
             if (desc.rpc_port == 0) {
-                LOG(ERROR) << "P2P: No valid port found for local TCP service.";
+                LOG_ERROR << "P2P: No valid port found for local TCP service.";
                 return -1;
             }
 #if defined(USE_ASCEND)
@@ -162,7 +163,7 @@ int TransferEngineImpl::init(const std::string& metadata_conn_string,
         else {
             auto ip_list = findLocalIpAddresses();
             if (ip_list.empty()) {
-                LOG(ERROR) << "not valid LAN address found";
+                LOG_ERROR << "not valid LAN address found";
                 return -1;
             } else {
                 desc.ip_or_host_name = ip_list[0];
@@ -174,12 +175,12 @@ int TransferEngineImpl::init(const std::string& metadata_conn_string,
         (void)(rpc_port);
         desc.rpc_port = findAvailableTcpPort(desc.sockfd);
         if (desc.rpc_port == 0) {
-            LOG(ERROR) << "not valid port for serving local TCP service";
+            LOG_ERROR << "not valid port for serving local TCP service";
             return -1;
         }
     }
 
-    LOG(INFO) << "Transfer Engine RPC using " << rpc_binding_method
+    LOG_INFO << "Transfer Engine RPC using " << rpc_binding_method
               << ", listening on " << desc.ip_or_host_name << ":"
               << desc.rpc_port
 #ifdef USE_BAREX
@@ -206,7 +207,7 @@ int TransferEngineImpl::init(const std::string& metadata_conn_string,
     Transport* ascend_transport =
         multi_transports_->installTransport("ascend", local_topology_);
     if (!ascend_transport) {
-        LOG(ERROR) << "Failed to install Ascend transport";
+        LOG_ERROR << "Failed to install Ascend transport";
         return -1;
     }
 #else
@@ -215,7 +216,7 @@ int TransferEngineImpl::init(const std::string& metadata_conn_string,
     Transport* ubshmem_transport =
         multi_transports_->installTransport("ubshmem", local_topology_);
     if (!ubshmem_transport) {
-        LOG(ERROR) << "Failed to install UBShmem transport";
+        LOG_ERROR << "Failed to install UBShmem transport";
         return -1;
     }
     auto_discover_ = false;
@@ -227,36 +228,36 @@ int TransferEngineImpl::init(const std::string& metadata_conn_string,
         Transport* cxl_transport =
             multi_transports_->installTransport("cxl", local_topology_);
         if (!cxl_transport) {
-            LOG(ERROR) << "Failed to install CXL transport";
+            LOG_ERROR << "Failed to install CXL transport";
             return -1;
         }
     }
 #endif
 
     if (auto_discover_) {
-        LOG(INFO) << "Auto-discovering topology...";
+        LOG_INFO << "Auto-discovering topology...";
         if (getenv("MC_CUSTOM_TOPO_JSON")) {
             auto path = getenv("MC_CUSTOM_TOPO_JSON");
-            LOG(INFO) << "Using custom topology from: " << path;
+            LOG_INFO << "Using custom topology from: " << path;
             auto topo_json = loadTopologyJsonFile(path);
             if (!topo_json.empty()) {
                 local_topology_->parse(topo_json);
             } else {
-                LOG(WARNING) << "Failed to load custom topology from " << path
+                LOG_WARNING << "Failed to load custom topology from " << path
                              << ", falling back to auto-detect.";
                 local_topology_->discover(filter_);
             }
         } else {
             local_topology_->discover(filter_);
         }
-        LOG(INFO) << "Topology discovery complete. Found "
+        LOG_INFO << "Topology discovery complete. Found "
                   << local_topology_->getHcaList().size() << " HCAs.";
 
 #ifdef USE_UB
         Transport* ub_transport =
             multi_transports_->installTransport("ub", local_topology_);
         if (!ub_transport) {
-            LOG(ERROR) << "Failed to install ub transport";
+            LOG_ERROR << "Failed to install ub transport";
             return -1;
         }
 #endif
@@ -265,17 +266,17 @@ int TransferEngineImpl::init(const std::string& metadata_conn_string,
         Transport* ascend_transport =
             multi_transports_->installTransport("ascend", local_topology_);
         if (!ascend_transport) {
-            LOG(ERROR) << "Failed to install Ascend transport";
+            LOG_ERROR << "Failed to install Ascend transport";
             return -1;
         }
 #elif defined(USE_MACA)
 
         Transport* t = multi_transports_->installTransport("maca", nullptr);
         if (!t) {
-            LOG(ERROR) << "Failed to install MACA transport";
+            LOG_ERROR << "Failed to install MACA transport";
             return -1;
         }
-        LOG(INFO) << "Using MACA transport";
+        LOG_INFO << "Using MACA transport";
 
 #elif defined(USE_MNNVL) || defined(USE_INTRA_NVLINK)
 
@@ -286,28 +287,28 @@ int TransferEngineImpl::init(const std::string& metadata_conn_string,
             Transport* t =
                 multi_transports_->installTransport("nvlink_intra", nullptr);
             if (!t) {
-                LOG(ERROR) << "Failed to install Intra-Node NVLink transport";
+                LOG_ERROR << "Failed to install Intra-Node NVLink transport";
                 return -1;
             }
-            LOG(INFO) << "Using Intra-Node NVLink transport "
+            LOG_INFO << "Using Intra-Node NVLink transport "
                          "(MC_INTRANODE_NVLINK set)";
         } else if (force_mnnvl || local_topology_->getHcaList().empty()) {
             Transport* t =
                 multi_transports_->installTransport("nvlink", nullptr);
             if (!t) {
-                LOG(ERROR) << "Failed to install NVLink transport";
+                LOG_ERROR << "Failed to install NVLink transport";
                 return -1;
             }
-            LOG(INFO) << "Using cross-node NVLink transport "
+            LOG_INFO << "Using cross-node NVLink transport "
                       << "(MC_FORCE_MNNVL or no HCA detected)";
         } else {
             Transport* t =
                 multi_transports_->installTransport("rdma", local_topology_);
             if (!t) {
-                LOG(ERROR) << "Failed to install RDMA transport";
+                LOG_ERROR << "Failed to install RDMA transport";
                 return -1;
             }
-            LOG(INFO) << "Using RDMA transport (RoCE/iWARP)";
+            LOG_INFO << "Using RDMA transport (RoCE/iWARP)";
         }
 
 #else
@@ -321,7 +322,7 @@ int TransferEngineImpl::init(const std::string& metadata_conn_string,
                 rdma_transport = multi_transports_->installTransport(
                     "barex", local_topology_);
 #else
-                LOG(ERROR) << "Set USE BAREX while barex not compiled";
+                LOG_ERROR << "Set USE BAREX while barex not compiled";
                 return -1;
 #endif
             } else {
@@ -329,18 +330,18 @@ int TransferEngineImpl::init(const std::string& metadata_conn_string,
                     "rdma", local_topology_);
             }
             if (rdma_transport == nullptr) {
-                LOG(ERROR) << "Failed to install RDMA transport, type="
+                LOG_ERROR << "Failed to install RDMA transport, type="
                            << (use_barex_ ? "barex" : "rdma");
                 return -1;
             } else {
-                LOG(INFO) << "installTransport, type="
+                LOG_INFO << "installTransport, type="
                           << (use_barex_ ? "barex" : "rdma");
             }
         } else {
             Transport* tcp_transport =
                 multi_transports_->installTransport("tcp", nullptr);
             if (!tcp_transport) {
-                LOG(ERROR) << "Failed to install TCP transport";
+                LOG_ERROR << "Failed to install TCP transport";
                 return -1;
             }
         }
@@ -354,10 +355,10 @@ int TransferEngineImpl::init(const std::string& metadata_conn_string,
             Transport* hip_transport =
                 multi_transports_->installTransport("hip", nullptr);
             if (!hip_transport) {
-                LOG(WARNING) << "Failed to install HIP transport "
+                LOG_WARNING << "Failed to install HIP transport "
                                 "(intra-node GPU P2P unavailable)";
             } else {
-                LOG(INFO) << "HIP transport installed for intra-node GPU P2P";
+                LOG_INFO << "HIP transport installed for intra-node GPU P2P";
             }
         }
 #endif
@@ -380,7 +381,7 @@ Transport* TransferEngineImpl::installTransport(const std::string& proto,
                                                 void** args) {
     Transport* transport = multi_transports_->getTransport(proto);
     if (transport) {
-        LOG(WARNING) << "Transport " << proto << " already installed";
+        LOG_WARNING << "Transport " << proto << " already installed";
         return transport;
     }
 
@@ -388,7 +389,7 @@ Transport* TransferEngineImpl::installTransport(const std::string& proto,
         const std::string nic_priority_matrix = static_cast<char*>(args[0]);
         int ret = local_topology_->parse(nic_priority_matrix);
         if (ret) {
-            LOG(ERROR) << "Failed to parse NIC priority matrix";
+            LOG_ERROR << "Failed to parse NIC priority matrix";
             return nullptr;
         }
     }
@@ -462,12 +463,12 @@ Transport::SegmentHandle TransferEngineImpl::openSegment(
     if (use_barex_) {
         Transport* transport = multi_transports_->getTransport("barex");
         if (!transport) {
-            LOG(ERROR) << "Barex proto not installed";
+            LOG_ERROR << "Barex proto not installed";
             return (Transport::SegmentHandle)-1;
         }
         Status s = transport->OpenChannel(segment_name, sid);
         if (!s.ok()) {
-            LOG(ERROR) << "openSegment, OpenChannel failed";
+            LOG_ERROR << "openSegment, OpenChannel failed";
             return (Transport::SegmentHandle)-1;
         }
     }
@@ -513,12 +514,12 @@ int TransferEngineImpl::registerLocalMemory(void* addr, size_t length,
                                             bool remote_accessible,
                                             bool update_metadata) {
     if (checkOverlap(addr, length)) {
-        LOG(ERROR)
+        LOG_ERROR
             << "Transfer Engine does not support overlapped memory region";
         return ERR_ADDRESS_OVERLAPPED;
     }
     if (length == 0) {
-        LOG(ERROR)
+        LOG_ERROR
             << "Transfer Engine does not support zero length memory region";
         return ERR_INVALID_ARGUMENT;
     }
@@ -555,12 +556,12 @@ int TransferEngineImpl::mp_registerLocalMemory(
     for (const auto& entry : buffer_map) {
         for (const auto& buffer : entry.second) {
             if (checkOverlap(buffer.addr, buffer.length)) {
-                LOG(ERROR) << "Transfer Engine does not support overlapped "
+                LOG_ERROR << "Transfer Engine does not support overlapped "
                               "memory region";
                 return ERR_ADDRESS_OVERLAPPED;
             }
             if (buffer.length == 0) {
-                LOG(ERROR) << "Transfer Engine does not support zero length "
+                LOG_ERROR << "Transfer Engine does not support zero length "
                               "memory region";
                 return ERR_INVALID_ARGUMENT;
             }
@@ -584,7 +585,7 @@ int TransferEngineImpl::mp_registerLocalMemory(
 
         auto transport = multi_transports_->getTransport(protocol);
         if (!transport) {
-            LOG(ERROR) << "Transport " << protocol << " not found";
+            LOG_ERROR << "Transport " << protocol << " not found";
             rollbackAllRegistrations(success_records);
             return -1;
         }
@@ -595,7 +596,7 @@ int TransferEngineImpl::mp_registerLocalMemory(
                 buffer.remote_accessible, buffer.update_metadata);
 
             if (ret < 0) {
-                LOG(ERROR) << "Failed to register memory with transport "
+                LOG_ERROR << "Failed to register memory with transport "
                            << protocol << " addr=" << buffer.addr
                            << " length=" << buffer.length;
 
@@ -626,7 +627,7 @@ int TransferEngineImpl::mp_registerLocalMemory(
 
 void TransferEngineImpl::rollbackAllRegistrations(
     const std::vector<RegisteredRecord>& records) {
-    LOG(INFO) << "Rolling back " << records.size() << " registered regions";
+    LOG_INFO << "Rolling back " << records.size() << " registered regions";
 
     for (const auto& record : records) {
         if (record.transport) {
@@ -644,7 +645,7 @@ int TransferEngineImpl::mp_unregisterLocalMemory(
 
         auto transport = multi_transports_->getTransport(protocol);
         if (!transport) {
-            LOG(ERROR) << "Transport " << protocol << " not found";
+            LOG_ERROR << "Transport " << protocol << " not found";
             return -1;
         }
 
@@ -669,7 +670,7 @@ int TransferEngineImpl::registerLocalMemoryBatch(
     const std::vector<BufferEntry>& buffer_list, const std::string& location) {
     for (auto& buffer : buffer_list) {
         if (checkOverlap(buffer.addr, buffer.length)) {
-            LOG(ERROR)
+            LOG_ERROR
                 << "Transfer Engine does not support overlapped memory region";
             return ERR_ADDRESS_OVERLAPPED;
         }
@@ -789,16 +790,16 @@ void TransferEngineImpl::InitializeMetricsConfig() {
             int interval = std::stoi(interval_env);
             if (interval > 0) {
                 metrics_interval_seconds_ = static_cast<uint64_t>(interval);
-                LOG(INFO) << "Metrics reporting interval set to "
+                LOG_INFO << "Metrics reporting interval set to "
                           << metrics_interval_seconds_ << " seconds";
             } else {
-                LOG(WARNING)
+                LOG_WARNING
                     << "Invalid MC_TE_METRIC_INTERVAL_SECONDS value: "
                     << interval_env << ", must be positive. Using default: "
                     << metrics_interval_seconds_;
             }
         } catch (const std::exception& e) {
-            LOG(WARNING) << "Failed to parse MC_TE_METRIC_INTERVAL_SECONDS: "
+            LOG_WARNING << "Failed to parse MC_TE_METRIC_INTERVAL_SECONDS: "
                          << interval_env
                          << ", using default: " << metrics_interval_seconds_;
         }
@@ -808,7 +809,7 @@ void TransferEngineImpl::InitializeMetricsConfig() {
 void TransferEngineImpl::StartMetricsReportingThread() {
     // Only start the metrics thread if metrics are enabled
     if (!metrics_enabled_) {
-        LOG(INFO)
+        LOG_INFO
             << "Metrics reporting is disabled (set MC_TE_METRIC=1 to enable)";
         return;
     }
@@ -823,7 +824,7 @@ void TransferEngineImpl::StartMetricsReportingThread() {
     }
 
     metrics_reporting_thread_ = std::thread([this]() {
-        LOG(INFO) << "Metrics reporting thread started (interval: "
+        LOG_INFO << "Metrics reporting thread started (interval: "
                   << metrics_interval_seconds_ << "s)";
         constexpr double kBytesPerMegabyte = 1024.0 * 1024.0;
 
@@ -890,7 +891,7 @@ void TransferEngineImpl::StartMetricsReportingThread() {
             }
 
             if (!has_latency) {
-                LOG(INFO) << log_msg.str();
+                LOG_INFO << log_msg.str();
                 continue;
             }
 
@@ -932,18 +933,18 @@ void TransferEngineImpl::StartMetricsReportingThread() {
                         << percentage << "%";
             }
 
-            LOG(INFO) << log_msg.str();
+            LOG_INFO << log_msg.str();
         }
-        LOG(INFO) << "Metrics reporting thread stopped";
+        LOG_INFO << "Metrics reporting thread stopped";
     });
 }
 
 void TransferEngineImpl::StopMetricsReportingThread() {
     should_stop_metrics_thread_ = true;  // Signal the thread to stop
     if (metrics_reporting_thread_.joinable()) {
-        LOG(INFO) << "Waiting for metrics reporting thread to join...";
+        LOG_INFO << "Waiting for metrics reporting thread to join...";
         metrics_reporting_thread_.join();  // Wait for the thread to finish
-        LOG(INFO) << "Metrics reporting thread joined";
+        LOG_INFO << "Metrics reporting thread joined";
     }
 }
 #endif

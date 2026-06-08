@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include "transport/rdma_transport/worker_pool.h"
+#include "log_macros.h"
 
 #include <sys/epoll.h>
 
@@ -78,7 +79,7 @@ int WorkerPool::submitPostSend(
                 context_.engine().meta()->getSegmentDescByID(target_id);
             if (!segment_desc_map[target_id]) {
                 segment_desc_map.clear();
-                LOG(ERROR) << "Cannot get target segment description #"
+                LOG_ERROR << "Cannot get target segment description #"
                            << target_id;
                 return ERR_INVALID_ARGUMENT;
             }
@@ -119,7 +120,7 @@ int WorkerPool::submitPostSend(
             peer_segment_desc = context_.engine().meta()->getSegmentDescByID(
                 slice->target_id, true);
             if (!peer_segment_desc) {
-                LOG(ERROR) << "Cannot reload target segment #"
+                LOG_ERROR << "Cannot reload target segment #"
                            << slice->target_id;
                 slice->markFailed();
                 failed_target_ids[slice->target_id] = getCurrentTimeInNano();
@@ -241,14 +242,14 @@ void WorkerPool::performPostSend(int thread_id) {
             continue;
         }
         if (!endpoint->connected() && endpoint->setupConnectionsByActive()) {
-            LOG(ERROR) << "Worker: Cannot make connection for endpoint: "
+            LOG_ERROR << "Worker: Cannot make connection for endpoint: "
                        << entry.first << ", mark it inactive";
             for (auto &slice : entry.second) failed_slice_list.push_back(slice);
             endpoint->set_active(false);
             failed_nr_polls++;
             if (context_.active() && failed_nr_polls > 32 &&
                 !success_nr_polls) {
-                LOG(WARNING)
+                LOG_WARNING
                     << "Failed to establish peer endpoints in local RNIC "
                     << context_.nicPath() << ", mark it inactive";
                 context_.set_active(false);
@@ -275,7 +276,7 @@ void WorkerPool::performPollCq(int thread_id) {
         ibv_wc wc[kPollCount];
         int nr_poll = context_.poll(kPollCount, wc, cq_index);
         if (nr_poll < 0) {
-            LOG(ERROR) << "Worker: Failed to poll completion queues";
+            LOG_ERROR << "Worker: Failed to poll completion queues";
             continue;
         }
 
@@ -296,7 +297,7 @@ void WorkerPool::performPollCq(int thread_id) {
                 // triggering endpoint deletion.
                 if (wc[i].status == IBV_WC_WR_FLUSH_ERR) {
                     if (globalConfig().trace)
-                        LOG(INFO)
+                        LOG_INFO
                             << "Worker: WR flush error (peer_nic: "
                             << slice->peer_nic_path << "), marking failed";
                     slice->markFailed();
@@ -304,7 +305,7 @@ void WorkerPool::performPollCq(int thread_id) {
                     continue;
                 }
 
-                LOG(ERROR) << "Worker: Process failed for slice (opcode: "
+                LOG_ERROR << "Worker: Process failed for slice (opcode: "
                            << slice->opcode
                            << ", source_addr: " << slice->source_addr
                            << ", length: " << slice->length
@@ -317,7 +318,7 @@ void WorkerPool::performPollCq(int thread_id) {
                 failed_nr_polls++;
                 if (context_.active() && failed_nr_polls > 32 &&
                     !success_nr_polls) {
-                    LOG(WARNING) << "Too many errors found in local RNIC "
+                    LOG_WARNING << "Too many errors found in local RNIC "
                                  << context_.nicPath() << ", mark it inactive";
                     context_.set_active(false);
                 }
@@ -424,7 +425,7 @@ int WorkerPool::doProcessContextEvents() {
     ibv_async_event event;
     bool event_acked = false;
     if (ibv_get_async_event(context_.context(), &event) < 0) return ERR_CONTEXT;
-    LOG(WARNING) << "Worker: Received context async event "
+    LOG_WARNING << "Worker: Received context async event "
                  << ibv_event_type_str(event.event_type) << " for context "
                  << context_.deviceName();
     if (event.event_type == IBV_EVENT_QP_FATAL) {
@@ -479,11 +480,11 @@ int WorkerPool::doProcessContextEvents() {
         event_acked = true;
 
         context_.disconnectAllEndpoints();
-        LOG(INFO) << "Worker: Context " << context_.deviceName()
+        LOG_INFO << "Worker: Context " << context_.deviceName()
                   << " is now inactive";
     } else if (event.event_type == IBV_EVENT_PORT_ACTIVE) {
         context_.set_active(true);
-        LOG(INFO) << "Worker: Context " << context_.deviceName()
+        LOG_INFO << "Worker: Context " << context_.deviceName()
                   << " is now active";
     }
 
@@ -512,7 +513,7 @@ void WorkerPool::monitorWorker() {
         int num_events = epoll_wait(context_.eventFd(), &event, 1, 100);
         if (num_events < 0) {
             if (errno != EWOULDBLOCK && errno != EINTR)
-                PLOG(ERROR) << "Worker: epoll_wait()";
+                LOG_ERROR << "Worker: epoll_wait()";
             continue;
         }
 

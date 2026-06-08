@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include "tent_backend.h"
+#include "log_macros.h"
 #include "utils.h"
 #include "tent/common/types.h"
 #include "tent/runtime/platform.h"
@@ -34,11 +35,11 @@ volatile bool g_tent_triggered_sig = false;
 
 void signalHandlerV1(int signum) {
     if (g_tent_triggered_sig) {
-        LOG(ERROR) << "Received signal " << signum
+        LOG_ERROR << "Received signal " << signum
                    << " again, forcefully terminating...";
         std::exit(EXIT_FAILURE);
     }
-    LOG(INFO) << "Received signal " << signum << ", stopping target server...";
+    LOG_INFO << "Received signal " << signum << ", stopping target server...";
     g_tent_running = false;
     g_tent_triggered_sig = true;
 }
@@ -126,7 +127,7 @@ int TENTBenchRunner::allocateBuffers() {
         }
 #endif
     } else {
-        LOG(ERROR) << "Unknown seg_type: " << seg_type;
+        LOG_ERROR << "Unknown seg_type: " << seg_type;
         return -1;
     }
 
@@ -158,7 +159,7 @@ int TENTBenchRunner::allocateBuffers() {
         reg_ns += (t2 - t1);
     }
 
-    LOG(INFO) << "Allocated " << total_buffer_size * num_buffers << " bytes "
+    LOG_INFO << "Allocated " << total_buffer_size * num_buffers << " bytes "
               << seg_type << " buffers in " << alloc_ns / 1e6
               << " ms, registered in " << reg_ns / 1e6 << " ms";
     return 0;
@@ -233,7 +234,7 @@ static inline int getGpuDeviceNumaID(int gpu_id) {
     char pci_bus_id[20];
     auto err = cudaDeviceGetPCIBusId(pci_bus_id, sizeof(pci_bus_id), gpu_id);
     if (err != cudaSuccess) {
-        LOG(WARNING) << "cudaDeviceGetPCIBusId: " << cudaGetErrorString(err);
+        LOG_WARNING << "cudaDeviceGetPCIBusId: " << cudaGetErrorString(err);
         return 0;
     }
     for (char* ch = pci_bus_id; (*ch = tolower(*ch)); ch++);
@@ -327,7 +328,7 @@ double TENTBenchRunner::runSingleTransfer(uint64_t local_addr,
         if (overall_status.s == TransferStatusEnum::COMPLETED) {
             break;
         } else if (overall_status.s == TransferStatusEnum::FAILED) {
-            LOG(ERROR) << "Failed transfer detected";
+            LOG_ERROR << "Failed transfer detected";
             exit(EXIT_FAILURE);
         }
     }

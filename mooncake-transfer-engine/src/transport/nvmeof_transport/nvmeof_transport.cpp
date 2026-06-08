@@ -13,9 +13,10 @@
 // limitations under the License.
 
 #include "transport/nvmeof_transport/nvmeof_transport.h"
+#include "log_macros.h"
 
 #include <bits/stdint-uintn.h>
-#include <glog/logging.h>
+
 
 #include <algorithm>
 #include <cassert>
@@ -85,7 +86,7 @@ Status NVMeoFTransport::getTransferStatus(BatchID batch_id, size_t task_id,
                                       .transferred_bytes = 0};
     auto [slice_id, slice_num] = nvmeof_desc.task_to_slices[task_id];
     for (size_t i = slice_id; i < slice_id + slice_num; ++i) {
-        // LOG(INFO) << "task " << task_id << " i " << i << " upper bound " <<
+        // LOG_INFO << "task " << task_id << " i " << i << " upper bound " <<
         // slice_num;
         auto event =
             desc_pool_->getTransferStatus(nvmeof_desc.desc_idx_, slice_id);
@@ -117,7 +118,7 @@ Status NVMeoFTransport::submitTransfer(
     auto &nvmeof_desc = *((NVMeoFBatchDesc *)(batch_desc.context));
 
     if (batch_desc.task_list.size() + entries.size() > batch_desc.batch_size) {
-        LOG(ERROR)
+        LOG_ERROR
             << "NVMeoFTransport: Exceed the limitation of current batch's "
                "capacity";
         return Status::InvalidArgument(
@@ -143,7 +144,7 @@ Status NVMeoFTransport::submitTransfer(
         }
 
         auto &desc = segment_desc_map.at(target_id);
-        // LOG(INFO) << "desc " << desc->name << " " << desc->protocol;
+        // LOG_INFO << "desc " << desc->name << " " << desc->protocol;
         assert(desc->protocol == "nvmeof");
         // TODO: solving iterator invalidation due to vector resize
         // Handle File Offset
@@ -200,7 +201,7 @@ Status NVMeoFTransport::submitTransfer(
     }
 
     desc_pool_->submitBatch(nvmeof_desc.desc_idx_);
-    // LOG(INFO) << "submit nr " << slice_id << " start " << start_slice_id;
+    // LOG_INFO << "submit nr " << slice_id << " start " << start_slice_id;
     return Status::OK();
 }
 
@@ -244,7 +245,7 @@ void NVMeoFTransport::addSliceToTask(void *source_addr, uint64_t slice_len,
                                      TransferTask &task,
                                      const char *file_path) {
     if (!source_addr || !file_path) {
-        LOG(ERROR) << "Invalid source_addr or file_path";
+        LOG_ERROR << "Invalid source_addr or file_path";
         return;
     }
     Slice *slice = getSliceCache().allocate();
@@ -274,7 +275,7 @@ void NVMeoFTransport::addSliceToCUFileBatch(
     params.u.batch.file_offset = file_offset;
     params.u.batch.size = slice_len;
     params.fh = fh;
-    // LOG(INFO) << "params " << "base " << request.source << " offset " <<
+    // LOG_INFO << "params " << "base " << request.source << " offset " <<
     // request.target_offset << " length " << request.length;
     desc_pool_->pushParams(desc_id, params);
 }

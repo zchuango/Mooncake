@@ -13,9 +13,10 @@
 // limitations under the License.
 
 #include "tent/transport/nvlink/nvlink_transport.h"
+#include "log_macros.h"
 
 #include <bits/stdint-uintn.h>
-#include <glog/logging.h>
+
 #include <sys/mman.h>
 
 #include <algorithm>
@@ -166,7 +167,7 @@ void NVLinkTransport::startTransfer(std::vector<NVLinkTask*>& tasks,
                                batch->async_stream.get());
     if (err != cudaSuccess && err != cudaErrorCallRequiresNewerDriver &&
         fail_idx < tasks.size()) {
-        LOG(ERROR) << "NVLinkTransport::startTransfer internal error: "
+        LOG_ERROR << "NVLinkTransport::startTransfer internal error: "
                    << "cudaMemcpyBatchAsync failed at task index " << fail_idx
                    << " (src=" << srcs[fail_idx] << ", dst=" << dsts[fail_idx]
                    << ", size=" << sizes[fail_idx]
@@ -241,7 +242,7 @@ Status NVLinkTransport::addMemoryBuffer(BufferDesc& desc,
         CUresult cu_err = cuMemGetAddressRange(&base_ptr, &alloc_size,
                                                (CUdeviceptr)desc.addr);
         if (cu_err != CUDA_SUCCESS) {
-            LOG(ERROR) << "NVLinkTransport: cuMemGetAddressRange failed for "
+            LOG_ERROR << "NVLinkTransport: cuMemGetAddressRange failed for "
                        << "addr 0x" << std::hex << desc.addr << std::dec
                        << " (error " << cu_err << ")";
             return Status::InternalError(
@@ -296,7 +297,7 @@ Status NVLinkTransport::removeMemoryBuffer(BufferDesc& desc) {
         if (cu_err == CUDA_SUCCESS) {
             key = (uint64_t)base_ptr;
         } else {
-            LOG(WARNING) << "NVLinkTransport: cuMemGetAddressRange failed for "
+            LOG_WARNING << "NVLinkTransport: cuMemGetAddressRange failed for "
                          << "addr 0x" << std::hex << desc.addr << std::dec
                          << " during removal (error " << cu_err
                          << "). Memory may already be freed.";

@@ -14,8 +14,9 @@
 // limitations under the License.
 
 #include "transport/ascend_transport/ascend_direct_transport/sync_transfer_executor.h"
+#include "log_macros.h"
 
-#include <glog/logging.h>
+
 
 #include "common.h"
 #include "transfer_metadata.h"
@@ -48,7 +49,7 @@ TransferExecutorBase::ExecuteResult SyncTransferExecutor::execute(
     adxl::TransferOp operation,
     const std::vector<Transport::Slice*>& slice_list) {
     if (local_engine_idx >= adxl_engines_.size()) {
-        LOG(ERROR) << "Invalid local_engine_idx: " << local_engine_idx;
+        LOG_ERROR << "Invalid local_engine_idx: " << local_engine_idx;
         return {.ret = -1, .status = adxl::FAILED, .retryable = false};
     }
 

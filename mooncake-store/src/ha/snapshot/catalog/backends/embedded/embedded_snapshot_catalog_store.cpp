@@ -1,10 +1,11 @@
 #include "ha/snapshot/catalog/backends/embedded/embedded_snapshot_catalog_store.h"
+#include "log_macros.h"
 
 #include <algorithm>
 #include <set>
 #include <string_view>
 
-#include <glog/logging.h>
+
 
 namespace mooncake {
 namespace ha {
@@ -165,7 +166,7 @@ EmbeddedSnapshotCatalogStore::List(size_t limit) {
         }
         auto descriptor = LoadSnapshotDescriptor(object_store_, snapshot_id);
         if (!descriptor) {
-            LOG(WARNING) << "Skipping unreadable embedded snapshot descriptor, "
+            LOG_WARNING << "Skipping unreadable embedded snapshot descriptor, "
                          << "snapshot_id=" << snapshot_id
                          << ", error=" << toString(descriptor.error());
             continue;

@@ -1,8 +1,8 @@
 #include <gflags/gflags.h>
-#include <glog/logging.h>
 
 #include <chrono>  // For std::chrono
 #include <csignal>
+#include <cstdlib>
 #include <memory>  // For std::unique_ptr
 #include <thread>  // For std::thread
 #include <ylt/coro_rpc/coro_rpc_server.hpp>
@@ -12,7 +12,9 @@
 #include "duration_utils.h"
 #include "ha/leadership/master_service_supervisor.h"
 #include "http_metadata_server.h"
-#include "mooncake_logging.h"
+#include "log_macros.h"
+#include "logger.h"
+#include "rpc_protocol.h"
 #include "rpc_service.h"
 #include "types.h"
 #include "utils.h"
@@ -36,11 +38,39 @@ constexpr char kDefaultKvSoftPinTtlFlagValue[] = "1800000";
 
 namespace {
 
+void ApplyRpcProtocolToServer(coro_rpc::coro_rpc_server& server) {
+    switch (mooncake::GetRpcProtocolFromEnv()) {
+        case mooncake::RpcProtocol::Urma:
+#ifdef YLT_ENABLE_URMA
+            server.init_urma();
+#else
+            LOG_WARNING
+                << "MC_RPC_PROTOCOL=urma requested but yalantinglibs was not "
+                   "built with YLT_ENABLE_URMA; using TCP";
+#endif
+            break;
+        case mooncake::RpcProtocol::Rdma:
+#ifdef YLT_ENABLE_IBV
+            server.init_ibv();
+#elif defined(YLT_ENABLE_URMA)
+            LOG_WARNING << "MC_RPC_PROTOCOL=rdma requested but YLT_ENABLE_IBV "
+                           "is unavailable; using URMA";
+            server.init_urma();
+#else
+            LOG_WARNING << "MC_RPC_PROTOCOL=rdma requested but no RDMA RPC "
+                           "transport is enabled; using TCP";
+#endif
+            break;
+        case mooncake::RpcProtocol::Tcp:
+            break;
+    }
+}
+
 bool ValidateDurationFlag(const char* flagname, const std::string& value) {
     uint64_t parsed_value = 0;
     std::string error;
     if (!mooncake::ParseDurationMs(value, &parsed_value, &error)) {
-        LOG(ERROR) << "Invalid value for --" << flagname << ": " << value
+        LOG_ERROR << "Invalid value for --" << flagname << ": " << value
                    << ". " << error;
         return false;
     }
@@ -52,7 +82,7 @@ uint64_t ParseDurationFlagOrDie(const char* flag_name,
     uint64_t parsed_value = 0;
     std::string error;
     if (!mooncake::ParseDurationMs(value, &parsed_value, &error)) {
-        LOG(FATAL) << "Invalid value for --" << flag_name << ": " << value
+        LOG_FATAL << "Invalid value for --" << flag_name << ": " << value
                    << ". " << error;
     }
     return parsed_value;
@@ -112,14 +142,14 @@ DEFINE_bool(rpc_enable_tcp_no_delay, true,
             "Enable TCP_NODELAY for RPC connections");
 DEFINE_validator(eviction_ratio, [](const char* flagname, double value) {
     if (value < 0.0 || value > 1.0) {
-        LOG(FATAL) << "Mem eviction ratio must be between 0.0 and 1.0";
+        LOG_FATAL << "Mem eviction ratio must be between 0.0 and 1.0";
         return false;
     }
     return true;
 });
 DEFINE_validator(nof_eviction_ratio, [](const char* flagname, double value) {
     if (value < 0.0 || value > 1.0) {
-        LOG(FATAL) << "NoF eviction ratio must be between 0.0 and 1.0";
+        LOG_FATAL << "NoF eviction ratio must be between 0.0 and 1.0";
         return false;
     }
     return true;
@@ -270,20 +300,20 @@ void ResolveRpcAddressFromInterfaceOrDie(
 
     if (!master_config.rpc_address.empty() &&
         master_config.rpc_address != "0.0.0.0") {
-        LOG(WARNING) << "rpc_interface is set. Overriding rpc_address="
+        LOG_WARNING << "rpc_interface is set. Overriding rpc_address="
                      << master_config.rpc_address;
     }
 
     auto resolved_address =
         mooncake::GetInterfaceIPv4Address(master_config.rpc_interface);
     if (!resolved_address) {
-        LOG(FATAL) << "Failed to resolve rpc_interface="
+        LOG_FATAL << "Failed to resolve rpc_interface="
                    << master_config.rpc_interface << ": "
                    << resolved_address.error();
     }
 
     master_config.rpc_address = resolved_address.value();
-    LOG(INFO) << "Resolved rpc_interface=" << master_config.rpc_interface
+    LOG_INFO << "Resolved rpc_interface=" << master_config.rpc_interface
               << " to rpc_address=" << master_config.rpc_address;
 }
 
@@ -484,10 +514,10 @@ void InitMasterConf(const mooncake::DefaultConfig& default_config,
 void LoadConfigFromCmdline(mooncake::MasterConfig& master_config,
                            bool conf_set) {
     if (FLAGS_max_threads != 4) {  // 4 is the default value
-        LOG(WARNING) << "max_threads is deprecated, use rpc_thread_num instead";
+        LOG_WARNING << "max_threads is deprecated, use rpc_thread_num instead";
     }
     if (FLAGS_port != 50051) {  // 50051 is the default value
-        LOG(WARNING) << "port is deprecated, use rpc_port instead";
+        LOG_WARNING << "port is deprecated, use rpc_port instead";
     }
     int server_thread_num =
         std::min(FLAGS_max_threads,
@@ -500,7 +530,7 @@ void LoadConfigFromCmdline(mooncake::MasterConfig& master_config,
     if (FLAGS_rpc_thread_num > 0) {
         rpc_thread_num = static_cast<size_t>(FLAGS_rpc_thread_num);
         if (FLAGS_max_threads != 4) {  // 4 is the default value
-            LOG(WARNING) << "Both rpc_thread_num and max_threads are set. "
+            LOG_WARNING << "Both rpc_thread_num and max_threads are set. "
                          << "Using rpc_thread_num=" << FLAGS_rpc_thread_num
                          << ". Please migrate to use rpc_thread_num only.";
         }
@@ -516,7 +546,7 @@ void LoadConfigFromCmdline(mooncake::MasterConfig& master_config,
     if (FLAGS_rpc_port > 0) {
         rpc_port = FLAGS_rpc_port;
         if (FLAGS_port != 50051) {  // 50051 is the default value
-            LOG(WARNING) << "Both rpc_port and port are set. "
+            LOG_WARNING << "Both rpc_port and port are set. "
                          << "Using rpc_port=" << FLAGS_rpc_port
                          << ". Please migrate to use rpc_port only.";
         }
@@ -528,127 +558,127 @@ void LoadConfigFromCmdline(mooncake::MasterConfig& master_config,
     }
 
     google::CommandLineFlagInfo info;
-    if ((google::GetCommandLineFlagInfo("enable_cxl", &info) &&
+    if ((GetCommandLineFlagInfo("enable_cxl", &info) &&
          !info.is_default) ||
         !conf_set) {
         master_config.enable_cxl = FLAGS_enable_cxl;
     }
-    if ((google::GetCommandLineFlagInfo("cxl_path", &info) &&
+    if ((GetCommandLineFlagInfo("cxl_path", &info) &&
          !info.is_default) ||
         !conf_set) {
         master_config.cxl_path = FLAGS_cxl_path;
     }
-    if ((google::GetCommandLineFlagInfo("cxl_size", &info) &&
+    if ((GetCommandLineFlagInfo("cxl_size", &info) &&
          !info.is_default) ||
         !conf_set) {
         master_config.cxl_size = FLAGS_cxl_size;
     }
-    if ((google::GetCommandLineFlagInfo("rpc_address", &info) &&
+    if ((GetCommandLineFlagInfo("rpc_address", &info) &&
          !info.is_default) ||
         !conf_set) {
         master_config.rpc_address = FLAGS_rpc_address;
     }
-    if ((google::GetCommandLineFlagInfo("rpc_interface", &info) &&
+    if ((GetCommandLineFlagInfo("rpc_interface", &info) &&
          !info.is_default) ||
         !conf_set) {
         master_config.rpc_interface = FLAGS_rpc_interface;
     }
-    if ((google::GetCommandLineFlagInfo("rpc_conn_timeout_seconds", &info) &&
+    if ((GetCommandLineFlagInfo("rpc_conn_timeout_seconds", &info) &&
          !info.is_default) ||
         !conf_set) {
         master_config.rpc_conn_timeout_seconds = FLAGS_rpc_conn_timeout_seconds;
     }
-    if ((google::GetCommandLineFlagInfo("rpc_enable_tcp_no_delay", &info) &&
+    if ((GetCommandLineFlagInfo("rpc_enable_tcp_no_delay", &info) &&
          !info.is_default) ||
         !conf_set) {
         master_config.rpc_enable_tcp_no_delay = FLAGS_rpc_enable_tcp_no_delay;
     }
-    if ((google::GetCommandLineFlagInfo("enable_metric_reporting", &info) &&
+    if ((GetCommandLineFlagInfo("enable_metric_reporting", &info) &&
          !info.is_default) ||
         !conf_set) {
         master_config.enable_metric_reporting = FLAGS_enable_metric_reporting;
     }
-    if ((google::GetCommandLineFlagInfo("metrics_port", &info) &&
+    if ((GetCommandLineFlagInfo("metrics_port", &info) &&
          !info.is_default) ||
         !conf_set) {
         master_config.metrics_port = FLAGS_metrics_port;
     }
-    if ((google::GetCommandLineFlagInfo("default_kv_lease_ttl", &info) &&
+    if ((GetCommandLineFlagInfo("default_kv_lease_ttl", &info) &&
          !info.is_default) ||
         !conf_set) {
         master_config.default_kv_lease_ttl = ParseDurationFlagOrDie(
             "default_kv_lease_ttl", FLAGS_default_kv_lease_ttl);
     }
-    if ((google::GetCommandLineFlagInfo("default_kv_soft_pin_ttl", &info) &&
+    if ((GetCommandLineFlagInfo("default_kv_soft_pin_ttl", &info) &&
          !info.is_default) ||
         !conf_set) {
         master_config.default_kv_soft_pin_ttl = ParseDurationFlagOrDie(
             "default_kv_soft_pin_ttl", FLAGS_default_kv_soft_pin_ttl);
     }
-    if ((google::GetCommandLineFlagInfo("allow_evict_soft_pinned_objects",
+    if ((GetCommandLineFlagInfo("allow_evict_soft_pinned_objects",
                                         &info) &&
          !info.is_default) ||
         !conf_set) {
         master_config.allow_evict_soft_pinned_objects =
             FLAGS_allow_evict_soft_pinned_objects;
     }
-    if ((google::GetCommandLineFlagInfo("eviction_ratio", &info) &&
+    if ((GetCommandLineFlagInfo("eviction_ratio", &info) &&
          !info.is_default) ||
         !conf_set) {
         master_config.eviction_ratio = FLAGS_eviction_ratio;
     }
-    if ((google::GetCommandLineFlagInfo("eviction_high_watermark_ratio",
+    if ((GetCommandLineFlagInfo("eviction_high_watermark_ratio",
                                         &info) &&
          !info.is_default) ||
         !conf_set) {
         master_config.eviction_high_watermark_ratio =
             FLAGS_eviction_high_watermark_ratio;
     }
-    if ((google::GetCommandLineFlagInfo("nof_eviction_ratio", &info) &&
+    if ((GetCommandLineFlagInfo("nof_eviction_ratio", &info) &&
          !info.is_default) ||
         !conf_set) {
         master_config.nof_eviction_ratio = FLAGS_nof_eviction_ratio;
     }
-    if ((google::GetCommandLineFlagInfo("nof_eviction_high_watermark_ratio",
+    if ((GetCommandLineFlagInfo("nof_eviction_high_watermark_ratio",
                                         &info) &&
          !info.is_default) ||
         !conf_set) {
         master_config.nof_eviction_high_watermark_ratio =
             FLAGS_nof_eviction_high_watermark_ratio;
     }
-    if ((google::GetCommandLineFlagInfo("enable_ha", &info) &&
+    if ((GetCommandLineFlagInfo("enable_ha", &info) &&
          !info.is_default) ||
         !conf_set) {
         master_config.enable_ha = FLAGS_enable_ha;
     }
-    if ((google::GetCommandLineFlagInfo("enable_offload", &info) &&
+    if ((GetCommandLineFlagInfo("enable_offload", &info) &&
          !info.is_default) ||
         !conf_set) {
         master_config.enable_offload = FLAGS_enable_offload;
     }
-    if ((google::GetCommandLineFlagInfo("offload_on_evict", &info) &&
+    if ((GetCommandLineFlagInfo("offload_on_evict", &info) &&
          !info.is_default) ||
         !conf_set) {
         master_config.offload_on_evict = FLAGS_offload_on_evict;
     }
-    if ((google::GetCommandLineFlagInfo("offload_force_evict", &info) &&
+    if ((GetCommandLineFlagInfo("offload_force_evict", &info) &&
          !info.is_default) ||
         !conf_set) {
         master_config.offload_force_evict = FLAGS_offload_force_evict;
     }
-    if ((google::GetCommandLineFlagInfo("promotion_on_hit", &info) &&
+    if ((GetCommandLineFlagInfo("promotion_on_hit", &info) &&
          !info.is_default) ||
         !conf_set) {
         master_config.promotion_on_hit = FLAGS_promotion_on_hit;
     }
-    if ((google::GetCommandLineFlagInfo("promotion_admission_threshold",
+    if ((GetCommandLineFlagInfo("promotion_admission_threshold",
                                         &info) &&
          !info.is_default) ||
         !conf_set) {
         master_config.promotion_admission_threshold =
             FLAGS_promotion_admission_threshold;
     }
-    if ((google::GetCommandLineFlagInfo("promotion_queue_limit", &info) &&
+    if ((GetCommandLineFlagInfo("promotion_queue_limit", &info) &&
          !info.is_default) ||
         !conf_set) {
         master_config.promotion_queue_limit = FLAGS_promotion_queue_limit;
@@ -659,193 +689,193 @@ void LoadConfigFromCmdline(mooncake::MasterConfig& master_config,
     // make the gate unreachable; clamping at parse time fails loudly and
     // gives the gate a stable contract to compare uint8_t against.
     if (master_config.promotion_admission_threshold > 255) {
-        LOG(WARNING) << "promotion_admission_threshold="
+        LOG_WARNING << "promotion_admission_threshold="
                      << master_config.promotion_admission_threshold
                      << " exceeds the CountMinSketch counter max (255). "
                      << "Clamping to 255. Lower the configured value to "
                      << "silence this warning.";
         master_config.promotion_admission_threshold = 255;
     }
-    if ((google::GetCommandLineFlagInfo("ha_backend_type", &info) &&
+    if ((GetCommandLineFlagInfo("ha_backend_type", &info) &&
          !info.is_default) ||
         !conf_set) {
         master_config.ha_backend_type = FLAGS_ha_backend_type;
     }
-    if ((google::GetCommandLineFlagInfo("ha_backend_connstring", &info) &&
+    if ((GetCommandLineFlagInfo("ha_backend_connstring", &info) &&
          !info.is_default) ||
         !conf_set) {
         master_config.ha_backend_connstring = FLAGS_ha_backend_connstring;
     }
-    if ((google::GetCommandLineFlagInfo("etcd_endpoints", &info) &&
+    if ((GetCommandLineFlagInfo("etcd_endpoints", &info) &&
          !info.is_default) ||
         !conf_set) {
         master_config.etcd_endpoints = FLAGS_etcd_endpoints;
     }
-    if ((google::GetCommandLineFlagInfo("client_ttl", &info) &&
+    if ((GetCommandLineFlagInfo("client_ttl", &info) &&
          !info.is_default) ||
         !conf_set) {
         master_config.client_live_ttl_sec = FLAGS_client_ttl;
     }
-    if ((google::GetCommandLineFlagInfo("nof_heartbeat_interval_sec", &info) &&
+    if ((GetCommandLineFlagInfo("nof_heartbeat_interval_sec", &info) &&
          !info.is_default) ||
         !conf_set) {
         master_config.nof_heartbeat_interval_sec =
             FLAGS_nof_heartbeat_interval_sec;
     }
-    if ((google::GetCommandLineFlagInfo("nof_heartbeat_probe_timeout_ms",
+    if ((GetCommandLineFlagInfo("nof_heartbeat_probe_timeout_ms",
                                         &info) &&
          !info.is_default) ||
         !conf_set) {
         master_config.nof_heartbeat_probe_timeout_ms =
             FLAGS_nof_heartbeat_probe_timeout_ms;
     }
-    if ((google::GetCommandLineFlagInfo("nof_heartbeat_failures_threshold",
+    if ((GetCommandLineFlagInfo("nof_heartbeat_failures_threshold",
                                         &info) &&
          !info.is_default) ||
         !conf_set) {
         master_config.nof_heartbeat_failures_threshold =
             FLAGS_nof_heartbeat_failures_threshold;
     }
-    if ((google::GetCommandLineFlagInfo("cluster_id", &info) &&
+    if ((GetCommandLineFlagInfo("cluster_id", &info) &&
          !info.is_default) ||
         !conf_set) {
         master_config.cluster_id = FLAGS_cluster_id;
     }
-    if ((google::GetCommandLineFlagInfo("root_fs_dir", &info) &&
+    if ((GetCommandLineFlagInfo("root_fs_dir", &info) &&
          !info.is_default) ||
         !conf_set) {
         master_config.root_fs_dir = FLAGS_root_fs_dir;
     }
-    if ((google::GetCommandLineFlagInfo("global_file_segment_size", &info) &&
+    if ((GetCommandLineFlagInfo("global_file_segment_size", &info) &&
          !info.is_default) ||
         !conf_set) {
         master_config.global_file_segment_size = FLAGS_global_file_segment_size;
     }
-    if ((google::GetCommandLineFlagInfo("memory_allocator", &info) &&
+    if ((GetCommandLineFlagInfo("memory_allocator", &info) &&
          !info.is_default) ||
         !conf_set) {
         master_config.memory_allocator = FLAGS_memory_allocator;
     }
-    if ((google::GetCommandLineFlagInfo("allocation_strategy", &info) &&
+    if ((GetCommandLineFlagInfo("allocation_strategy", &info) &&
          !info.is_default) ||
         !conf_set) {
         master_config.allocation_strategy = FLAGS_allocation_strategy;
     }
-    if ((google::GetCommandLineFlagInfo("ssd_high_watermark_ratio", &info) &&
+    if ((GetCommandLineFlagInfo("ssd_high_watermark_ratio", &info) &&
          !info.is_default) ||
         !conf_set) {
         master_config.ssd_high_watermark_ratio = FLAGS_ssd_high_watermark_ratio;
     }
-    if ((google::GetCommandLineFlagInfo("ddr_admission_watermark_ratio",
+    if ((GetCommandLineFlagInfo("ddr_admission_watermark_ratio",
                                         &info) &&
          !info.is_default) ||
         !conf_set) {
         master_config.ddr_admission_watermark_ratio =
             FLAGS_ddr_admission_watermark_ratio;
     }
-    if ((google::GetCommandLineFlagInfo("enable_http_metadata_server", &info) &&
+    if ((GetCommandLineFlagInfo("enable_http_metadata_server", &info) &&
          !info.is_default) ||
         !conf_set) {
         master_config.enable_http_metadata_server =
             FLAGS_enable_http_metadata_server;
     }
-    if ((google::GetCommandLineFlagInfo("http_metadata_server_port", &info) &&
+    if ((GetCommandLineFlagInfo("http_metadata_server_port", &info) &&
          !info.is_default) ||
         !conf_set) {
         master_config.http_metadata_server_port =
             FLAGS_http_metadata_server_port;
     }
-    if ((google::GetCommandLineFlagInfo("http_metadata_server_host", &info) &&
+    if ((GetCommandLineFlagInfo("http_metadata_server_host", &info) &&
          !info.is_default) ||
         !conf_set) {
         master_config.http_metadata_server_host =
             FLAGS_http_metadata_server_host;
     }
-    if ((google::GetCommandLineFlagInfo("put_start_discard_timeout_sec",
+    if ((GetCommandLineFlagInfo("put_start_discard_timeout_sec",
                                         &info) &&
          !info.is_default) ||
         !conf_set) {
         master_config.put_start_discard_timeout_sec =
             FLAGS_put_start_discard_timeout_sec;
     }
-    if ((google::GetCommandLineFlagInfo("put_start_release_timeout_sec",
+    if ((GetCommandLineFlagInfo("put_start_release_timeout_sec",
                                         &info) &&
          !info.is_default) ||
         !conf_set) {
         master_config.put_start_release_timeout_sec =
             FLAGS_put_start_release_timeout_sec;
     }
-    if ((google::GetCommandLineFlagInfo("enable_disk_eviction", &info) &&
+    if ((GetCommandLineFlagInfo("enable_disk_eviction", &info) &&
          !info.is_default) ||
         !conf_set) {
         master_config.enable_disk_eviction = FLAGS_enable_disk_eviction;
     }
-    if ((google::GetCommandLineFlagInfo("quota_bytes", &info) &&
+    if ((GetCommandLineFlagInfo("quota_bytes", &info) &&
          !info.is_default) ||
         !conf_set) {
         master_config.quota_bytes = FLAGS_quota_bytes;
     }
-    if ((google::GetCommandLineFlagInfo("max_total_finished_tasks", &info) &&
+    if ((GetCommandLineFlagInfo("max_total_finished_tasks", &info) &&
          !info.is_default) ||
         !conf_set) {
         master_config.max_total_finished_tasks = FLAGS_max_total_finished_tasks;
     }
-    if ((google::GetCommandLineFlagInfo("max_total_pending_tasks", &info) &&
+    if ((GetCommandLineFlagInfo("max_total_pending_tasks", &info) &&
          !info.is_default) ||
         !conf_set) {
         master_config.max_total_pending_tasks = FLAGS_max_total_pending_tasks;
     }
-    if ((google::GetCommandLineFlagInfo("max_total_processing_tasks", &info) &&
+    if ((GetCommandLineFlagInfo("max_total_processing_tasks", &info) &&
          !info.is_default) ||
         !conf_set) {
         master_config.max_total_processing_tasks =
             FLAGS_max_total_processing_tasks;
     }
-    if ((google::GetCommandLineFlagInfo("pending_task_timeout_sec", &info) &&
+    if ((GetCommandLineFlagInfo("pending_task_timeout_sec", &info) &&
          !info.is_default) ||
         !conf_set) {
         master_config.pending_task_timeout_sec = FLAGS_pending_task_timeout_sec;
     }
-    if ((google::GetCommandLineFlagInfo("processing_task_timeout_sec", &info) &&
+    if ((GetCommandLineFlagInfo("processing_task_timeout_sec", &info) &&
          !info.is_default) ||
         !conf_set) {
         master_config.processing_task_timeout_sec =
             FLAGS_processing_task_timeout_sec;
     }
-    if ((google::GetCommandLineFlagInfo("max_retry_attempts", &info) &&
+    if ((GetCommandLineFlagInfo("max_retry_attempts", &info) &&
          !info.is_default) ||
         !conf_set) {
         master_config.max_retry_attempts = FLAGS_max_retry_attempts;
     }
-    if ((google::GetCommandLineFlagInfo("enable_snapshot", &info) &&
+    if ((GetCommandLineFlagInfo("enable_snapshot", &info) &&
          !info.is_default) ||
         !conf_set) {
         master_config.enable_snapshot = FLAGS_enable_snapshot;
     }
-    if ((google::GetCommandLineFlagInfo("enable_snapshot_restore", &info) &&
+    if ((GetCommandLineFlagInfo("enable_snapshot_restore", &info) &&
          !info.is_default) ||
         !conf_set) {
         master_config.enable_snapshot_restore = FLAGS_enable_snapshot_restore;
     }
-    if ((google::GetCommandLineFlagInfo("snapshot_interval_seconds", &info) &&
+    if ((GetCommandLineFlagInfo("snapshot_interval_seconds", &info) &&
          !info.is_default) ||
         !conf_set) {
         master_config.snapshot_interval_seconds =
             FLAGS_snapshot_interval_seconds;
     }
-    if ((google::GetCommandLineFlagInfo("snapshot_child_timeout_seconds",
+    if ((GetCommandLineFlagInfo("snapshot_child_timeout_seconds",
                                         &info) &&
          !info.is_default) ||
         !conf_set) {
         master_config.snapshot_child_timeout_seconds =
             FLAGS_snapshot_child_timeout_seconds;
     }
-    if ((google::GetCommandLineFlagInfo("snapshot_retention_count", &info) &&
+    if ((GetCommandLineFlagInfo("snapshot_retention_count", &info) &&
          !info.is_default) ||
         !conf_set) {
         master_config.snapshot_retention_count = FLAGS_snapshot_retention_count;
     }
-    if ((google::GetCommandLineFlagInfo("snapshot_backup_dir", &info) &&
+    if ((GetCommandLineFlagInfo("snapshot_backup_dir", &info) &&
          !info.is_default) ||
         !conf_set) {
         master_config.snapshot_backup_dir = FLAGS_snapshot_backup_dir;
@@ -853,15 +883,15 @@ void LoadConfigFromCmdline(mooncake::MasterConfig& master_config,
     bool use_snapshot_object_store_flag = false;
     bool use_snapshot_payload_store_flag = false;
     bool use_snapshot_payload_backend_flag = false;
-    if (google::GetCommandLineFlagInfo("snapshot_object_store_type", &info) &&
+    if (GetCommandLineFlagInfo("snapshot_object_store_type", &info) &&
         !info.is_default) {
         use_snapshot_object_store_flag = true;
     }
-    if (google::GetCommandLineFlagInfo("snapshot_payload_store_type", &info) &&
+    if (GetCommandLineFlagInfo("snapshot_payload_store_type", &info) &&
         !info.is_default) {
         use_snapshot_payload_store_flag = true;
     }
-    if (google::GetCommandLineFlagInfo("snapshot_payload_backend_type",
+    if (GetCommandLineFlagInfo("snapshot_payload_backend_type",
                                        &info) &&
         !info.is_default) {
         use_snapshot_payload_backend_flag = true;
@@ -870,12 +900,12 @@ void LoadConfigFromCmdline(mooncake::MasterConfig& master_config,
         master_config.snapshot_object_store_type =
             FLAGS_snapshot_object_store_type;
     } else if (use_snapshot_payload_store_flag) {
-        LOG(WARNING) << "--snapshot_payload_store_type is deprecated; use "
+        LOG_WARNING << "--snapshot_payload_store_type is deprecated; use "
                      << "--snapshot_object_store_type instead";
         master_config.snapshot_object_store_type =
             FLAGS_snapshot_payload_store_type;
     } else if (use_snapshot_payload_backend_flag) {
-        LOG(WARNING) << "--snapshot_payload_backend_type is deprecated; use "
+        LOG_WARNING << "--snapshot_payload_backend_type is deprecated; use "
                      << "--snapshot_object_store_type instead";
         master_config.snapshot_object_store_type =
             FLAGS_snapshot_payload_backend_type;
@@ -885,11 +915,11 @@ void LoadConfigFromCmdline(mooncake::MasterConfig& master_config,
     }
     bool use_snapshot_catalog_store_flag = false;
     bool use_snapshot_catalog_backend_flag = false;
-    if (google::GetCommandLineFlagInfo("snapshot_catalog_store_type", &info) &&
+    if (GetCommandLineFlagInfo("snapshot_catalog_store_type", &info) &&
         !info.is_default) {
         use_snapshot_catalog_store_flag = true;
     }
-    if (google::GetCommandLineFlagInfo("snapshot_catalog_backend_type",
+    if (GetCommandLineFlagInfo("snapshot_catalog_backend_type",
                                        &info) &&
         !info.is_default) {
         use_snapshot_catalog_backend_flag = true;
@@ -898,7 +928,7 @@ void LoadConfigFromCmdline(mooncake::MasterConfig& master_config,
         master_config.snapshot_catalog_store_type =
             FLAGS_snapshot_catalog_store_type;
     } else if (use_snapshot_catalog_backend_flag) {
-        LOG(WARNING) << "--snapshot_catalog_backend_type is deprecated; use "
+        LOG_WARNING << "--snapshot_catalog_backend_type is deprecated; use "
                      << "--snapshot_catalog_store_type instead";
         master_config.snapshot_catalog_store_type =
             FLAGS_snapshot_catalog_backend_type;
@@ -908,12 +938,12 @@ void LoadConfigFromCmdline(mooncake::MasterConfig& master_config,
     }
     bool use_snapshot_catalog_store_connstring_flag = false;
     bool use_snapshot_catalog_backend_connstring_flag = false;
-    if (google::GetCommandLineFlagInfo("snapshot_catalog_store_connstring",
+    if (GetCommandLineFlagInfo("snapshot_catalog_store_connstring",
                                        &info) &&
         !info.is_default) {
         use_snapshot_catalog_store_connstring_flag = true;
     }
-    if (google::GetCommandLineFlagInfo("snapshot_catalog_backend_connstring",
+    if (GetCommandLineFlagInfo("snapshot_catalog_backend_connstring",
                                        &info) &&
         !info.is_default) {
         use_snapshot_catalog_backend_connstring_flag = true;
@@ -922,7 +952,7 @@ void LoadConfigFromCmdline(mooncake::MasterConfig& master_config,
         master_config.snapshot_catalog_store_connstring =
             FLAGS_snapshot_catalog_store_connstring;
     } else if (use_snapshot_catalog_backend_connstring_flag) {
-        LOG(WARNING)
+        LOG_WARNING
             << "--snapshot_catalog_backend_connstring is deprecated; use "
             << "--snapshot_catalog_store_connstring instead";
         master_config.snapshot_catalog_store_connstring =
@@ -936,7 +966,7 @@ void LoadConfigFromCmdline(mooncake::MasterConfig& master_config,
 // Function to start HTTP metadata server
 std::unique_ptr<mooncake::HttpMetadataServer> StartHttpMetadataServer(
     int port, const std::string& host) {
-    LOG(INFO) << "Starting C++ HTTP metadata server on " << host << ":" << port;
+    LOG_INFO << "Starting C++ HTTP metadata server on " << host << ":" << port;
 
     try {
         auto server =
@@ -945,14 +975,14 @@ std::unique_ptr<mooncake::HttpMetadataServer> StartHttpMetadataServer(
 
         // Check if server started successfully
         if (server->is_running()) {
-            LOG(INFO) << "C++ HTTP metadata server started successfully";
+            LOG_INFO << "C++ HTTP metadata server started successfully";
             return server;
         } else {
-            LOG(ERROR) << "Failed to start C++ HTTP metadata server";
+            LOG_ERROR << "Failed to start C++ HTTP metadata server";
             return nullptr;
         }
     } catch (const std::exception& e) {
-        LOG(ERROR) << "Failed to start C++ HTTP metadata server: " << e.what();
+        LOG_ERROR << "Failed to start C++ HTTP metadata server: " << e.what();
         return nullptr;
     }
 }
@@ -963,10 +993,13 @@ int main(int argc, char* argv[]) {
     gflags::SetVersionString(mooncake::MOONCAKE_DISPLAY_VERSION);
     gflags::ParseCommandLineFlags(&argc, &argv, true);
 
-    if (!FLAGS_log_dir.empty()) {
-        google::InitGoogleLogging(argv[0]);
+    mooncake::LogConfig log_config;
+    if (const char* log_dir = std::getenv("MC_LOG_DIR");
+        log_dir && *log_dir != '\0') {
+        log_config.logDir = log_dir;
     }
-    mooncake::logging::ApplyMooncakeLogEnableToGlog();
+    log_config.fileName = "mooncake_master";
+    mooncake::Logger::Instance().Init(log_config);
 
     // Initialize the master configuration
     mooncake::MasterConfig master_config;
@@ -977,7 +1010,7 @@ int main(int argc, char* argv[]) {
         try {
             default_config.Load();
         } catch (const std::exception& e) {
-            LOG(FATAL) << "Failed to initialize default config: " << e.what();
+            LOG_FATAL << "Failed to initialize default config: " << e.what();
             return 1;
         }
         InitMasterConf(default_config, master_config);
@@ -988,7 +1021,7 @@ int main(int argc, char* argv[]) {
     const std::string ha_backend_connstring =
         ResolveHABackendConnstring(master_config);
     if (master_config.enable_ha && ha_backend_connstring.empty()) {
-        LOG(FATAL) << "HA backend connection string must be set when "
+        LOG_FATAL << "HA backend connection string must be set when "
                    << "enable_ha is true, backend_type="
                    << master_config.ha_backend_type
                    << ". Only backend_type=etcd may fall back to "
@@ -997,32 +1030,29 @@ int main(int argc, char* argv[]) {
     }
     if (!master_config.enable_ha && (!ha_backend_connstring.empty() ||
                                      !master_config.etcd_endpoints.empty())) {
-        LOG(WARNING)
+        LOG_WARNING
             << "HA backend connection string is set but will not be used in "
             << "non-HA mode";
     }
     if (!master_config.ha_backend_connstring.empty() &&
         !master_config.etcd_endpoints.empty() &&
         master_config.ha_backend_connstring != master_config.etcd_endpoints) {
-        LOG(WARNING) << "Both ha_backend_connstring and etcd_endpoints are "
+        LOG_WARNING << "Both ha_backend_connstring and etcd_endpoints are "
                      << "set. Using ha_backend_connstring="
                      << master_config.ha_backend_connstring
                      << " for HA coordinator setup";
     }
     if (master_config.memory_allocator != "cachelib" &&
         master_config.memory_allocator != "offset") {
-        LOG(FATAL) << "Invalid memory allocator: "
+        LOG_FATAL << "Invalid memory allocator: "
                    << master_config.memory_allocator
                    << ", must be 'cachelib' or 'offset'";
         return 1;
     }
 
-    const char* value = std::getenv("MC_RPC_PROTOCOL");
-    std::string protocol = "tcp";
-    if (value && std::string_view(value) == "rdma") {
-        protocol = "rdma";
-    }
-    LOG(INFO)
+    std::string protocol =
+        mooncake::RpcProtocolName(mooncake::GetRpcProtocolFromEnv());
+    LOG_INFO
         << "Master service started on port " << master_config.rpc_port
         << ", max_threads=" << master_config.rpc_thread_num
         << ", enable_metric_reporting=" << master_config.enable_metric_reporting
@@ -1098,7 +1128,7 @@ int main(int argc, char* argv[]) {
                                     master_config.http_metadata_server_host);
 
         if (!http_metadata_server) {
-            LOG(FATAL) << "Failed to start HTTP metadata server";
+            LOG_FATAL << "Failed to start HTTP metadata server";
             return 1;
         }
 
@@ -1118,10 +1148,7 @@ int main(int argc, char* argv[]) {
             master_config.rpc_address,
             std::chrono::seconds(master_config.rpc_conn_timeout_seconds),
             master_config.rpc_enable_tcp_no_delay);
-        const char* value = std::getenv("MC_RPC_PROTOCOL");
-        if (value && std::string_view(value) == "rdma") {
-            server.init_ibv();
-        }
+        ApplyRpcProtocolToServer(server);
         auto wrapped_master_service =
             std::make_shared<mooncake::WrappedMasterService>(
                 mooncake::WrappedMasterServiceConfig(master_config, version));
@@ -1129,7 +1156,7 @@ int main(int argc, char* argv[]) {
             static_cast<uint16_t>(master_config.metrics_port),
             master_config.enable_metric_reporting);
         if (!admin_server.Start()) {
-            LOG(ERROR) << "Failed to start master admin server";
+            LOG_ERROR << "Failed to start master admin server";
             return 1;
         }
         admin_server.SetRuntimeState(

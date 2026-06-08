@@ -16,6 +16,7 @@
 #define MULTI_TRANSFER_ENGINE_IMPL_H_
 
 #include <limits.h>
+#include "log_macros.h"
 #include <string.h>
 
 #include <atomic>
@@ -298,7 +299,7 @@ class TransferEngineImpl {
             TransferStatus dummy_status;
             auto status = getBatchTransferStatus(batch_id, dummy_status, true);
             if (!status.ok()) {
-                LOG(ERROR) << status.ToString();
+                LOG_ERROR << status.ToString();
             }
         }
         return result;
@@ -323,7 +324,7 @@ class TransferEngineImpl {
             auto value = notifies_to_send_[batch_id];
             auto rc = sendNotifyByID(value.first, value.second);
             if (rc) {
-                LOG(ERROR) << "Failed to send notify message, error code: "
+                LOG_ERROR << "Failed to send notify message, error code: "
                            << rc;
             }
             notifies_to_send_.erase(batch_id);

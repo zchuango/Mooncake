@@ -17,10 +17,11 @@
 // https://github.com/facebook/rocksdb/blob/main/util/status.cc
 
 #include "tent/common/status.h"
+#include "log_macros.h"
 
 #include <cstring>
 
-#include "glog/logging.h"
+
 
 namespace mooncake {
 namespace tent {
@@ -80,7 +81,7 @@ std::string_view Status::CodeToString(Status::Code code) {
         case Code::kNotImplemented:
             return "NotImplemented";
         default:
-            LOG(ERROR) << "Unknown code: " << static_cast<uint16_t>(code);
+            LOG_ERROR << "Unknown code: " << static_cast<uint16_t>(code);
             return "UnknownCode";
     }
 }

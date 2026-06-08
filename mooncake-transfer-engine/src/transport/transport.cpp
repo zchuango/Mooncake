@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include "transport/transport.h"
+#include "log_macros.h"
 
 #include "error.h"
 #include "transfer_engine.h"
@@ -44,7 +45,7 @@ Status Transport::freeBatchID(BatchID batch_id) {
     const size_t task_count = batch_desc.task_list.size();
     for (size_t task_id = 0; task_id < task_count; task_id++) {
         if (!batch_desc.task_list[task_id].is_finished) {
-            LOG(ERROR) << "BatchID cannot be freed until all tasks are done";
+            LOG_ERROR << "BatchID cannot be freed until all tasks are done";
             return Status::BatchBusy(
                 "BatchID cannot be freed until all tasks are done");
         }

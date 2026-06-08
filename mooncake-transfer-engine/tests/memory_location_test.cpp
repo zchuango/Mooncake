@@ -1,6 +1,7 @@
 #include "memory_location.h"
+#include "log_macros.h"
 
-#include <glog/logging.h>
+
 #include <gtest/gtest.h>
 #include <numa.h>
 #include <numaif.h>
@@ -36,7 +37,7 @@ TEST(MemoryLocationTest, MallocSimpleNode0) {
 
 TEST(MemoryLocationTest, MallocSimpleNodeLargest) {
     int node = numa_max_node();
-    LOG(INFO) << "node: " << node;
+    LOG_INFO << "node: " << node;
 
     std::string location = "cpu:" + std::to_string(node);
 
@@ -63,7 +64,7 @@ TEST(MemoryLocationTest, MallocSimpleNodeLargest) {
 TEST(MemoryLocationTest, MallocMultipleNodes) {
     int nodea = 0;
     int nodeb = numa_max_node();
-    LOG(INFO) << "node a: " << nodea << " node b: " << nodeb;
+    LOG_INFO << "node a: " << nodea << " node b: " << nodeb;
 
     std::string locationa = "cpu:" + std::to_string(nodea);
     std::string locationb = "cpu:" + std::to_string(nodeb);
@@ -87,7 +88,7 @@ TEST(MemoryLocationTest, MallocMultipleNodes) {
     int status[3];
     rc = numa_move_pages(0, 3, pages, nodes, status, MPOL_MF_MOVE);
     if (rc != 0) {
-        PLOG(ERROR) << "numa_move_pages failed, rc: " << rc;
+        PLOG_ERROR << "numa_move_pages failed, rc: " << rc;
     }
     ASSERT_EQ(rc, 0);
 

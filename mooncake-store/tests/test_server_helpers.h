@@ -13,6 +13,7 @@
 
 #include "http_metadata_server.h"
 #include "master_config.h"
+#include "rpc_protocol.h"
 #include "rpc_service.h"
 #include "types.h"
 #include <ylt/util/tl/expected.hpp>
@@ -20,6 +21,28 @@
 
 namespace mooncake {
 namespace testing {
+namespace detail {
+
+inline void ApplyRpcProtocolToServer(coro_rpc::coro_rpc_server& server) {
+    switch (GetRpcProtocolFromEnv()) {
+        case RpcProtocol::Urma:
+#ifdef YLT_ENABLE_URMA
+            server.init_urma();
+#endif
+            break;
+        case RpcProtocol::Rdma:
+#ifdef YLT_ENABLE_IBV
+            server.init_ibv();
+#elif defined(YLT_ENABLE_URMA)
+            server.init_urma();
+#endif
+            break;
+        case RpcProtocol::Tcp:
+            break;
+    }
+}
+
+}  // namespace detail
 
 // Lightweight in-process master server for tests (non-HA).
 // Optionally starts embedded HTTP metadata server for transfer engine (default
@@ -89,10 +112,7 @@ class InProcMaster {
             server_ = std::make_unique<coro_rpc::coro_rpc_server>(
                 /*thread_num=*/4, /*port=*/rpc_port_, /*address=*/"0.0.0.0",
                 std::chrono::seconds(0), /*tcp_no_delay=*/true);
-            const char* value = std::getenv("MC_RPC_PROTOCOL");
-            if (value && std::string_view(value) == "rdma") {
-                server_->init_ibv();
-            }
+            detail::ApplyRpcProtocolToServer(*server_);
 
             uint64_t default_kv_lease_ttl = DEFAULT_DEFAULT_KV_LEASE_TTL;
             if (config.default_kv_lease_ttl.has_value()) {

@@ -1,5 +1,6 @@
-#include <glog/logging.h>
+
 #include <gtest/gtest.h>
+#include "log_macros.h"
 
 #include <chrono>
 #include <cstdlib>
@@ -278,10 +279,10 @@ class TcpLocalMemcpyAutoEnableTest : public ::testing::Test {
                                const Replica::Descriptor& replica) {
         const auto& endpoint = replica.get_memory_descriptor()
                                    .buffer_descriptor.transport_endpoint_;
-        LOG(INFO) << label << " replica endpoint=" << endpoint;
-        LOG(INFO) << label << " client transport endpoint="
+        LOG_INFO << label << " replica endpoint=" << endpoint;
+        LOG_INFO << label << " client transport endpoint="
                   << runtime_.client->GetTransportEndpoint();
-        LOG(INFO) << label << " is local replica="
+        LOG_INFO << label << " is local replica="
                   << runtime_.client->IsReplicaOnLocalMemory(replica);
     }
 

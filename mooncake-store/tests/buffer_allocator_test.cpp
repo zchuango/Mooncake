@@ -1,6 +1,7 @@
 // buffer_allocator_test.cpp
-#include <glog/logging.h>
+
 #include <gtest/gtest.h>
+#include "log_macros.h"
 
 #include <atomic>
 #include <cstddef>
@@ -107,7 +108,7 @@ TEST_F(BufferAllocatorTest, AllocateMultiple) {
 
         // Clean up allocated memory
         handles.clear();
-        LOG(INFO) << "Cleaned up handles in AllocateMultiple test";
+        LOG_INFO << "Cleaned up handles in AllocateMultiple test";
     }
 }
 
@@ -197,7 +198,7 @@ TEST_F(BufferAllocatorTest, ParallelAllocation) {
             thread.join();
         }
 
-        LOG(INFO) << "Completed parallel allocation/deallocation test for "
+        LOG_INFO << "Completed parallel allocation/deallocation test for "
                   << (allocator_type == BufferAllocatorType::CACHELIB
                           ? "CACHELIB"
                           : "OFFSET");

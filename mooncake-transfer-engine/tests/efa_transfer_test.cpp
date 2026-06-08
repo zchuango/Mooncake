@@ -28,7 +28,8 @@
 //       --transfer_mb 368
 
 #include <gflags/gflags.h>
-#include <glog/logging.h>
+#include "log_macros.h"
+
 #include <signal.h>
 #include <sys/mman.h>
 
@@ -79,7 +80,7 @@ static void* allocateHugepage(size_t size) {
     void* buf = mmap(nullptr, size, PROT_READ | PROT_WRITE,
                      MAP_PRIVATE | MAP_ANONYMOUS | MAP_HUGETLB, -1, 0);
     if (buf == MAP_FAILED) {
-        LOG(WARNING) << "Hugepage mmap failed (" << strerror(errno)
+        LOG_WARNING << "Hugepage mmap failed (" << strerror(errno)
                      << "), falling back to regular pages";
         buf = mmap(nullptr, size, PROT_READ | PROT_WRITE,
                    MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
@@ -93,33 +94,33 @@ static int runTarget(TransferEngine* engine) {
         static_cast<size_t>(FLAGS_buf_size_gb * 1024 * 1024 * 1024);
     int num_bufs = FLAGS_num_bufs;
 
-    LOG(INFO) << "=== Target Node ===";
-    LOG(INFO) << "Registering " << num_bufs << " x " << FLAGS_buf_size_gb
+    LOG_INFO << "=== Target Node ===";
+    LOG_INFO << "Registering " << num_bufs << " x " << FLAGS_buf_size_gb
               << " GB = " << num_bufs * FLAGS_buf_size_gb << " GB";
 
     // Allocate buffers
     std::vector<void*> bufs;
     bufs.reserve(num_bufs);
-    LOG(INFO) << "Allocating " << num_bufs << " buffers...";
+    LOG_INFO << "Allocating " << num_bufs << " buffers...";
     for (int i = 0; i < num_bufs; ++i) {
         void* buf = allocateHugepage(buf_bytes);
         if (!buf) {
-            LOG(ERROR) << "Allocation failed at buffer " << i;
+            LOG_ERROR << "Allocation failed at buffer " << i;
             for (auto* p : bufs) munmap(p, buf_bytes);
             return 1;
         }
         bufs.push_back(buf);
         if ((i + 1) % 50 == 0 || i == num_bufs - 1)
-            LOG(INFO) << "  allocated " << (i + 1) << "/" << num_bufs;
+            LOG_INFO << "  allocated " << (i + 1) << "/" << num_bufs;
     }
 
     // Register all buffers
-    LOG(INFO) << "Registering " << num_bufs << " buffers on all NICs...";
+    LOG_INFO << "Registering " << num_bufs << " buffers on all NICs...";
     auto t0 = std::chrono::steady_clock::now();
     for (int i = 0; i < num_bufs; ++i) {
         int ret = engine->registerLocalMemory(bufs[i], buf_bytes, "*", true);
         if (ret != 0) {
-            LOG(ERROR) << "registerLocalMemory failed at buffer " << i
+            LOG_ERROR << "registerLocalMemory failed at buffer " << i
                        << ": ret=" << ret;
             for (int j = 0; j < i; ++j) engine->unregisterLocalMemory(bufs[j]);
             for (auto* p : bufs) munmap(p, buf_bytes);
@@ -128,20 +129,20 @@ static int runTarget(TransferEngine* engine) {
         if ((i + 1) % 50 == 0 || i == num_bufs - 1) {
             auto now = std::chrono::steady_clock::now();
             double elapsed = std::chrono::duration<double>(now - t0).count();
-            LOG(INFO) << "  registered " << (i + 1) << "/" << num_bufs << " ("
+            LOG_INFO << "  registered " << (i + 1) << "/" << num_bufs << " ("
                       << elapsed << "s)";
         }
     }
     auto t1 = std::chrono::steady_clock::now();
-    LOG(INFO) << "Registration complete: "
+    LOG_INFO << "Registration complete: "
               << std::chrono::duration<double>(t1 - t0).count() << "s";
 
-    LOG(INFO) << "Target ready. First buffer at " << bufs[0]
+    LOG_INFO << "Target ready. First buffer at " << bufs[0]
               << ". Waiting for initiator (Ctrl+C to stop)...";
 
     while (g_running) sleep(1);
 
-    LOG(INFO) << "Shutting down target...";
+    LOG_INFO << "Shutting down target...";
     for (auto* p : bufs) {
         engine->unregisterLocalMemory(p);
         munmap(p, buf_bytes);
@@ -173,13 +174,13 @@ static int runInitiator(TransferEngine* engine) {
     size_t transfer_bytes =
         static_cast<size_t>(FLAGS_transfer_mb * 1024 * 1024);
 
-    LOG(INFO) << "=== Initiator Node ===";
-    LOG(INFO) << "Target: " << FLAGS_target;
-    LOG(INFO) << "Transfer size: " << FLAGS_transfer_mb << " MB";
-    LOG(INFO) << "Threads: " << FLAGS_threads;
+    LOG_INFO << "=== Initiator Node ===";
+    LOG_INFO << "Target: " << FLAGS_target;
+    LOG_INFO << "Transfer size: " << FLAGS_transfer_mb << " MB";
+    LOG_INFO << "Threads: " << FLAGS_threads;
 
     if (FLAGS_target.empty()) {
-        LOG(ERROR) << "--target required in initiator mode";
+        LOG_ERROR << "--target required in initiator mode";
         return 1;
     }
 
@@ -189,40 +190,40 @@ static int runInitiator(TransferEngine* engine) {
     for (int t = 0; t < FLAGS_threads; ++t) {
         recv_bufs[t] = allocateHugepage(recv_bytes);
         if (!recv_bufs[t]) {
-            LOG(ERROR) << "Failed to allocate receive buffer for thread " << t;
+            LOG_ERROR << "Failed to allocate receive buffer for thread " << t;
             return 1;
         }
         int ret = engine->registerLocalMemory(recv_bufs[t], recv_bytes, "cpu:0",
                                               true);
         if (ret != 0) {
-            LOG(ERROR) << "Failed to register receive buffer: " << ret;
+            LOG_ERROR << "Failed to register receive buffer: " << ret;
             return 1;
         }
     }
-    LOG(INFO) << "Allocated and registered " << FLAGS_threads
+    LOG_INFO << "Allocated and registered " << FLAGS_threads
               << " receive buffers of " << recv_bytes / 1e6 << " MB each";
 
     // Open remote segment
     auto segment_id = engine->openSegment(FLAGS_target);
     if (segment_id < 0) {
-        LOG(ERROR) << "openSegment failed for " << FLAGS_target;
+        LOG_ERROR << "openSegment failed for " << FLAGS_target;
         return 1;
     }
 
     // Get remote buffer info
     auto segment_desc = engine->getMetadata()->getSegmentDescByID(segment_id);
     if (!segment_desc || segment_desc->buffers.empty()) {
-        LOG(ERROR) << "No remote buffers found";
+        LOG_ERROR << "No remote buffers found";
         return 1;
     }
     size_t num_remote_bufs = segment_desc->buffers.size();
-    LOG(INFO) << "Remote has " << num_remote_bufs << " buffers";
-    LOG(INFO) << "First buffer: addr=0x" << std::hex
+    LOG_INFO << "Remote has " << num_remote_bufs << " buffers";
+    LOG_INFO << "First buffer: addr=0x" << std::hex
               << segment_desc->buffers[0].addr << std::dec
               << " size=" << segment_desc->buffers[0].length;
 
     // Connection warmup: small transfer to establish endpoints
-    LOG(INFO) << "Warming up connection...";
+    LOG_INFO << "Warming up connection...";
     {
         size_t warmup_size = std::min(transfer_bytes, (size_t)(64 * 1024));
         auto batch_id = engine->allocateBatchID(1);
@@ -234,7 +235,7 @@ static int runInitiator(TransferEngine* engine) {
         req.length = warmup_size;
         auto s = engine->submitTransfer(batch_id, {req});
         if (!s.ok()) {
-            LOG(ERROR) << "Warmup transfer failed: " << s.ToString();
+            LOG_ERROR << "Warmup transfer failed: " << s.ToString();
             return 1;
         }
         while (true) {
@@ -242,13 +243,13 @@ static int runInitiator(TransferEngine* engine) {
             engine->getTransferStatus(batch_id, 0, status);
             if (status.s == TransferStatusEnum::COMPLETED) break;
             if (status.s == TransferStatusEnum::FAILED) {
-                LOG(ERROR) << "Warmup transfer FAILED";
+                LOG_ERROR << "Warmup transfer FAILED";
                 return 1;
             }
         }
         engine->freeBatchID(batch_id);
     }
-    LOG(INFO) << "Connection ready.";
+    LOG_INFO << "Connection ready.";
 
     // Refresh segment desc after connection warmup (endpoints are now up)
     engine->syncSegmentCache(FLAGS_target);
@@ -331,7 +332,7 @@ static int runInitiator(TransferEngine* engine) {
 
     // Run warmup + benchmark with threads
     int num_threads = FLAGS_threads;
-    LOG(INFO) << "Running with " << num_threads << " threads, " << FLAGS_warmup
+    LOG_INFO << "Running with " << num_threads << " threads, " << FLAGS_warmup
               << " warmup + " << FLAGS_iterations
               << " bench iterations per thread...";
 
@@ -358,7 +359,7 @@ static int runInitiator(TransferEngine* engine) {
     }
 
     if (all_latencies.empty()) {
-        LOG(ERROR) << "All transfers failed";
+        LOG_ERROR << "All transfers failed";
         return 1;
     }
 
@@ -367,21 +368,21 @@ static int runInitiator(TransferEngine* engine) {
     double total_bytes = (double)total_xfers * transfer_bytes;
     double agg_throughput = total_bytes / 1e9 / (wall_ms / 1000.0);
 
-    LOG(INFO) << "=== Results (" << num_threads << " threads) ===";
-    LOG(INFO) << "Transfer: " << FLAGS_transfer_mb << " MB x " << total_xfers
+    LOG_INFO << "=== Results (" << num_threads << " threads) ===";
+    LOG_INFO << "Transfer: " << FLAGS_transfer_mb << " MB x " << total_xfers
               << " transfers";
-    LOG(INFO) << "Wall time: " << wall_ms << " ms";
-    LOG(INFO) << "Per-transfer p50: " << stats.p50_ms << " ms"
+    LOG_INFO << "Wall time: " << wall_ms << " ms";
+    LOG_INFO << "Per-transfer p50: " << stats.p50_ms << " ms"
               << "  p99: " << stats.p99_ms << " ms";
-    LOG(INFO) << "Per-transfer throughput: " << stats.throughput_gbs << " GB/s";
-    LOG(INFO) << "Aggregate throughput: " << agg_throughput << " GB/s";
-    LOG(INFO) << "Errors: " << total_errors;
+    LOG_INFO << "Per-transfer throughput: " << stats.throughput_gbs << " GB/s";
+    LOG_INFO << "Aggregate throughput: " << agg_throughput << " GB/s";
+    LOG_INFO << "Errors: " << total_errors;
 
     // Per-thread stats
     for (int t = 0; t < num_threads; ++t) {
         if (results[t].latencies.empty()) continue;
         auto ts = computeStats(results[t].latencies, transfer_bytes);
-        LOG(INFO) << "  Thread " << t << ": p50=" << ts.p50_ms
+        LOG_INFO << "  Thread " << t << ": p50=" << ts.p50_ms
                   << "ms  tput=" << ts.throughput_gbs << " GB/s"
                   << "  iters=" << results[t].latencies.size()
                   << "  errors=" << results[t].errors;
@@ -403,7 +404,7 @@ int main(int argc, char** argv) {
     setupSignalHandler();
 
     if (FLAGS_server.empty()) {
-        LOG(ERROR) << "--server is required";
+        LOG_ERROR << "--server is required";
         return 1;
     }
 
@@ -417,7 +418,7 @@ int main(int argc, char** argv) {
     auto engine = std::make_unique<TransferEngine>(false);
     int ret = engine->init(FLAGS_metadata, FLAGS_server, host, port);
     if (ret != 0) {
-        LOG(ERROR) << "Engine init failed: " << ret;
+        LOG_ERROR << "Engine init failed: " << ret;
         return 1;
     }
 
@@ -425,12 +426,12 @@ int main(int argc, char** argv) {
     engine->getLocalTopology()->discover({});
     auto* xport = engine->installTransport("efa", nullptr);
     if (!xport) {
-        LOG(ERROR) << "installTransport(efa) failed";
+        LOG_ERROR << "installTransport(efa) failed";
         return 1;
     }
 
     std::string actual_server = engine->getLocalIpAndPort();
-    LOG(INFO) << "Actual server name (use this for --target): "
+    LOG_INFO << "Actual server name (use this for --target): "
               << actual_server;
 
     if (FLAGS_mode == "target") {
@@ -438,7 +439,7 @@ int main(int argc, char** argv) {
     } else if (FLAGS_mode == "initiator") {
         ret = runInitiator(engine.get());
     } else {
-        LOG(ERROR) << "Unknown mode: " << FLAGS_mode;
+        LOG_ERROR << "Unknown mode: " << FLAGS_mode;
         ret = 1;
     }
 

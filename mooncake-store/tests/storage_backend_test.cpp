@@ -1,6 +1,7 @@
 #include "storage_backend.h"
+#include "log_macros.h"
 
-#include <glog/logging.h>
+
 #include <gtest/gtest.h>
 
 #include <filesystem>
@@ -112,13 +113,13 @@ class StorageBackendTest : public ::testing::Test {
                 if (entry.is_regular_file()) {
                     fs::remove(entry.path(), ec);
                     if (ec) {
-                        LOG(WARNING) << "Failed to remove file '"
+                        LOG_WARNING << "Failed to remove file '"
                                      << entry.path() << "': " << ec.message();
                     }
                 } else if (entry.is_directory()) {
                     fs::remove_all(entry.path(), ec);
                     if (ec) {
-                        LOG(WARNING) << "Failed to remove directory '"
+                        LOG_WARNING << "Failed to remove directory '"
                                      << entry.path() << "': " << ec.message();
                     }
                 }
@@ -129,7 +130,7 @@ class StorageBackendTest : public ::testing::Test {
 
     void TearDown() override {
         google::ShutdownGoogleLogging();
-        LOG(INFO) << "Clear test data...";
+        LOG_INFO << "Clear test data...";
         // Clean up all test files and subdirectories
         if (fs::exists(data_path)) {
             for (const auto& entry : fs::directory_iterator(data_path)) {
@@ -137,13 +138,13 @@ class StorageBackendTest : public ::testing::Test {
                 if (entry.is_regular_file()) {
                     fs::remove(entry.path(), ec);
                     if (ec) {
-                        LOG(WARNING) << "Failed to remove file '"
+                        LOG_WARNING << "Failed to remove file '"
                                      << entry.path() << "': " << ec.message();
                     }
                 } else if (entry.is_directory()) {
                     fs::remove_all(entry.path(), ec);
                     if (ec) {
-                        LOG(WARNING) << "Failed to remove directory '"
+                        LOG_WARNING << "Failed to remove directory '"
                                      << entry.path() << "': " << ec.message();
                     }
                 }
@@ -309,7 +310,7 @@ TEST_F(StorageBackendTest, InitializeWithInvalidStart_UseTimestampFallback) {
     int64_t expected = (time << 12) | 0;
     BucketIdGenerator gen(
         BucketIdGenerator::INIT_NEW_START_ID);  // invalid start
-    LOG(INFO) << "expected is: " << expected << " gen is: " << gen.CurrentId();
+    LOG_INFO << "expected is: " << expected << " gen is: " << gen.CurrentId();
     EXPECT_TRUE(expected <= gen.CurrentId());
 }
 
@@ -1664,7 +1665,7 @@ TEST_F(StorageBackendTest,
                 expected_magic.resize(8, '_');
 
                 if (magic != expected_magic) {
-                    LOG(ERROR)
+                    LOG_ERROR
                         << "CORRUPTION: Expected magic '" << expected_magic
                         << "' but got '" << magic << "'";
                     corruption_detected.store(true, std::memory_order_release);
@@ -1676,7 +1677,7 @@ TEST_F(StorageBackendTest,
                      ++i) {
                     size_t pattern_idx = i % patternA.size();
                     if (buffer[i] != patternA[pattern_idx]) {
-                        LOG(ERROR)
+                        LOG_ERROR
                             << "CORRUPTION: Pattern mismatch at offset " << i;
                         corruption_detected.store(true,
                                                   std::memory_order_release);
@@ -1737,7 +1738,7 @@ TEST_F(StorageBackendTest,
     reader_thread.join();
     writer_thread.join();
 
-    LOG(INFO) << "Concurrency test completed: " << read_count.load()
+    LOG_INFO << "Concurrency test completed: " << read_count.load()
               << " reads, " << write_count.load() << " writes";
 
     EXPECT_FALSE(corruption_detected.load())
@@ -2104,7 +2105,7 @@ TEST_F(StorageBackendTest, BucketStorageBackend_ConcurrentReadsNoBlocking) {
                            end_time - start_time)
                            .count();
 
-    LOG(INFO) << "Concurrent reads test: " << successful_reads.load()
+    LOG_INFO << "Concurrent reads test: " << successful_reads.load()
               << " successful reads in " << duration_ms << "ms";
 
     EXPECT_FALSE(any_failure.load()) << "All reads should succeed";
@@ -2450,7 +2451,7 @@ TEST_F(StorageBackendTest,
     }
     deleter_thread.join();
 
-    LOG(INFO) << "Concurrent delete test: " << successful_reads.load() << "/"
+    LOG_INFO << "Concurrent delete test: " << successful_reads.load() << "/"
               << num_readers << " readers got data before delete";
 
     // All readers should have completed
@@ -2546,7 +2547,7 @@ TEST_F(StorageBackendTest, BucketStorageBackend_ConcurrentReadWriteDelete) {
             if (load_result.has_value()) {
                 std::string loaded(read_buf.get(), expected_value.size());
                 if (loaded != expected_value) {
-                    LOG(ERROR) << "Corruption detected: expected '"
+                    LOG_ERROR << "Corruption detected: expected '"
                                << expected_value << "' got '" << loaded << "'";
                     corruption_detected.store(true);
                 }
@@ -2601,7 +2602,7 @@ TEST_F(StorageBackendTest, BucketStorageBackend_ConcurrentReadWriteDelete) {
     reader_thread.join();
     deleter_thread.join();
 
-    LOG(INFO) << "Stress test completed: writes=" << write_count.load()
+    LOG_INFO << "Stress test completed: writes=" << write_count.load()
               << ", reads=" << read_count.load()
               << ", deletes=" << delete_count.load();
 

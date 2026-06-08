@@ -1,7 +1,8 @@
 #include <cuda_runtime.h>
+#include "log_macros.h"
 #include <thread>
 #include <mooncake_worker.cuh>
-#include <glog/logging.h>
+
 #include <transfer_engine.h>
 #include "pg_utils.h"
 
@@ -45,7 +46,7 @@ bool MooncakeWorker::waitUntilTasksSubmitted(
     auto submitted = [this, &tasks] {
         for (const auto& task : tasks) {
             if (task.task_id >= kNumTasks_) {
-                LOG(ERROR) << "Invalid task id.";
+                LOG_ERROR << "Invalid task id.";
                 return true;
             }
             if (submitted_task_sequence_[task.task_id].load(
@@ -196,7 +197,7 @@ void MooncakeWorker::startWorker() {
                                      group->engine->probePeerAliveByID(
                                          group->segmentIDs[j]) !=
                                          PeerLiveness::Alive)) {
-                                    LOG(ERROR)
+                                    LOG_ERROR
                                         << "Rank " << group->rank
                                         << " marking peer " << j
                                         << " as broken during transferring op "
@@ -222,7 +223,7 @@ void MooncakeWorker::startWorker() {
                     if (!skipTransfer) {
                         auto s = group->engine->freeBatchID(task.batchID);
                         if (!s.ok()) {
-                            LOG(WARNING)
+                            LOG_WARNING
                                 << "BatchID leaked due to freeBatchID "
                                    "failure (likely caused by a timeout): "
                                 << s.message();
@@ -286,7 +287,7 @@ void MooncakeWorker::startWorker() {
                                  group->engine->probePeerAliveByID(
                                      group->segmentIDs[j]) !=
                                      PeerLiveness::Alive)) {
-                                LOG(ERROR) << "Rank " << group->rank
+                                LOG_ERROR << "Rank " << group->rank
                                            << " marking peer " << j
                                            << " as broken during syncing op "
                                            << (int)task.opType;
@@ -321,7 +322,7 @@ void MooncakeWorker::startWorker() {
                         }
                         auto s = group->engine->freeBatchID(task.batchID);
                         if (!s.ok()) {
-                            LOG(WARNING)
+                            LOG_WARNING
                                 << "BatchID leaked due to freeBatchID "
                                    "failure (likely caused by a timeout): "
                                 << s.message();

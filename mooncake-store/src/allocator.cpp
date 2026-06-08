@@ -1,10 +1,11 @@
 // buffer_allocator.cpp
 #include "allocator.h"
 
-#include <glog/logging.h>
+
 
 #include <memory>
 
+#include "log_macros.h"
 #include "master_metric_manager.h"
 
 namespace mooncake {
@@ -24,7 +25,7 @@ AllocatedBuffer::~AllocatedBuffer() {
     auto alloc = allocator_.lock();
     if (alloc) {
         alloc->deallocate(this);
-        VLOG(1) << "buf_handle_deallocated size=" << size_;
+        LOG_INFO << "buf_handle_deallocated size=" << size_;
     }
 }
 
@@ -35,7 +36,7 @@ AllocatedBuffer::Descriptor AllocatedBuffer::get_descriptor() const {
     if (alloc) {
         endpoint = alloc->getTransportEndpoint();
     } else {
-        LOG(ERROR) << "allocator=expired_or_null in get_descriptor";
+        LOG_ERROR << "allocator=expired_or_null in get_descriptor";
     }
 
     if (this->protocol == "cxl") {
@@ -81,7 +82,7 @@ CachelibBufferAllocator::CachelibBufferAllocator(std::string segment_name,
       cur_size_(0),
       transport_endpoint_(std::move(transport_endpoint)),
       replica_type_(replica_type) {
-    VLOG(1) << "initializing_buffer_allocator segment_name=" << segment_name
+    LOG_INFO << "initializing_buffer_allocator segment_name=" << segment_name
             << " base_address=" << reinterpret_cast<void*>(base)
             << " size=" << size;
 
@@ -102,12 +103,12 @@ CachelibBufferAllocator::CachelibBufferAllocator(std::string segment_name,
         header_region_size_, reinterpret_cast<void*>(base), size);
 
     if (!memory_allocator_) {
-        LOG(ERROR) << "status=failed_to_init_facebook_memory_allocator";
+        LOG_ERROR << "status=failed_to_init_facebook_memory_allocator";
     }
 
     // Add the main pool to the allocator.
     pool_id_ = memory_allocator_->addPool("main", size);
-    VLOG(1) << "buffer_allocator_initialized pool_id="
+    LOG_INFO << "buffer_allocator_initialized pool_id="
             << static_cast<int>(pool_id_);
 }
 
@@ -129,19 +130,19 @@ std::unique_ptr<AllocatedBuffer> CachelibBufferAllocator::allocate(
         size_t padding_size = std::max(size, kMinSliceSize);
         buffer = memory_allocator_->allocate(pool_id_, padding_size);
         if (!buffer) {
-            VLOG(1) << "allocation_failed size=" << size
+            LOG_INFO << "allocation_failed size=" << size
                     << " segment=" << segment_name_
                     << " current_size=" << cur_size_;
             return nullptr;
         }
     } catch (const std::exception& e) {
-        LOG(ERROR) << "allocation_exception error=" << e.what();
+        LOG_ERROR << "allocation_exception error=" << e.what();
         return nullptr;
     } catch (...) {
-        LOG(ERROR) << "allocation_unknown_exception";
+        LOG_ERROR << "allocation_unknown_exception";
         return nullptr;
     }
-    VLOG(1) << "allocation_succeeded size=" << size
+    LOG_INFO << "allocation_succeeded size=" << size
             << " segment=" << segment_name_ << " address=" << buffer;
     cur_size_.fetch_add(size);
     if (replica_type_ == ReplicaType::MEMORY) {
@@ -171,12 +172,12 @@ void CachelibBufferAllocator::deallocate(AllocatedBuffer* handle) {
             MasterMetricManager::instance().dec_allocated_nof_size(
                 segment_name_, freed_size);
         }
-        VLOG(1) << "deallocation_succeeded address=" << handle->buffer_ptr_
+        LOG_INFO << "deallocation_succeeded address=" << handle->buffer_ptr_
                 << " size=" << freed_size << " segment=" << segment_name_;
     } catch (const std::exception& e) {
-        LOG(ERROR) << "deallocation_exception error=" << e.what();
+        LOG_ERROR << "deallocation_exception error=" << e.what();
     } catch (...) {
-        LOG(ERROR) << "deallocation_unknown_exception";
+        LOG_ERROR << "deallocation_unknown_exception";
     }
 }
 
@@ -191,7 +192,7 @@ OffsetBufferAllocator::OffsetBufferAllocator(std::string segment_name,
       cur_size_(0),
       transport_endpoint_(std::move(transport_endpoint)),
       replica_type_(replica_type) {
-    VLOG(1) << "initializing_offset_buffer_allocator segment_name="
+    LOG_INFO << "initializing_offset_buffer_allocator segment_name="
             << segment_name << " base_address=" << reinterpret_cast<void*>(base)
             << " size=" << size;
 
@@ -212,14 +213,14 @@ OffsetBufferAllocator::OffsetBufferAllocator(std::string segment_name,
             base, size, static_cast<uint32_t>(init_capacity),
             static_cast<uint32_t>(max_capacity));
         if (!offset_allocator_) {
-            LOG(ERROR) << "status=failed_to_create_offset_allocator";
+            LOG_ERROR << "status=failed_to_create_offset_allocator";
             throw std::runtime_error("Failed to create offset allocator");
         }
 
-        VLOG(1) << "offset_buffer_allocator_initialized segment_name="
+        LOG_INFO << "offset_buffer_allocator_initialized segment_name="
                 << segment_name;
     } catch (const std::exception& e) {
-        LOG(ERROR) << "offset_allocator_init_exception error=" << e.what();
+        LOG_ERROR << "offset_allocator_init_exception error=" << e.what();
         throw;
     }
 }
@@ -236,7 +237,7 @@ OffsetBufferAllocator::~OffsetBufferAllocator() {
 
 std::unique_ptr<AllocatedBuffer> OffsetBufferAllocator::allocate(size_t size) {
     if (!offset_allocator_) {
-        LOG(ERROR) << "allocator_status=not_initialized";
+        LOG_ERROR << "allocator_status=not_initialized";
         return nullptr;
     }
 
@@ -245,7 +246,7 @@ std::unique_ptr<AllocatedBuffer> OffsetBufferAllocator::allocate(size_t size) {
         // Allocate memory using OffsetAllocator
         auto allocation_handle = offset_allocator_->allocate(size);
         if (!allocation_handle) {
-            VLOG(1) << "allocation_failed size=" << size
+            LOG_INFO << "allocation_failed size=" << size
                     << " segment=" << segment_name_
                     << " current_size=" << cur_size_;
             return nullptr;
@@ -258,13 +259,13 @@ std::unique_ptr<AllocatedBuffer> OffsetBufferAllocator::allocate(size_t size) {
         // OffsetAllocationHandle
         allocated_buffer = std::make_unique<AllocatedBuffer>(
             shared_from_this(), buffer_ptr, size, std::move(allocation_handle));
-        VLOG(1) << "allocation_succeeded size=" << size
+        LOG_INFO << "allocation_succeeded size=" << size
                 << " segment=" << segment_name_ << " address=" << buffer_ptr;
     } catch (const std::exception& e) {
-        LOG(ERROR) << "allocation_exception error=" << e.what();
+        LOG_ERROR << "allocation_exception error=" << e.what();
         return nullptr;
     } catch (...) {
-        LOG(ERROR) << "allocation_unknown_exception";
+        LOG_ERROR << "allocation_unknown_exception";
         return nullptr;
     }
 
@@ -293,12 +294,12 @@ void OffsetBufferAllocator::deallocate(AllocatedBuffer* handle) {
             MasterMetricManager::instance().dec_allocated_nof_size(
                 segment_name_, freed_size);
         }
-        VLOG(1) << "deallocation_succeeded address=" << handle->data()
+        LOG_INFO << "deallocation_succeeded address=" << handle->data()
                 << " size=" << freed_size << " segment=" << segment_name_;
     } catch (const std::exception& e) {
-        LOG(ERROR) << "deallocation_exception error=" << e.what();
+        LOG_ERROR << "deallocation_exception error=" << e.what();
     } catch (...) {
-        LOG(ERROR) << "deallocation_unknown_exception";
+        LOG_ERROR << "deallocation_unknown_exception";
     }
 }
 
@@ -311,24 +312,24 @@ size_t OffsetBufferAllocator::getLargestFreeRegion() const {
         auto report = offset_allocator_->storageReport();
         return report.largestFreeRegion;
     } catch (const std::exception& e) {
-        LOG(ERROR) << "Failed to get storage report: " << e.what()
+        LOG_ERROR << "Failed to get storage report: " << e.what()
                    << " segment=" << segment_name_;
         return 0;
     } catch (...) {
-        LOG(ERROR) << "Unknown error getting storage report"
+        LOG_ERROR << "Unknown error getting storage report"
                    << " segment=" << segment_name_;
         return 0;
     }
 }
 
 SimpleAllocator::SimpleAllocator(size_t size) {
-    LOG(INFO) << "initializing_simple_allocator size=" << size;
+    LOG_INFO << "initializing_simple_allocator size=" << size;
 
     try {
         // Allocate the base memory region
         base_ = std::aligned_alloc(facebook::cachelib::Slab::kSize, size);
         if (!base_) {
-            LOG(ERROR) << "base_memory_allocation_failed size=" << size;
+            LOG_ERROR << "base_memory_allocation_failed size=" << size;
             throw std::bad_alloc();
         }
 
@@ -341,7 +342,7 @@ SimpleAllocator::SimpleAllocator(size_t size) {
         header_region_start_ = std::make_unique<char[]>(header_region_size_);
         if (!header_region_start_) {
             std::free(base_);
-            LOG(ERROR) << "header_region_allocation_failed size="
+            LOG_ERROR << "header_region_allocation_failed size="
                        << header_region_size_;
             throw std::bad_alloc();
         }
@@ -355,13 +356,13 @@ SimpleAllocator::SimpleAllocator(size_t size) {
 
         if (!memory_allocator_) {
             std::free(base_);
-            LOG(ERROR) << "cachelib_memory_allocator_init_failed";
+            LOG_ERROR << "cachelib_memory_allocator_init_failed";
             throw std::runtime_error("Failed to initialize memory allocator");
         }
 
         // Add main memory pool
         pool_id_ = memory_allocator_->addPool("main", size);
-        LOG(INFO) << "simple_allocator_initialized pool_id="
+        LOG_INFO << "simple_allocator_initialized pool_id="
                   << static_cast<int>(pool_id_);
 
     } catch (const std::exception& e) {
@@ -369,7 +370,7 @@ SimpleAllocator::SimpleAllocator(size_t size) {
             std::free(base_);
             base_ = nullptr;
         }
-        LOG(ERROR) << "simple_allocator_init_exception error=" << e.what();
+        LOG_ERROR << "simple_allocator_init_exception error=" << e.what();
         throw;
     }
 }
@@ -383,16 +384,16 @@ SimpleAllocator::~SimpleAllocator() {
             std::free(base_);
             base_ = nullptr;
         }
-        LOG(INFO) << "simple_allocator_destroyed status=success";
+        LOG_INFO << "simple_allocator_destroyed status=success";
     } catch (const std::exception& e) {
-        LOG(ERROR) << "simple_allocator_destruction_exception error="
+        LOG_ERROR << "simple_allocator_destruction_exception error="
                    << e.what();
     }
 }
 
 void* SimpleAllocator::allocate(size_t size) {
     if (!memory_allocator_) {
-        LOG(ERROR) << "allocator_status=not_initialized";
+        LOG_ERROR << "allocator_status=not_initialized";
         return nullptr;
     }
 
@@ -403,23 +404,23 @@ void* SimpleAllocator::allocate(size_t size) {
             // This allocator is used in client side. Though the failure will
             // not cause any critical issue, it generally indicates the local
             // buffer is not large enough. So we log it as warning.
-            LOG(WARNING) << "allocation_failed size=" << size;
+            LOG_WARNING << "allocation_failed size=" << size;
             return nullptr;
         }
-        VLOG(1) << "allocation_succeeded size=" << size << " address=" << ptr;
+        LOG_INFO << "allocation_succeeded size=" << size << " address=" << ptr;
         return ptr;
     } catch (const std::exception& e) {
-        LOG(ERROR) << "allocation_exception error=" << e.what();
+        LOG_ERROR << "allocation_exception error=" << e.what();
         return nullptr;
     } catch (...) {
-        LOG(ERROR) << "allocation_unknown_exception";
+        LOG_ERROR << "allocation_unknown_exception";
         return nullptr;
     }
 }
 
 void SimpleAllocator::deallocate(void* ptr, size_t size) {
     if (!memory_allocator_ || !ptr) {
-        LOG(WARNING) << "invalid_deallocation_request allocator="
+        LOG_WARNING << "invalid_deallocation_request allocator="
                      << (memory_allocator_ ? "valid" : "null")
                      << " ptr=" << (ptr ? "valid" : "null");
         return;
@@ -427,11 +428,11 @@ void SimpleAllocator::deallocate(void* ptr, size_t size) {
 
     try {
         memory_allocator_->free(ptr);
-        VLOG(1) << "deallocation_succeeded size=" << size << " address=" << ptr;
+        LOG_INFO << "deallocation_succeeded size=" << size << " address=" << ptr;
     } catch (const std::exception& e) {
-        LOG(ERROR) << "deallocation_exception error=" << e.what();
+        LOG_ERROR << "deallocation_exception error=" << e.what();
     } catch (...) {
-        LOG(ERROR) << "deallocation_unknown_exception";
+        LOG_ERROR << "deallocation_unknown_exception";
     }
 }
 

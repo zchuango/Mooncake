@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include "tent/transport/rdma/buffers.h"
+#include "log_macros.h"
 #include "tent/transport/rdma/context.h"
 
 #include <algorithm>
@@ -198,14 +199,14 @@ Status LocalBufferManager::addDevice(RdmaContext* context) {
     assert(topology_ && context);
     int index = topology_->getNicId(context->name());
     if (index < 0) {
-        LOG(ERROR) << "Device " << context->name()
+        LOG_ERROR << "Device " << context->name()
                    << " not found in the local segment";
         return Status::DeviceNotFound(
             "Device not found in the local segment" LOC_MARK);
     }
 
     if (context_list_[index]) {
-        LOG(WARNING) << "Device " << context->name()
+        LOG_WARNING << "Device " << context->name()
                      << " already exists in the local segment";
     }
     context_list_[index] = context;

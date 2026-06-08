@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include "utils.h"
+#include "log_macros.h"
 
 #include "bench_runner.h"
 #include "te_backend.h"
@@ -31,7 +32,7 @@ int processBatchSizes(BenchRunner& runner, size_t block_size, size_t batch_size,
     else if (XferBenchConfig::op_type == "write")
         opcode = WRITE;
     else {
-        LOG(ERROR) << "Invalid args: workload only support read|write|mix";
+        LOG_ERROR << "Invalid args: workload only support read|write|mix";
         exit(EXIT_FAILURE);
     }
 
@@ -128,7 +129,7 @@ int main(int argc, char* argv[]) {
                  batch_size *= 2) {
                 if (block_size * batch_size * num_threads >
                     XferBenchConfig::total_buffer_size) {
-                    LOG(INFO) << "Skipped for block_size " << block_size
+                    LOG_INFO << "Skipped for block_size " << block_size
                               << " batch_size " << batch_size;
                 } else {
                     if (processBatchSizes(*runner, block_size, batch_size,

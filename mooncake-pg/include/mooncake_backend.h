@@ -2,6 +2,7 @@
 #define MOONCAKE_BACKEND_H
 
 #include <cstdint>
+#include "log_macros.h"
 #include <memory>
 #include <string>
 #include <vector>
@@ -183,13 +184,13 @@ class MooncakeBackend final : public ::c10d::ProcessGroup {
 
         auto it = matrix.find(location);
         if (it == matrix.end()) {
-            LOG(INFO) << "Topology is " << topology->toJson();
-            LOG(ERROR) << "Topology entry not found for location: " << location;
+            LOG_INFO << "Topology is " << topology->toJson();
+            LOG_ERROR << "Topology entry not found for location: " << location;
             return "";
         }
         if (it->second.preferred_hca.empty()) {
-            LOG(INFO) << "Topology is " << topology->toJson();
-            LOG(ERROR) << "Preferred HCA list is empty for location: "
+            LOG_INFO << "Topology is " << topology->toJson();
+            LOG_ERROR << "Preferred HCA list is empty for location: "
                        << location;
             return "";
         }

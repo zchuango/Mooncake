@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
-#include <glog/logging.h>
+#include "log_macros.h"
+
 
 #include <chrono>
 #include <cstdlib>
@@ -125,7 +126,7 @@ TEST(NonHAReconnectTest, ClientAutoReconnectAndRemount) {
     {
         auto vis = CheckSegmentVisible(master, local_hostname);
         if (!vis.has_value()) {
-            LOG(INFO) << "Initial segment not visible: " << vis.error();
+            LOG_INFO << "Initial segment not visible: " << vis.error();
         }
         ASSERT_TRUE(vis.value()) << "Initial segment not found in master";
     }
@@ -150,7 +151,7 @@ TEST(NonHAReconnectTest, ClientAutoReconnectAndRemount) {
     for (int i = 0; i < 30; ++i) {  // up to ~15s
         auto vis = CheckSegmentVisible(master, local_hostname);
         if (vis.value()) {
-            LOG(INFO) << "Segment found in master after restart in " << i
+            LOG_INFO << "Segment found in master after restart in " << i
                       << " attempts";
             found = true;
             break;

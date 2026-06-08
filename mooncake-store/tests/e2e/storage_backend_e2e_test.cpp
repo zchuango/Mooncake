@@ -13,7 +13,8 @@
 // permissions and limitations under the License.
 
 #include <gflags/gflags.h>
-#include <glog/logging.h>
+#include "log_macros.h"
+
 #include <gtest/gtest.h>
 #include <unistd.h>
 
@@ -65,7 +66,7 @@ class StorageBackendE2ETest : public ::testing::Test {
     static void SetUpTestSuite() {
         google::InitGoogleLogging("StorageBackendE2ETest");
         FLAGS_logtostderr = 1;
-        LOG(INFO) << "Protocol: " << FLAGS_protocol
+        LOG_INFO << "Protocol: " << FLAGS_protocol
                   << ", Device: " << FLAGS_device_name;
     }
 
@@ -103,7 +104,7 @@ class StorageBackendE2ETest : public ::testing::Test {
 
         ASSERT_TRUE(master_.Start(builder.build()));
         master_address_ = master_.master_address();
-        LOG(INFO) << "In-proc master at " << master_address_;
+        LOG_INFO << "In-proc master at " << master_address_;
     }
 
     // ----- client helpers -----
@@ -345,7 +346,7 @@ TEST_F(StorageBackendE2ETest, DiskReplicaSurvivesWriterDeath) {
                 EXPECT_EQ(got, expected_values[i])
                     << "Data mismatch for " << keys[i];
             } else {
-                LOG(WARNING)
+                LOG_WARNING
                     << "Key " << keys[i] << " not readable after writer "
                     << "death: " << toString(err);
             }
@@ -386,7 +387,7 @@ TEST_F(StorageBackendE2ETest, QuotaExhaustionGracefulBehavior) {
     for (const auto& key : keys) {
         if (writer->HasDiskReplica(key)) ++disk_count;
     }
-    LOG(INFO) << "DISK replicas under tight quota: " << disk_count << "/"
+    LOG_INFO << "DISK replicas under tight quota: " << disk_count << "/"
               << kKeyCount;
     EXPECT_GT(disk_count, 0) << "Expected at least one DISK replica.";
 

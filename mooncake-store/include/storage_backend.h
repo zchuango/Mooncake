@@ -1,6 +1,6 @@
 #pragma once
 
-#include <glog/logging.h>
+
 
 #include <atomic>
 #include <filesystem>
@@ -10,6 +10,7 @@
 #include <set>
 #include <string>
 #include <vector>
+#include <iostream>
 
 #include "file_interface.h"
 #include "mutex.h"
@@ -344,13 +345,15 @@ class StorageBackend {
                                                   bool enable_eviction = true) {
         namespace fs = std::filesystem;
         if (!fs::exists(root_dir)) {
-            LOG(INFO) << "Root directory does not exist: " << root_dir;
+            std::cerr << "Root directory does not exist: " << root_dir
+                      << std::endl;
             return nullptr;
         } else if (!fs::is_directory(root_dir)) {
-            LOG(INFO) << "Root path is not a directory: " << root_dir;
+            std::cerr << "Root path is not a directory: " << root_dir
+                      << std::endl;
             return nullptr;
         } else if (fsdir.empty()) {
-            LOG(INFO) << "FSDIR cannot be empty";
+            std::cerr << "FSDIR cannot be empty" << std::endl;
             return nullptr;
         }
 
@@ -1115,13 +1118,13 @@ class OffsetAllocatorStorageBackend : public StorageBackendInterface {
             const std::string& expected_key,
             const std::string& stored_key) const {
             if (stored_key.size() != key_len) {
-                LOG(ERROR) << "Key length mismatch: expected " << key_len
-                           << ", got " << stored_key.size();
+                std::cerr << "Key length mismatch: expected " << key_len
+                          << ", got " << stored_key.size() << std::endl;
                 return tl::make_unexpected(ErrorCode::FILE_READ_FAIL);
             }
             if (stored_key != expected_key) {
-                LOG(ERROR) << "Key mismatch: expected " << expected_key
-                           << ", got " << stored_key;
+                std::cerr << "Key mismatch: expected " << expected_key
+                          << ", got " << stored_key << std::endl;
                 return tl::make_unexpected(ErrorCode::FILE_READ_FAIL);
             }
             return {};

@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include "memory_location.h"
+#include "log_macros.h"
 
 #include "cuda_alike.h"
 
@@ -41,7 +42,7 @@ const std::vector<MemoryLocationEntry> getMemoryLocation(void *start,
     cudaPointerAttributes attributes;
     cudaError_t result = cudaPointerGetAttributes(&attributes, start);
     if (result != cudaSuccess) {
-        LOG(ERROR) << "cudaPointerGetAttributes failed (Error code: " << result
+        LOG_ERROR << "cudaPointerGetAttributes failed (Error code: " << result
                    << " - " << cudaGetErrorString(result) << ")" << std::endl;
         entries.push_back({(uint64_t)start, len, kWildcardLocation});
         return entries;
@@ -70,7 +71,7 @@ const std::vector<MemoryLocationEntry> getMemoryLocation(void *start,
 
     int rc = numa_move_pages(0, n, pages, nullptr, status, 0);
     if (rc != 0) {
-        PLOG(WARNING) << "Failed to get NUMA node, addr: " << start
+        PLOG_WARNING << "Failed to get NUMA node, addr: " << start
                       << ", len: " << len;
         entries.push_back({(uint64_t)start, len, kWildcardLocation});
         free(pages);

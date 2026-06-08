@@ -13,8 +13,9 @@
 // limitations under the License.
 
 #include "transport/hip_transport/event_pool.h"
+#include "log_macros.h"
 
-#include <glog/logging.h>
+
 
 namespace mooncake {
 
@@ -73,7 +74,7 @@ hipEvent_t EventPool::createEvent() {
     hipEvent_t event;
     hipError_t err = hipEventCreateWithFlags(&event, hipEventDisableTiming);
     if (err != hipSuccess) {
-        LOG(ERROR) << "EventPool: Failed to create event: "
+        LOG_ERROR << "EventPool: Failed to create event: "
                    << hipGetErrorString(err);
         return nullptr;
     }
@@ -83,7 +84,7 @@ hipEvent_t EventPool::createEvent() {
 hipEvent_t EventPool::createEventForDevice(int device_id) {
     hipError_t err = hipSetDevice(device_id);
     if (err != hipSuccess) {
-        LOG(ERROR) << "EventPool: Failed to set device " << device_id << ": "
+        LOG_ERROR << "EventPool: Failed to set device " << device_id << ": "
                    << hipGetErrorString(err);
         return nullptr;
     }
@@ -94,7 +95,7 @@ hipEvent_t EventPool::createEventForDevice(int device_id) {
 bool EventPool::initializeEventsForDevice(int device_id) {
     hipError_t err = hipSetDevice(device_id);
     if (err != hipSuccess) {
-        LOG(ERROR) << "EventPool: Failed to set device " << device_id << ": "
+        LOG_ERROR << "EventPool: Failed to set device " << device_id << ": "
                    << hipGetErrorString(err);
         return false;
     }

@@ -13,8 +13,9 @@
 // limitations under the License.
 
 #include "transport/rdma_transport/endpoint_store.h"
+#include "log_macros.h"
 
-#include <glog/logging.h>
+
 
 #include <atomic>
 #include <cassert>
@@ -50,13 +51,13 @@ std::shared_ptr<RdmaEndPoint> FIFOEndpointStore::insertEndpoint(
     const std::string &peer_nic_path, RdmaContext *context) {
     RWSpinlock::WriteGuard guard(endpoint_map_lock_);
     if (endpoint_map_.find(peer_nic_path) != endpoint_map_.end()) {
-        LOG(INFO) << "Endpoint " << peer_nic_path
+        LOG_INFO << "Endpoint " << peer_nic_path
                   << " already exists in FIFOEndpointStore";
         return endpoint_map_[peer_nic_path];
     }
     auto endpoint = std::make_shared<RdmaEndPoint>(*context);
     if (!endpoint) {
-        LOG(ERROR) << "Failed to allocate memory for RdmaEndPoint";
+        LOG_ERROR << "Failed to allocate memory for RdmaEndPoint";
         return nullptr;
     }
     auto &config = globalConfig();
@@ -99,7 +100,7 @@ void FIFOEndpointStore::evictEndpoint() {
     std::string victim = fifo_list_.front();
     fifo_list_.pop_front();
     fifo_map_.erase(victim);
-    LOG(INFO) << victim << " evicted";
+    LOG_INFO << victim << " evicted";
     waiting_list_len_++;
     auto victim_endpoint = endpoint_map_[victim];
     victim_endpoint->beginDestroy();
@@ -161,7 +162,7 @@ std::shared_ptr<RdmaEndPoint> SIEVEEndpointStore::getEndpoint(
                                                // because of idempotence
         return iter->second.first;
     }
-    // LOG(INFO) << "Endpoint " << peer_nic_path << " not found in
+    // LOG_INFO << "Endpoint " << peer_nic_path << " not found in
     // SIEVEEndpointStore";
     return nullptr;
 }
@@ -181,13 +182,13 @@ std::shared_ptr<RdmaEndPoint> SIEVEEndpointStore::insertEndpoint(
     const std::string &peer_nic_path, RdmaContext *context) {
     RWSpinlock::WriteGuard guard(endpoint_map_lock_);
     if (endpoint_map_.find(peer_nic_path) != endpoint_map_.end()) {
-        LOG(INFO) << "Endpoint " << peer_nic_path
+        LOG_INFO << "Endpoint " << peer_nic_path
                   << " already exists in SIEVEEndpointStore";
         return endpoint_map_[peer_nic_path].first;
     }
     auto endpoint = std::make_shared<RdmaEndPoint>(*context);
     if (!endpoint) {
-        LOG(ERROR) << "Failed to allocate memory for RdmaEndPoint";
+        LOG_ERROR << "Failed to allocate memory for RdmaEndPoint";
         return nullptr;
     }
     auto &config = globalConfig();
@@ -247,7 +248,7 @@ void SIEVEEndpointStore::evictEndpoint() {
     o == fifo_list_.begin() ? hand_ = std::nullopt : hand_ = std::prev(o);
     fifo_list_.erase(o);
     fifo_map_.erase(victim);
-    LOG(INFO) << victim << " evicted";
+    LOG_INFO << victim << " evicted";
     auto victim_instance = endpoint_map_[victim].first;
     victim_instance->beginDestroy();
     waiting_list_len_++;

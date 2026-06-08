@@ -20,6 +20,8 @@
 #include <optional>
 #include <vector>
 
+#include <gflags/gflags.h>
+
 #include "real_client.h"
 #include "client_buffer.hpp"
 #include "config.h"
@@ -35,7 +37,8 @@
 #ifdef USE_NOF
 #include "spdk/spdk_wrapper.h"
 #endif
-#include "mooncake_logging.h"
+#include "log_macros.h"
+#include "master_client.h"
 #define UBDIAG_PERF_DEF_FILE "mooncake_perf_points.def"
 #define UBDIAG_PROGRAM_NAME "mooncake_store"
 #include "ubdiag/auto_perf.h"
@@ -56,7 +59,7 @@ namespace {
 bool checkAcl(aclError result, const char *message) {
     if (result != ACL_ERROR_NONE) {
         const char *errMsg = aclGetRecentErrMsg();
-        MC_LOG(ERROR) << message << " (Error code: " << result << " - " << errMsg
+        MC_LOG_ERROR << message << " (Error code: " << result << " - " << errMsg
                    << ")";
         return false;
     }
@@ -70,12 +73,12 @@ tl::expected<void, ErrorCode> set_context_if_needed(const std::string &protocol,
         return {};
     }
     if (physical_device_id == kInvalidPhysicalDeviceId) {
-        MC_LOG(ERROR) << "Missing physical device id for " << action;
+        MC_LOG_ERROR << "Missing physical device id for " << action;
         return tl::make_unexpected(ErrorCode::INVALID_PARAMS);
     }
     if (!ContextManager::getInstance().setCurrentContextByPhysicalId(
             physical_device_id)) {
-        MC_LOG(ERROR) << "Failed to set current context for physical device "
+        MC_LOG_ERROR << "Failed to set current context for physical device "
                    << physical_device_id << " during " << action;
         return tl::make_unexpected(ErrorCode::INVALID_PARAMS);
     }
@@ -179,14 +182,14 @@ bool IsRealClientSlow(uint64_t latency_us) {
 void LogRealClientSingleSlow(const char *op, const std::string &key,
                              uint64_t size, uint64_t latency_us, int rc) {
     if (!IsRealClientSlow(latency_us)) return;
-    MC_LOG(WARNING) << op << "_slow key[" << key << "] size[" << size
+    MC_LOG_WARNING << op << "_slow key[" << key << "] size[" << size
                     << "] elapsed_us[" << latency_us << "] rc[" << rc << "]";
 }
 
 void LogRealClientBatchSlow(const char *op, size_t num_keys, uint64_t size,
                             uint64_t latency_us, size_t success) {
     if (!IsRealClientSlow(latency_us)) return;
-    MC_LOG(WARNING) << op << "_slow num_keys[" << num_keys << "] size["
+    MC_LOG_WARNING << op << "_slow num_keys[" << num_keys << "] size["
                     << size << "] elapsed_us[" << latency_us << "] success["
                     << success << "]";
 }
@@ -194,7 +197,7 @@ void LogRealClientBatchSlow(const char *op, size_t num_keys, uint64_t size,
 void LogRealClientBatchRcSlow(const char *op, size_t num_keys, uint64_t size,
                               uint64_t latency_us, int rc) {
     if (!IsRealClientSlow(latency_us)) return;
-    MC_LOG(WARNING) << op << "_slow num_keys[" << num_keys << "] size["
+    MC_LOG_WARNING << op << "_slow num_keys[" << num_keys << "] size["
                     << size << "] elapsed_us[" << latency_us << "] rc[" << rc
                     << "]";
 }
@@ -225,7 +228,7 @@ PreparedRangedReadRequest prepare_ranged_read_request(
         buffer_count != all_dst_offsets.size() ||
         buffer_count != all_src_offsets.size() ||
         buffer_count != all_sizes.size()) {
-        MC_LOG(ERROR) << log_prefix << ": top-level size mismatch";
+        MC_LOG_ERROR << log_prefix << ": top-level size mismatch";
         prepared.results = build_ranged_read_internal_error_results(
             buffer_count, all_keys, all_dst_offsets, ErrorCode::INVALID_PARAMS);
         prepared.top_level_valid = false;
@@ -240,7 +243,7 @@ PreparedRangedReadRequest prepare_ranged_read_request(
         if (key_count != all_dst_offsets[i].size() ||
             key_count != all_src_offsets[i].size() ||
             key_count != all_sizes[i].size()) {
-            MC_LOG(ERROR) << log_prefix
+            MC_LOG_ERROR << log_prefix
                        << ": key-group size mismatch for buffer index " << i;
             for (size_t j = 0; j < key_count; ++j) {
                 prepared.results[i][j] =
@@ -262,7 +265,7 @@ PreparedRangedReadRequest prepare_ranged_read_request(
 
             if (fragment_count != all_src_offsets[i][j].size() ||
                 fragment_count != all_sizes[i][j].size()) {
-                MC_LOG(ERROR) << log_prefix << ": fragment size mismatch, "
+                MC_LOG_ERROR << log_prefix << ": fragment size mismatch, "
                            << "buffer_index=" << i << " key_index=" << j;
                 continue;
             }
@@ -272,7 +275,7 @@ PreparedRangedReadRequest prepare_ranged_read_request(
                 const size_t fragment_size = all_sizes[i][j][k];
                 if (dst_offset >
                     std::numeric_limits<size_t>::max() - fragment_size) {
-                    MC_LOG(ERROR)
+                    MC_LOG_ERROR
                         << log_prefix
                         << ": destination range overflow, buffer_index=" << i
                         << " key_index=" << j << " fragment_index=" << k;
@@ -312,13 +315,13 @@ inline tl::expected<void, ErrorCode> scatter_host_to_maybe_device(
     if (gpu_staging::IsDevicePointer(dst, &device_id)) {
         gpu_staging::SetDevice(device_id);
         if (!gpu_staging::CopyHostToDevice(dst, src, size)) {
-            MC_LOG(ERROR) << "H2D copy failed: " << context;
+            MC_LOG_ERROR << "H2D copy failed: " << context;
             return tl::unexpected(ErrorCode::TRANSFER_FAIL);
         }
     } else if (gpu_staging::IsHostPointer(dst)) {
         memcpy(dst, src, size);
     } else {
-        MC_LOG(ERROR) << "Unknown memory type for dst buffer: " << context;
+        MC_LOG_ERROR << "Unknown memory type for dst buffer: " << context;
         return tl::unexpected(ErrorCode::INVALID_PARAMS);
     }
     return {};
@@ -431,7 +434,7 @@ RealClient::map_dummy_addrs_to_real_ptrs(
     const ShmContext &context, const std::vector<uint64_t> &dummy_addrs,
     const std::vector<size_t> &sizes, const UUID &client_id) const {
     if (dummy_addrs.size() != sizes.size()) {
-        MC_LOG(ERROR) << "Mismatched dummy_addrs and sizes, client_id="
+        MC_LOG_ERROR << "Mismatched dummy_addrs and sizes, client_id="
                    << client_id;
         return tl::unexpected(ErrorCode::INVALID_PARAMS);
     }
@@ -442,7 +445,7 @@ RealClient::map_dummy_addrs_to_real_ptrs(
         void *real_ptr = nullptr;
         if (!map_dummy_buffer_to_real(context, dummy_addrs[i], sizes[i],
                                       last_hit_shm, real_ptr)) {
-            MC_LOG(ERROR) << "Dummy buffer at " << dummy_addrs[i] << " (size "
+            MC_LOG_ERROR << "Dummy buffer at " << dummy_addrs[i] << " (size "
                        << sizes[i]
                        << ") not found in any mapped shared memory, client_id="
                        << client_id;
@@ -461,7 +464,7 @@ RealClient::map_dummy_nested_addrs_to_real_ptrs(
     const std::vector<std::string> &keys, const UUID &client_id) const {
     if (keys.size() != dummy_all_buffers.size() ||
         keys.size() != all_sizes.size()) {
-        MC_LOG(ERROR) << "Mismatched sizes for keys, dummy buffers, and sizes";
+        MC_LOG_ERROR << "Mismatched sizes for keys, dummy buffers, and sizes";
         return tl::unexpected(ErrorCode::INVALID_PARAMS);
     }
     std::vector<std::vector<void *>> real_all_buffers;
@@ -471,7 +474,7 @@ RealClient::map_dummy_nested_addrs_to_real_ptrs(
         const auto &row_addrs = dummy_all_buffers[ki];
         const auto &row_sizes = all_sizes[ki];
         if (row_addrs.size() != row_sizes.size()) {
-            MC_LOG(ERROR) << "Mismatched buffers and sizes for key: " << keys[ki];
+            MC_LOG_ERROR << "Mismatched buffers and sizes for key: " << keys[ki];
             return tl::unexpected(ErrorCode::INVALID_PARAMS);
         }
         std::vector<void *> row_real;
@@ -480,7 +483,7 @@ RealClient::map_dummy_nested_addrs_to_real_ptrs(
             void *real_ptr = nullptr;
             if (!map_dummy_buffer_to_real(context, row_addrs[j], row_sizes[j],
                                           last_hit_shm, real_ptr)) {
-                MC_LOG(ERROR)
+                MC_LOG_ERROR
                     << "Dummy buffer at " << row_addrs[j]
                     << " not found in any mapped shared memory for client "
                     << client_id;
@@ -539,7 +542,7 @@ void ResourceTracker::cleanupAllResources() {
 
     for (auto &wp : instances_) {
         if (auto sp = wp.lock()) {
-            MC_LOG(INFO) << "Cleaning up DistributedObjectStore instance";
+            MC_LOG_INFO << "Cleaning up DistributedObjectStore instance";
             sp->tearDownAll();
         }
     }
@@ -585,7 +588,7 @@ void ResourceTracker::startSignalThread() {
                 int sig = 0;
                 int rc = sigwait(&set, &sig);
                 if (rc != 0) {
-                    MC_LOG(ERROR) << "sigwait failed: " << strerror(rc);
+                    MC_LOG_ERROR << "sigwait failed: " << strerror(rc);
                     continue;
                 }
 
@@ -597,7 +600,7 @@ void ResourceTracker::startSignalThread() {
                 }
 
                 // Perform cleanup in normal thread context
-                MC_LOG(INFO) << "Received signal " << sig
+                MC_LOG_INFO << "Received signal " << sig
                           << ", cleaning up resources";
                 ResourceTracker::getInstance().cleanupAllResources();
 
@@ -615,7 +618,7 @@ void ResourceTracker::startSignalThread() {
                 sigaddset(&unblock_set, sig);
                 int ret = pthread_sigmask(SIG_UNBLOCK, &unblock_set, nullptr);
                 if (ret != 0) {
-                    MC_LOG(ERROR) << "Failed to unblock signal " << sig
+                    MC_LOG_ERROR << "Failed to unblock signal " << sig
                                << " before raising: " << strerror(ret);
                     _exit(EXIT_FAILURE);
                 }
@@ -656,10 +659,10 @@ tl::expected<void, ErrorCode> RealClient::setup_ascend_internal(
 #ifdef USE_ASCEND_DIRECT
     // Initialize ContextManager for dummy-real mode
     if (!ContextManager::getInstance().initialize()) {
-        MC_LOG(ERROR) << "Failed to initialize ContextManager";
+        MC_LOG_ERROR << "Failed to initialize ContextManager";
         return tl::unexpected(ErrorCode::INVALID_PARAMS);
     }
-    MC_LOG(INFO) << "ContextManager initialized with "
+    MC_LOG_INFO << "ContextManager initialized with "
               << ContextManager::getInstance().getDeviceCount() << " device(s)";
 #endif
     return {};
@@ -683,7 +686,7 @@ tl::expected<void, ErrorCode> RealClient::setup_internal(
         auto ascend_setup = setup_ascend_internal(local_buffer_size);
         if (!ascend_setup) return ascend_setup;
         if (!ContextManager::getInstance().setCurrentContext(0)) {
-            MC_LOG(ERROR) << "Failed to set current context for device " << 0;
+            MC_LOG_ERROR << "Failed to set current context for device " << 0;
             return tl::make_unexpected(ErrorCode::INVALID_PARAMS);
         }
     }
@@ -691,7 +694,7 @@ tl::expected<void, ErrorCode> RealClient::setup_internal(
 
 #ifdef USE_NOF
     if (!SpdkWrapper::GetInstance().InitializeEnv()) {
-        LOG(ERROR) << "spdk env init fail";
+        LOG_ERROR << "spdk env init fail";
         return tl::unexpected(ErrorCode::INTERNAL_ERROR);
     }
 #endif
@@ -702,7 +705,7 @@ tl::expected<void, ErrorCode> RealClient::setup_internal(
 
     // Validate required parameters
     if (local_hostname.empty()) {
-        MC_LOG(ERROR) << "local_hostname is empty";
+        MC_LOG_ERROR << "local_hostname is empty";
         return tl::unexpected(ErrorCode::INVALID_PARAMS);
     }
 
@@ -720,7 +723,7 @@ tl::expected<void, ErrorCode> RealClient::setup_internal(
             this->local_hostname, metadata_server, protocol, device_name,
             master_server_addr, transfer_engine, {{"client_mode", "real"}});
         if (!client_opt) {
-            MC_LOG(ERROR) << "Failed to create client";
+            MC_LOG_ERROR << "Failed to create client";
             return tl::unexpected(ErrorCode::INVALID_PARAMS);
         }
         client_ = *client_opt;
@@ -741,7 +744,7 @@ tl::expected<void, ErrorCode> RealClient::setup_internal(
             port_binder_ = std::make_unique<AutoPortBinder>(minPort, maxPort);
             int port = port_binder_->getPort();
             if (port < 0) {
-                MC_LOG(WARNING) << "Failed to bind available port, retry "
+                MC_LOG_WARNING << "Failed to bind available port, retry "
                              << (retry + 1) << "/" << kMaxRetries;
                 port_binder_.reset();
                 std::this_thread::sleep_for(std::chrono::milliseconds(100));
@@ -757,21 +760,21 @@ tl::expected<void, ErrorCode> RealClient::setup_internal(
             if (client_opt) {
                 client_ = *client_opt;
                 success = true;
-                MC_LOG(INFO) << "Successfully created client on port " << port
+                MC_LOG_INFO << "Successfully created client on port " << port
                           << " after " << (retry + 1) << " attempt(s)";
                 break;
             }
 
             // Failed to create client (possibly due to metadata registration
             // conflict), release port and retry with a different port
-            MC_LOG(WARNING) << "Failed to create client on port " << port
+            MC_LOG_WARNING << "Failed to create client on port " << port
                          << ", retry " << (retry + 1) << "/" << kMaxRetries;
             port_binder_.reset();
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
         }
 
         if (!success) {
-            MC_LOG(ERROR) << "Failed to create client after " << kMaxRetries
+            MC_LOG_ERROR << "Failed to create client after " << kMaxRetries
                        << " retries";
             return tl::unexpected(ErrorCode::INTERNAL_ERROR);
         }
@@ -790,18 +793,18 @@ tl::expected<void, ErrorCode> RealClient::setup_internal(
         local_buffer_size, this->protocol, should_use_hugepage,
         use_spdk_dma_for_client_buffer);
     if (local_buffer_size > 0 && protocol != "cxl") {
-        MC_LOG(INFO) << "Registering local memory: " << local_buffer_size
+        MC_LOG_INFO << "Registering local memory: " << local_buffer_size
                   << " bytes";
         auto result = client_->RegisterLocalMemory(
             client_buffer_allocator_->getBase(), local_buffer_size,
             kWildcardLocation, false, true);
         if (!result.has_value()) {
-            MC_LOG(ERROR) << "Failed to register local memory: "
+            MC_LOG_ERROR << "Failed to register local memory: "
                        << toString(result.error());
             return tl::unexpected(result.error());
         }
     } else {
-        MC_LOG(INFO) << "Local buffer size is 0, skip registering local memory";
+        MC_LOG_INFO << "Local buffer size is 0, skip registering local memory";
     }
 
     // If global_segment_size is 0, skip mount segment;
@@ -816,16 +819,16 @@ tl::expected<void, ErrorCode> RealClient::setup_internal(
             if (end != env && *end == '\0')
                 cxl_dev_size = static_cast<size_t>(val);
         } else {
-            MC_LOG(FATAL) << "MC_CXL_DEV_SIZE not set";
+            MC_LOG_FATAL << "MC_CXL_DEV_SIZE not set";
             return tl::unexpected(ErrorCode::INVALID_PARAMS);
         }
 
         void *ptr = client_->GetBaseAddr();
-        MC_LOG(INFO) << "Mounting CXL segment: " << cxl_dev_size << " bytes, "
+        MC_LOG_INFO << "Mounting CXL segment: " << cxl_dev_size << " bytes, "
                   << ptr;
         auto mount_result = client_->MountSegment(ptr, cxl_dev_size, protocol);
         if (!mount_result.has_value()) {
-            MC_LOG(ERROR) << "Failed to mount segment: "
+            MC_LOG_ERROR << "Failed to mount segment: "
                        << toString(mount_result.error());
             return tl::unexpected(mount_result.error());
         }
@@ -846,7 +849,7 @@ tl::expected<void, ErrorCode> RealClient::setup_internal(
                     if (i) nodes_str += ",";
                     nodes_str += std::to_string(seg_numa_nodes[i]);
                 }
-                MC_LOG(INFO) << "NUMA-segmented mode: NIC NUMA nodes=["
+                MC_LOG_INFO << "NUMA-segmented mode: NIC NUMA nodes=["
                           << nodes_str << "]";
             } else {
                 seg_numa_nodes.clear();
@@ -857,7 +860,7 @@ tl::expected<void, ErrorCode> RealClient::setup_internal(
             size_t segment_size = std::min(global_segment_size, max_mr_size);
             global_segment_size -= segment_size;
             current_glbseg_size += segment_size;
-            MC_LOG(INFO) << "Mounting segment: " << segment_size << " bytes, "
+            MC_LOG_INFO << "Mounting segment: " << segment_size << " bytes, "
                       << current_glbseg_size << " of " << total_glbseg_size;
 
             size_t mapped_size = segment_size;
@@ -885,7 +888,7 @@ tl::expected<void, ErrorCode> RealClient::setup_internal(
             }
 
             if (!ptr) {
-                MC_LOG(ERROR) << "Failed to allocate segment memory";
+                MC_LOG_ERROR << "Failed to allocate segment memory";
                 return tl::unexpected(ErrorCode::INVALID_PARAMS);
             }
             if (this->protocol == "ascend" || this->protocol == "ubshmem") {
@@ -905,23 +908,23 @@ tl::expected<void, ErrorCode> RealClient::setup_internal(
             auto mount_result =
                 client_->MountSegment(ptr, mapped_size, protocol, seg_location);
             if (!mount_result.has_value()) {
-                MC_LOG(ERROR) << "Failed to mount segment: "
+                MC_LOG_ERROR << "Failed to mount segment: "
                            << toString(mount_result.error());
                 return tl::unexpected(mount_result.error());
             }
         }
         if (total_glbseg_size == 0) {
-            MC_LOG(INFO) << "Global segment size is 0, skip mounting segment";
+            MC_LOG_INFO << "Global segment size is 0, skip mounting segment";
         }
     }
 
     // Start IPC server to accept FD from dummy clients
     if (!ipc_socket_path_.empty()) {
         if (start_ipc_server() != 0) {
-            MC_LOG(ERROR) << "Failed to start IPC server at " << ipc_socket_path_;
+            MC_LOG_ERROR << "Failed to start IPC server at " << ipc_socket_path_;
             return tl::unexpected(ErrorCode::INTERNAL_ERROR);
         }
-        MC_LOG(INFO) << "Starting IPC server at " << ipc_socket_path_;
+        MC_LOG_INFO << "Starting IPC server at " << ipc_socket_path_;
     }
     if (enable_ssd_offload && start_offload_rpc_server) {
         // Start RPC server for offload operations (batch_get / release_buffer).
@@ -935,13 +938,13 @@ tl::expected<void, ErrorCode> RealClient::setup_internal(
         offload_rpc_server_->async_start();
         auto err = offload_rpc_server_->get_errc();
         if (err) {
-            MC_LOG(ERROR) << "Failed to start offload RPC server: "
+            MC_LOG_ERROR << "Failed to start offload RPC server: "
                        << err.message();
             offload_rpc_server_.reset();
             return tl::unexpected(ErrorCode::INTERNAL_ERROR);
         }
         offload_rpc_port_ = offload_rpc_server_->port();
-        LOG(INFO) << "Offload RPC server started on port " << offload_rpc_port_;
+        LOG_INFO << "Offload RPC server started on port " << offload_rpc_port_;
 
         // Build local_rpc_addr from hostname + auto-allocated port
         std::string rpc_host = this->local_hostname;
@@ -962,7 +965,7 @@ tl::expected<void, ErrorCode> RealClient::setup_internal(
             client_->GetSsdMetricPtr());
         auto init_result = file_storage_->Init();
         if (!init_result) {
-            MC_LOG(ERROR) << "file storage init failed with error: "
+            MC_LOG_ERROR << "file storage init failed with error: "
                        << init_result.error();
             return init_result;
         }
@@ -970,7 +973,7 @@ tl::expected<void, ErrorCode> RealClient::setup_internal(
     client_requester_ = std::make_shared<ClientRequester>();
     if (FLAGS_enable_http_server) {
         if (start_http_server() != 0) {
-            MC_LOG(ERROR) << "Failed to start HTTP server on port "
+            MC_LOG_ERROR << "Failed to start HTTP server on port "
                        << FLAGS_http_port;
         }
     }
@@ -1009,18 +1012,18 @@ inline size_t get_config_size(const ConfigDict &config, const std::string &key,
     const std::string &value = it->second;
     // Check for negative numbers (stoull incorrectly parses "-1" as large val)
     if (!value.empty() && value[0] == '-') {
-        MC_LOG(WARNING) << "Invalid negative value for config key '" << key
+        MC_LOG_WARNING << "Invalid negative value for config key '" << key
                      << "': " << value << ", using default: " << default_value;
         return default_value;
     }
     try {
         return std::stoull(value);
     } catch (const std::invalid_argument &e) {
-        MC_LOG(WARNING) << "Invalid non-numeric value for config key '" << key
+        MC_LOG_WARNING << "Invalid non-numeric value for config key '" << key
                      << "': " << value << ", using default: " << default_value;
         return default_value;
     } catch (const std::out_of_range &e) {
-        MC_LOG(WARNING) << "Value out of range for config key '" << key
+        MC_LOG_WARNING << "Value out of range for config key '" << key
                      << "': " << value << ", using default: " << default_value;
         return default_value;
     }
@@ -1036,11 +1039,11 @@ tl::expected<void, ErrorCode> RealClient::setup_internal(
 
     // Validate required parameters
     if (local_hostname.empty()) {
-        MC_LOG(ERROR) << "Missing required config: " << CONFIG_KEY_LOCAL_HOSTNAME;
+        MC_LOG_ERROR << "Missing required config: " << CONFIG_KEY_LOCAL_HOSTNAME;
         return tl::unexpected(ErrorCode::INVALID_PARAMS);
     }
     if (metadata_server.empty()) {
-        MC_LOG(ERROR) << "Missing required config: " << CONFIG_KEY_METADATA_SERVER;
+        MC_LOG_ERROR << "Missing required config: " << CONFIG_KEY_METADATA_SERVER;
         return tl::unexpected(ErrorCode::INVALID_PARAMS);
     }
 
@@ -1060,14 +1063,14 @@ tl::expected<void, ErrorCode> RealClient::setup_internal(
     // Validate size parameters are within acceptable ranges
     if (global_segment_size < MIN_SEGMENT_SIZE ||
         global_segment_size > MAX_SEGMENT_SIZE) {
-        MC_LOG(ERROR) << "Invalid " << CONFIG_KEY_GLOBAL_SEGMENT_SIZE << ": "
+        MC_LOG_ERROR << "Invalid " << CONFIG_KEY_GLOBAL_SEGMENT_SIZE << ": "
                    << global_segment_size << ", must be between "
                    << MIN_SEGMENT_SIZE << " and " << MAX_SEGMENT_SIZE;
         return tl::unexpected(ErrorCode::INVALID_PARAMS);
     }
     if (local_buffer_size < MIN_SEGMENT_SIZE ||
         local_buffer_size > MAX_SEGMENT_SIZE) {
-        MC_LOG(ERROR) << "Invalid " << CONFIG_KEY_LOCAL_BUFFER_SIZE << ": "
+        MC_LOG_ERROR << "Invalid " << CONFIG_KEY_LOCAL_BUFFER_SIZE << ": "
                    << local_buffer_size << ", must be between "
                    << MIN_SEGMENT_SIZE << " and " << MAX_SEGMENT_SIZE;
         return tl::unexpected(ErrorCode::INVALID_PARAMS);
@@ -1075,7 +1078,7 @@ tl::expected<void, ErrorCode> RealClient::setup_internal(
 
     // Validate protocol is supported
     if (protocol != "tcp" && protocol != "rdma") {
-        MC_LOG(ERROR) << "Invalid " << CONFIG_KEY_PROTOCOL << ": " << protocol
+        MC_LOG_ERROR << "Invalid " << CONFIG_KEY_PROTOCOL << ": " << protocol
                    << ", must be 'tcp' or 'rdma'";
         return tl::unexpected(ErrorCode::INVALID_PARAMS);
     }
@@ -1100,7 +1103,7 @@ tl::expected<void, ErrorCode> RealClient::initAll_internal(
     const std::string &protocol_, const std::string &device_name,
     size_t mount_segment_size) {
     if (client_) {
-        MC_LOG(ERROR) << "Client is already initialized";
+        MC_LOG_ERROR << "Client is already initialized";
         return tl::unexpected(ErrorCode::INVALID_PARAMS);
     }
     uint64_t buffer_allocator_size = 1024 * 1024 * 1024;
@@ -1137,7 +1140,7 @@ tl::expected<void, ErrorCode> RealClient::tearDownAll_internal() {
         auto unregister_result = client_->unregisterLocalMemory(
             client_buffer_allocator_->getBase(), true);
         if (!unregister_result) {
-            MC_LOG(WARNING)
+            MC_LOG_WARNING
                 << "Failed to unregister client local buffer on tear down: "
                 << toString(unregister_result.error());
         }
@@ -1169,7 +1172,7 @@ tl::expected<void, ErrorCode> RealClient::tearDownAll_internal() {
             if (seg.is_ascend) {
                 teardown_ascend_shm_buffer(seg);
             } else if (munmap(seg.shm_buffer, seg.shm_size) != 0) {
-                MC_LOG(ERROR) << "Failed to unmap shm: " << seg.shm_name
+                MC_LOG_ERROR << "Failed to unmap shm: " << seg.shm_name
                            << ", error: " << strerror(errno);
             }
             seg.shm_buffer = nullptr;
@@ -1188,45 +1191,45 @@ int RealClient::mountSegment(const std::string &path, size_t offset,
                              const std::string &location,
                              std::vector<std::string> &out_segment_ids) {
     if (!client_) {
-        MC_LOG(ERROR) << "Client not initialized";
+        MC_LOG_ERROR << "Client not initialized";
         return -1;
     }
 
     size_t max_mr_size = globalConfig().max_mr_size;
     if (max_mr_size == 0) {
-        MC_LOG(ERROR) << "Invalid max_mr_size: 0";
+        MC_LOG_ERROR << "Invalid max_mr_size: 0";
         return -1;
     }
 
     size_t page_size = sysconf(_SC_PAGESIZE);
     if (max_mr_size < page_size) {
-        MC_LOG(ERROR) << "max_mr_size " << max_mr_size
+        MC_LOG_ERROR << "max_mr_size " << max_mr_size
                    << " is smaller than page_size " << page_size;
         return -1;
     }
 
     int fd = open(path.c_str(), O_RDWR);
     if (fd < 0) {
-        MC_LOG(ERROR) << "open failed for " << path << ": " << strerror(errno);
+        MC_LOG_ERROR << "open failed for " << path << ": " << strerror(errno);
         return -1;
     }
 
     struct stat st;
     if (fstat(fd, &st) != 0) {
-        MC_LOG(ERROR) << "fstat failed for " << path << ": " << strerror(errno);
+        MC_LOG_ERROR << "fstat failed for " << path << ": " << strerror(errno);
         close(fd);
         return -1;
     }
 
     if (offset > (size_t)st.st_size || size > (size_t)st.st_size - offset) {
-        MC_LOG(ERROR) << "requested range [offset=" << offset << ", size=" << size
+        MC_LOG_ERROR << "requested range [offset=" << offset << ", size=" << size
                    << "] exceeds file size " << st.st_size;
         close(fd);
         return -1;
     }
 
     if (offset % page_size != 0) {
-        MC_LOG(ERROR) << "offset " << offset
+        MC_LOG_ERROR << "offset " << offset
                    << " is not page-aligned (page_size=" << page_size << ")";
         close(fd);
         return -1;
@@ -1245,14 +1248,14 @@ int RealClient::mountSegment(const std::string &path, size_t offset,
         void *ptr = mmap(nullptr, chunk_size, PROT_READ | PROT_WRITE,
                          MAP_SHARED, fd, current_offset);
         if (ptr == MAP_FAILED) {
-            MC_LOG(ERROR) << "mmap failed for " << path << ": " << strerror(errno);
+            MC_LOG_ERROR << "mmap failed for " << path << ": " << strerror(errno);
             break;
         }
 
         auto result =
             client_->MountSegmentAndGetId(ptr, chunk_size, protocol, location);
         if (!result.has_value()) {
-            MC_LOG(ERROR) << "MountSegmentAndGetId failed";
+            MC_LOG_ERROR << "MountSegmentAndGetId failed";
             munmap(ptr, chunk_size);
             break;
         }
@@ -1359,7 +1362,7 @@ void RealClient::ReleaseAllAllocatedSegmentRecords() {
 int RealClient::unmountSegment(const std::vector<std::string> &segment_ids,
                                uint64_t grace_period_seconds) {
     if (!client_) {
-        MC_LOG(ERROR) << "Client not initialized";
+        MC_LOG_ERROR << "Client not initialized";
         return -1;
     }
 
@@ -1376,14 +1379,14 @@ int RealClient::unmountSegment(const std::vector<std::string> &segment_ids,
         for (const auto &segment_id : segment_ids) {
             UUID id;
             if (!StringToUuid(segment_id, id)) {
-                MC_LOG(ERROR) << "Invalid segment_id: " << segment_id;
+                MC_LOG_ERROR << "Invalid segment_id: " << segment_id;
                 if (first_error == 0) first_error = -1;
                 continue;
             }
 
             auto it = mounted_segment_records_.find(segment_id);
             if (it == mounted_segment_records_.end()) {
-                MC_LOG(ERROR) << "segment_id not found in mounted records: "
+                MC_LOG_ERROR << "segment_id not found in mounted records: "
                            << segment_id;
                 if (first_error == 0) first_error = -1;
                 continue;
@@ -1403,7 +1406,7 @@ int RealClient::unmountSegment(const std::vector<std::string> &segment_ids,
         auto result = client_->UnmountSegmentById(entry.id, grace_period_ms,
                                                   std::move(cleanup_callback));
         if (!result.has_value()) {
-            MC_LOG(ERROR) << "UnmountSegmentById failed for " << entry.segment_id;
+            MC_LOG_ERROR << "UnmountSegmentById failed for " << entry.segment_id;
             if (first_error == 0) {
                 first_error = static_cast<int>(result.error());
             }
@@ -1436,32 +1439,32 @@ int RealClient::allocateAndMountSegment(
     size_t size, const std::string &protocol, const std::string &location,
     std::vector<std::string> &out_segment_ids, size_t *out_allocated_size) {
     if (!client_) {
-        MC_LOG(ERROR) << "Client not initialized";
+        MC_LOG_ERROR << "Client not initialized";
         return -1;
     }
 
     size_t max_mr_size = globalConfig().max_mr_size;
     if (max_mr_size == 0) {
-        MC_LOG(ERROR) << "Invalid max_mr_size: 0";
+        MC_LOG_ERROR << "Invalid max_mr_size: 0";
         return -1;
     }
 
     if (size == 0) {
-        MC_LOG(ERROR) << "size is 0";
+        MC_LOG_ERROR << "size is 0";
         return -1;
     }
 
     const size_t slab_size = facebook::cachelib::Slab::kSize;
     size_t page_size = sysconf(_SC_PAGESIZE);
     if (max_mr_size < page_size) {
-        MC_LOG(ERROR) << "max_mr_size " << max_mr_size
+        MC_LOG_ERROR << "max_mr_size " << max_mr_size
                    << " is smaller than page_size " << page_size;
         return -1;
     }
 
     size_t aligned_max_chunk = (max_mr_size / page_size) * page_size;
     if (aligned_max_chunk < slab_size) {
-        MC_LOG(ERROR) << "max_mr_size " << max_mr_size
+        MC_LOG_ERROR << "max_mr_size " << max_mr_size
                    << " is smaller than slab_size " << slab_size;
         return -1;
     }
@@ -1470,7 +1473,7 @@ int RealClient::allocateAndMountSegment(
 
     // Check overflow before aligning up to slab_size
     if (size > std::numeric_limits<size_t>::max() - (slab_size - 1)) {
-        MC_LOG(ERROR) << "size " << size
+        MC_LOG_ERROR << "size " << size
                    << " overflows when aligning to slab_size";
         return -1;
     }
@@ -1487,7 +1490,7 @@ int RealClient::allocateAndMountSegment(
 
         void *ptr = allocate_buffer_allocator_memory(chunk_size, protocol);
         if (!ptr) {
-            MC_LOG(ERROR) << "allocate_buffer_allocator_memory failed for size "
+            MC_LOG_ERROR << "allocate_buffer_allocator_memory failed for size "
                        << chunk_size;
             break;
         }
@@ -1495,7 +1498,7 @@ int RealClient::allocateAndMountSegment(
         auto result =
             client_->MountSegmentAndGetId(ptr, chunk_size, protocol, location);
         if (!result.has_value()) {
-            MC_LOG(ERROR) << "MountSegmentAndGetId failed";
+            MC_LOG_ERROR << "MountSegmentAndGetId failed";
             free_memory(protocol, ptr);
             break;
         }
@@ -1539,7 +1542,7 @@ int RealClient::unmountAndFreeSegment(
     const std::vector<std::string> &segment_ids,
     uint64_t grace_period_seconds) {
     if (!client_) {
-        MC_LOG(ERROR) << "Client not initialized";
+        MC_LOG_ERROR << "Client not initialized";
         return -1;
     }
 
@@ -1556,14 +1559,14 @@ int RealClient::unmountAndFreeSegment(
         for (const auto &segment_id : segment_ids) {
             UUID id;
             if (!StringToUuid(segment_id, id)) {
-                MC_LOG(ERROR) << "Invalid segment_id: " << segment_id;
+                MC_LOG_ERROR << "Invalid segment_id: " << segment_id;
                 if (first_error == 0) first_error = -1;
                 continue;
             }
 
             auto it = allocated_segment_records_.find(segment_id);
             if (it == allocated_segment_records_.end()) {
-                MC_LOG(ERROR) << "segment_id not found in allocated records: "
+                MC_LOG_ERROR << "segment_id not found in allocated records: "
                            << segment_id;
                 if (first_error == 0) first_error = -1;
                 continue;
@@ -1583,7 +1586,7 @@ int RealClient::unmountAndFreeSegment(
         auto result = client_->UnmountSegmentById(entry.id, grace_period_ms,
                                                   std::move(cleanup_callback));
         if (!result.has_value()) {
-            MC_LOG(ERROR) << "UnmountSegmentById failed for " << entry.segment_id;
+            MC_LOG_ERROR << "UnmountSegmentById failed for " << entry.segment_id;
             if (first_error == 0) {
                 first_error = static_cast<int>(result.error());
             }
@@ -1686,11 +1689,11 @@ int RealClient::start_http_server() {
 
     auto ec = http_server_->async_start();
     if (ec.hasResult()) {
-        MC_LOG(ERROR) << "Failed to start HTTP server on port " << FLAGS_http_port;
+        MC_LOG_ERROR << "Failed to start HTTP server on port " << FLAGS_http_port;
         http_server_.reset();
         return -1;
     }
-    LOG(INFO) << "Client HTTP server started on port " << FLAGS_http_port;
+    LOG_INFO << "Client HTTP server started on port " << FLAGS_http_port;
     return 0;
 }
 
@@ -1698,7 +1701,7 @@ void RealClient::stop_http_server() {
     if (http_server_) {
         http_server_->stop();
         http_server_.reset();
-        MC_LOG(INFO) << "Client HTTP server stopped";
+        MC_LOG_INFO << "Client HTTP server stopped";
     }
 }
 
@@ -1707,15 +1710,15 @@ tl::expected<void, ErrorCode> RealClient::put_internal(
     const ReplicateConfig &config,
     const std::shared_ptr<ClientBufferAllocator> &client_buffer_allocator) {
     if (config.prefer_alloc_in_same_node) {
-        MC_LOG(ERROR) << "prefer_alloc_in_same_node is not supported.";
+        MC_LOG_ERROR << "prefer_alloc_in_same_node is not supported.";
         return tl::unexpected(ErrorCode::INVALID_PARAMS);
     }
     if (!client_) {
-        MC_LOG(ERROR) << "Client is not initialized";
+        MC_LOG_ERROR << "Client is not initialized";
         return tl::unexpected(ErrorCode::INVALID_PARAMS);
     }
     if (!client_buffer_allocator) {
-        MC_LOG(ERROR) << "Client buffer allocator is not provided";
+        MC_LOG_ERROR << "Client buffer allocator is not provided";
         return tl::unexpected(ErrorCode::INVALID_PARAMS);
     }
     UbDiag::PerfPoint pt_alloc(PerfKey::PUT_INTERNAL_ALLOC_BUFFER,
@@ -1724,7 +1727,7 @@ tl::expected<void, ErrorCode> RealClient::put_internal(
     auto alloc_result = client_buffer_allocator->allocate(value.size_bytes());
     pt_alloc.End(alloc_result ? 0 : -1);
     if (!alloc_result) {
-        MC_LOG(ERROR) << "Failed to allocate buffer for put operation, key: "
+        MC_LOG_ERROR << "Failed to allocate buffer for put operation, key: "
                    << key << ", value size: " << value.size();
         return tl::unexpected(ErrorCode::INVALID_PARAMS);
     }
@@ -1743,11 +1746,11 @@ tl::expected<void, ErrorCode> RealClient::put_internal(
 
     auto put_result = client_->Put(key, slices, config);
     if (!put_result) {
-        MC_LOG(INFO) << "put_result key[" << key << "] rc[" << static_cast<int>(put_result.error()) << "] size[" << value.size_bytes() << "]";
+        MC_LOG_INFO << "put_result key[" << key << "] rc[" << static_cast<int>(put_result.error()) << "] size[" << value.size_bytes() << "]";
         return tl::unexpected(put_result.error());
     }
 
-    MC_LOG(INFO) << "put_result key[" << key << "] rc[0] size[" << value.size_bytes() << "]";
+    MC_LOG_INFO << "put_result key[" << key << "] rc[0] size[" << value.size_bytes() << "]";
     return {};
 }
 
@@ -1757,7 +1760,7 @@ tl::expected<void, ErrorCode> RealClient::put_dummy_helper(
     std::shared_lock<std::shared_mutex> lock(dummy_client_mutex_);
     auto it = shm_contexts_.find(client_id);
     if (it == shm_contexts_.end()) {
-        MC_LOG(ERROR) << "client_id=" << client_id << ", error=shm_not_mapped";
+        MC_LOG_ERROR << "client_id=" << client_id << ", error=shm_not_mapped";
         return tl::unexpected(ErrorCode::INVALID_PARAMS);
     }
     auto &context = it->second;
@@ -1768,7 +1771,7 @@ tl::expected<void, ErrorCode> RealClient::put_dummy_helper(
 int RealClient::put(const std::string &key, std::span<const char> value,
                     const ReplicateConfig &config) {
     mooncake::logging::ScopedTraceId trace(mooncake::logging::NewTraceId());
-    MC_LOG(INFO) << "put_start key[" << key << "] size[" << value.size_bytes()
+    MC_LOG_INFO << "put_start key[" << key << "] size[" << value.size_bytes()
                  << "]";
     auto result = execute_timed_operation<tl::expected<void, ErrorCode>>(
         [&]() {
@@ -1791,19 +1794,19 @@ tl::expected<void, ErrorCode> RealClient::put_batch_internal(
     const ReplicateConfig &config,
     const std::shared_ptr<ClientBufferAllocator> &client_buffer_allocator) {
     if (config.prefer_alloc_in_same_node) {
-        MC_LOG(ERROR) << "prefer_alloc_in_same_node is not supported.";
+        MC_LOG_ERROR << "prefer_alloc_in_same_node is not supported.";
         return tl::unexpected(ErrorCode::INVALID_PARAMS);
     }
     if (!client_) {
-        MC_LOG(ERROR) << "Client is not initialized";
+        MC_LOG_ERROR << "Client is not initialized";
         return tl::unexpected(ErrorCode::INVALID_PARAMS);
     }
     if (keys.size() != values.size()) {
-        MC_LOG(ERROR) << "Key and value size mismatch";
+        MC_LOG_ERROR << "Key and value size mismatch";
         return tl::unexpected(ErrorCode::INVALID_PARAMS);
     }
     if (!client_buffer_allocator) {
-        MC_LOG(ERROR) << "Client buffer allocator is not provided";
+        MC_LOG_ERROR << "Client buffer allocator is not provided";
         return tl::unexpected(ErrorCode::INVALID_PARAMS);
     }
     std::vector<BufferHandle> buffer_handles;
@@ -1820,7 +1823,7 @@ tl::expected<void, ErrorCode> RealClient::put_batch_internal(
             client_buffer_allocator->allocate(value.size_bytes());
         pt_alloc.End(alloc_result ? 0 : -1);
         if (!alloc_result) {
-            MC_LOG(ERROR)
+            MC_LOG_ERROR
                 << "Failed to allocate buffer for put_batch operation, key: "
                 << key << ", value size: " << value.size();
             return tl::unexpected(ErrorCode::INVALID_PARAMS);
@@ -1848,7 +1851,7 @@ tl::expected<void, ErrorCode> RealClient::put_batch_internal(
         if (it != batched_slices.end()) {
             ordered_batched_slices.emplace_back(it->second);
         } else {
-            MC_LOG(ERROR) << "Missing slices for key: " << key;
+            MC_LOG_ERROR << "Missing slices for key: " << key;
             return tl::unexpected(ErrorCode::INVALID_PARAMS);
         }
     }
@@ -1862,7 +1865,7 @@ tl::expected<void, ErrorCode> RealClient::put_batch_internal(
             num_failed++;
         }
     }
-    MC_LOG(INFO) << "batch_put_result num_keys[" << keys.size() << "] num_failed[" << num_failed << "]";
+    MC_LOG_INFO << "batch_put_result num_keys[" << keys.size() << "] num_failed[" << num_failed << "]";
 
     for (size_t i = 0; i < results.size(); ++i) {
         if (!results[i]) {
@@ -1879,7 +1882,7 @@ tl::expected<void, ErrorCode> RealClient::put_batch_dummy_helper(
     std::shared_lock<std::shared_mutex> lock(dummy_client_mutex_);
     auto it = shm_contexts_.find(client_id);
     if (it == shm_contexts_.end()) {
-        MC_LOG(ERROR) << "client_id=" << client_id << ", error=shm_not_mapped";
+        MC_LOG_ERROR << "client_id=" << client_id << ", error=shm_not_mapped";
         return tl::unexpected(ErrorCode::INVALID_PARAMS);
     }
     auto &context = it->second;
@@ -1892,7 +1895,7 @@ int RealClient::put_batch(const std::vector<std::string> &keys,
                           const std::vector<std::span<const char>> &values,
                           const ReplicateConfig &config) {
     mooncake::logging::ScopedTraceId trace(mooncake::logging::NewTraceId());
-    MC_LOG(INFO) << "put_batch_start num_keys[" << keys.size()
+    MC_LOG_INFO << "put_batch_start num_keys[" << keys.size()
                  << "] total_size[" << sum_value_sizes(values) << "]";
     auto result = execute_timed_operation<tl::expected<void, ErrorCode>>(
         [&]() {
@@ -1916,15 +1919,15 @@ tl::expected<void, ErrorCode> RealClient::put_parts_internal(
     const ReplicateConfig &config,
     const std::shared_ptr<ClientBufferAllocator> &client_buffer_allocator) {
     if (config.prefer_alloc_in_same_node) {
-        MC_LOG(ERROR) << "prefer_alloc_in_same_node is not supported.";
+        MC_LOG_ERROR << "prefer_alloc_in_same_node is not supported.";
         return tl::unexpected(ErrorCode::INVALID_PARAMS);
     }
     if (!client_) {
-        MC_LOG(ERROR) << "Client is not initialized";
+        MC_LOG_ERROR << "Client is not initialized";
         return tl::unexpected(ErrorCode::INVALID_PARAMS);
     }
     if (!client_buffer_allocator) {
-        MC_LOG(ERROR) << "Client buffer allocator is not provided";
+        MC_LOG_ERROR << "Client buffer allocator is not provided";
         return tl::unexpected(ErrorCode::INVALID_PARAMS);
     }
 
@@ -1935,14 +1938,14 @@ tl::expected<void, ErrorCode> RealClient::put_parts_internal(
     }
 
     if (total_size == 0) {
-        MC_LOG(WARNING) << "Attempting to put empty data for key: " << key;
+        MC_LOG_WARNING << "Attempting to put empty data for key: " << key;
         return {};
     }
 
     // Allocate buffer using the new allocator
     auto alloc_result = client_buffer_allocator->allocate(total_size);
     if (!alloc_result) {
-        MC_LOG(ERROR) << "Failed to allocate buffer for put_parts operation, key: "
+        MC_LOG_ERROR << "Failed to allocate buffer for put_parts operation, key: "
                    << key << ", total size: " << total_size;
         return tl::unexpected(ErrorCode::INVALID_PARAMS);
     }
@@ -1963,7 +1966,7 @@ tl::expected<void, ErrorCode> RealClient::put_parts_internal(
     // Perform the put operation - buffer_handle will be automatically released
     auto put_result = client_->Put(key, slices, config);
     if (!put_result) {
-        MC_LOG(ERROR) << "Put operation failed with error: "
+        MC_LOG_ERROR << "Put operation failed with error: "
                    << toString(put_result.error());
         return tl::unexpected(put_result.error());
     }
@@ -1977,7 +1980,7 @@ tl::expected<void, ErrorCode> RealClient::put_parts_dummy_helper(
     std::shared_lock<std::shared_mutex> lock(dummy_client_mutex_);
     auto it = shm_contexts_.find(client_id);
     if (it == shm_contexts_.end()) {
-        MC_LOG(ERROR) << "client_id=" << client_id << ", error=shm_not_mapped";
+        MC_LOG_ERROR << "client_id=" << client_id << ", error=shm_not_mapped";
         return tl::unexpected(ErrorCode::INVALID_PARAMS);
     }
     auto &context = it->second;
@@ -1990,7 +1993,7 @@ int RealClient::put_parts(const std::string &key,
                           std::vector<std::span<const char>> values,
                           const ReplicateConfig &config) {
     mooncake::logging::ScopedTraceId trace(mooncake::logging::NewTraceId());
-    MC_LOG(INFO) << "put_parts_start key[" << key << "] total_size["
+    MC_LOG_INFO << "put_parts_start key[" << key << "] total_size["
                  << sum_value_sizes(values) << "]";
     auto result = execute_timed_operation<tl::expected<void, ErrorCode>>(
         [&]() {
@@ -2011,7 +2014,7 @@ int RealClient::put_parts(const std::string &key,
 tl::expected<void, ErrorCode> RealClient::remove_internal(
     const std::string &key, bool force) {
     if (!client_) {
-        MC_LOG(ERROR) << "Client is not initialized";
+        MC_LOG_ERROR << "Client is not initialized";
         return tl::unexpected(ErrorCode::INVALID_PARAMS);
     }
     auto remove_result = client_->Remove(key, force);
@@ -2028,7 +2031,7 @@ int RealClient::remove(const std::string &key, bool force) {
 tl::expected<long, ErrorCode> RealClient::removeByRegex_internal(
     const std::string &str, bool force) {
     if (!client_) {
-        MC_LOG(ERROR) << "Client is not initialized";
+        MC_LOG_ERROR << "Client is not initialized";
         return tl::unexpected(ErrorCode::INVALID_PARAMS);
     }
     return client_->RemoveByRegex(str, force);
@@ -2040,7 +2043,7 @@ long RealClient::removeByRegex(const std::string &str, bool force) {
 
 tl::expected<int64_t, ErrorCode> RealClient::removeAll_internal(bool force) {
     if (!client_) {
-        MC_LOG(ERROR) << "Client is not initialized";
+        MC_LOG_ERROR << "Client is not initialized";
         return tl::unexpected(ErrorCode::INVALID_PARAMS);
     }
     return client_->RemoveAll(force);
@@ -2053,7 +2056,7 @@ long RealClient::removeAll(bool force) {
 std::vector<tl::expected<void, ErrorCode>> RealClient::batchRemove_internal(
     const std::vector<std::string> &keys, bool force) {
     if (!client_) {
-        MC_LOG(ERROR) << "Client is not initialized";
+        MC_LOG_ERROR << "Client is not initialized";
         return std::vector<tl::expected<void, ErrorCode>>(
             keys.size(), tl::unexpected(ErrorCode::INVALID_PARAMS));
     }
@@ -2079,7 +2082,7 @@ std::vector<int> RealClient::batchRemove(const std::vector<std::string> &keys,
 tl::expected<bool, ErrorCode> RealClient::isExist_internal(
     const std::string &key) {
     if (!client_) {
-        MC_LOG(ERROR) << "Client is not initialized";
+        MC_LOG_ERROR << "Client is not initialized";
         return tl::unexpected(ErrorCode::INVALID_PARAMS);
     }
     return client_->IsExist(key);
@@ -2115,7 +2118,7 @@ std::vector<int> RealClient::batchIsExist(
 tl::expected<int64_t, ErrorCode> RealClient::getSize_internal(
     const std::string &key) {
     if (!client_) {
-        MC_LOG(ERROR) << "Client is not initialized";
+        MC_LOG_ERROR << "Client is not initialized";
         return tl::unexpected(ErrorCode::INVALID_PARAMS);
     }
 
@@ -2134,7 +2137,7 @@ tl::expected<int64_t, ErrorCode> RealClient::getSize_internal(
         auto &replica = replica_list[0];
         total_size = calculate_total_size(replica);
     } else {
-        MC_LOG(ERROR) << "Internal error: replica_list is empty";
+        MC_LOG_ERROR << "Internal error: replica_list is empty";
         return tl::unexpected(ErrorCode::INVALID_PARAMS);  // Internal error
     }
 
@@ -2170,7 +2173,7 @@ tl::expected<void, ErrorCode> RealClient::map_shm_internal_with_device(
         for (const auto &shm : context_it->second.mapped_shms) {
             if (shm.dummy_base_addr ==
                 static_cast<uintptr_t>(dummy_base_addr)) {
-                MC_LOG(INFO) << "Segment already mapped: " << shm_name;
+                MC_LOG_INFO << "Segment already mapped: " << shm_name;
                 if (fd >= 0) close(fd);
                 return {};
             }
@@ -2178,7 +2181,7 @@ tl::expected<void, ErrorCode> RealClient::map_shm_internal_with_device(
     }
 
     if (fd < 0) {
-        MC_LOG(ERROR) << "Invalid file descriptor: " << fd;
+        MC_LOG_ERROR << "Invalid file descriptor: " << fd;
         return tl::make_unexpected(ErrorCode::INVALID_PARAMS);
     }
 
@@ -2195,7 +2198,7 @@ tl::expected<void, ErrorCode> RealClient::map_shm_internal_with_device(
     void *shm_buffer =
         mmap(nullptr, shm_size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
     if (shm_buffer == MAP_FAILED) {
-        MC_LOG(ERROR) << "Failed to map shared memory from fd: " << fd
+        MC_LOG_ERROR << "Failed to map shared memory from fd: " << fd
                    << ", name: " << shm_name << ", error: " << strerror(errno);
         close(fd);
         return tl::make_unexpected(ErrorCode::INTERNAL_ERROR);
@@ -2220,7 +2223,7 @@ tl::expected<void, ErrorCode> RealClient::map_shm_internal_with_device(
         auto result = client_->RegisterLocalMemory(
             shm.shm_buffer, shm_size, kWildcardLocation, false, true);
         if (!result.has_value()) {
-            MC_LOG(ERROR) << "Failed to register memory";
+            MC_LOG_ERROR << "Failed to register memory";
             munmap(shm_buffer, shm_size);
             return tl::unexpected(result.error());
         }
@@ -2228,7 +2231,7 @@ tl::expected<void, ErrorCode> RealClient::map_shm_internal_with_device(
 
     if (is_local_buffer) {
         if (context.client_buffer_allocator) {
-            MC_LOG(ERROR) << "A local buffer is already mapped for this "
+            MC_LOG_ERROR << "A local buffer is already mapped for this "
                           "client shared memory.";
             munmap(shm_buffer, shm_size);
             return tl::make_unexpected(ErrorCode::OBJECT_ALREADY_EXISTS);
@@ -2239,7 +2242,7 @@ tl::expected<void, ErrorCode> RealClient::map_shm_internal_with_device(
 
     context.mapped_shms.push_back(std::move(shm));
 
-    MC_LOG(INFO) << "Mapped new shared memory: " << shm_name
+    MC_LOG_INFO << "Mapped new shared memory: " << shm_name
               << ", size: " << shm_size;
     return {};
 }
@@ -2249,7 +2252,7 @@ tl::expected<void, ErrorCode> RealClient::unmap_shm_internal(
     std::unique_lock<std::shared_mutex> lock(dummy_client_mutex_);
     auto it = shm_contexts_.find(client_id);
     if (it == shm_contexts_.end()) {
-        MC_LOG(ERROR) << "client_id=" << client_id << ", error=shm_not_mapped";
+        MC_LOG_ERROR << "client_id=" << client_id << ", error=shm_not_mapped";
         return tl::make_unexpected(ErrorCode::INVALID_PARAMS);
     }
 
@@ -2260,7 +2263,7 @@ tl::expected<void, ErrorCode> RealClient::unmap_shm_internal(
         if (shm.shm_buffer) {
             auto rc = client_->unregisterLocalMemory(shm.shm_buffer, true);
             if (!rc) {
-                MC_LOG(ERROR) << "Failed to unregister memory";
+                MC_LOG_ERROR << "Failed to unregister memory";
                 munmap(shm.shm_buffer, shm.shm_size);
                 context.mapped_shms.clear();
                 shm_contexts_.erase(it);
@@ -2280,11 +2283,11 @@ tl::expected<void, ErrorCode> RealClient::ascend_shm_internal(
     const UUID &client_id) {
 #ifdef USE_ASCEND_DIRECT
     if (!client_) {
-        MC_LOG(ERROR) << "Client is not initialized";
+        MC_LOG_ERROR << "Client is not initialized";
         return tl::make_unexpected(ErrorCode::INVALID_PARAMS);
     }
     if (shareable_handle_bytes.size() != sizeof(aclrtMemFabricHandle)) {
-        MC_LOG(ERROR) << "Invalid fabric handle bytes size: "
+        MC_LOG_ERROR << "Invalid fabric handle bytes size: "
                    << shareable_handle_bytes.size();
         return tl::make_unexpected(ErrorCode::INVALID_PARAMS);
     }
@@ -2292,14 +2295,14 @@ tl::expected<void, ErrorCode> RealClient::ascend_shm_internal(
     auto &context = shm_contexts_[client_id];
     for (const auto &region : context.mapped_shms) {
         if (region.dummy_base_addr == static_cast<uintptr_t>(dummy_base_addr)) {
-            MC_LOG(INFO) << "VMM region already mapped for dummy address";
+            MC_LOG_INFO << "VMM region already mapped for dummy address";
             return {};
         }
     }
 
     if (!ContextManager::getInstance().setCurrentContextByPhysicalId(
             device_id)) {
-        MC_LOG(ERROR) << "Failed to set current context for physical device "
+        MC_LOG_ERROR << "Failed to set current context for physical device "
                    << device_id;
         return tl::make_unexpected(ErrorCode::INVALID_PARAMS);
     }
@@ -2362,25 +2365,25 @@ tl::expected<void, ErrorCode> RealClient::ascend_ipc_shm_internal(
 #ifdef USE_ASCEND_DIRECT
     constexpr size_t kIPCKeyLen = 65;
     if (!client_) {
-        MC_LOG(ERROR) << "Client is not initialized";
+        MC_LOG_ERROR << "Client is not initialized";
         return tl::make_unexpected(ErrorCode::INVALID_PARAMS);
     }
     if (ipc_key_bytes.size() != kIPCKeyLen) {
-        MC_LOG(ERROR) << "Invalid IPC key size: " << ipc_key_bytes.size();
+        MC_LOG_ERROR << "Invalid IPC key size: " << ipc_key_bytes.size();
         return tl::make_unexpected(ErrorCode::INVALID_PARAMS);
     }
     std::unique_lock<std::shared_mutex> lock(dummy_client_mutex_);
     auto &context = shm_contexts_[client_id];
     for (const auto &region : context.mapped_shms) {
         if (region.dummy_base_addr == static_cast<uintptr_t>(dummy_base_addr)) {
-            MC_LOG(INFO) << "IPC region already mapped for dummy address";
+            MC_LOG_INFO << "IPC region already mapped for dummy address";
             return {};
         }
     }
 
     if (!ContextManager::getInstance().setCurrentContextByPhysicalId(
             device_id)) {
-        MC_LOG(ERROR) << "Failed to set current context for physical device "
+        MC_LOG_ERROR << "Failed to set current context for physical device "
                    << device_id;
         return tl::make_unexpected(ErrorCode::INVALID_PARAMS);
     }
@@ -2390,7 +2393,7 @@ tl::expected<void, ErrorCode> RealClient::ascend_ipc_shm_internal(
         aclrtIpcMemImportByKey(&mapped_va, ipc_key_bytes.data(),
                                ACL_RT_IPC_MEM_IMPORT_FLAG_ENABLE_PEER_ACCESS);
     if (ret != ACL_ERROR_NONE) {
-        MC_LOG(ERROR) << "aclrtIpcMemImportByKey failed, ret=" << ret
+        MC_LOG_ERROR << "aclrtIpcMemImportByKey failed, ret=" << ret
                    << ", errmsg: " << aclGetRecentErrMsg();
         return tl::make_unexpected(ErrorCode::INTERNAL_ERROR);
     }
@@ -2398,11 +2401,11 @@ tl::expected<void, ErrorCode> RealClient::ascend_ipc_shm_internal(
         auto result = client_->RegisterLocalMemory(mapped_va, mem_size, "npu",
                                                    false, true);
         if (!result.has_value()) {
-            MC_LOG(ERROR) << "Failed to register memory";
+            MC_LOG_ERROR << "Failed to register memory";
             (void)aclrtIpcMemClose(ipc_key_bytes.data());
             return tl::unexpected(result.error());
         }
-        MC_LOG(INFO) << "RegisterLocalMemory for ipc shm, va:" << mapped_va;
+        MC_LOG_INFO << "RegisterLocalMemory for ipc shm, va:" << mapped_va;
     }
 
     MappedShm region;
@@ -2428,7 +2431,7 @@ tl::expected<void, ErrorCode> RealClient::ascend_ipc_shm_internal(
     }
 
     context.mapped_shms.push_back(std::move(region));
-    MC_LOG(INFO) << "IPC memory mapped: dummy_addr=0x" << std::hex
+    MC_LOG_INFO << "IPC memory mapped: dummy_addr=0x" << std::hex
               << dummy_base_addr << ", real_addr=" << mapped_va << std::dec
               << ", size=" << mem_size << ", device_id=" << device_id;
 #endif
@@ -2442,7 +2445,7 @@ void RealClient::teardown_ascend_shm_buffer(MappedShm &shm) {
     if (shm.shm_size > 0 && client_) {
         auto res = client_->unregisterLocalMemory(shm.shm_buffer, true);
         if (!res) {
-            MC_LOG(WARNING)
+            MC_LOG_WARNING
                 << "Failed to unregister local memory for shared memory: "
                 << shm.shm_name << ", error: " << toString(res.error());
         }
@@ -2451,7 +2454,7 @@ void RealClient::teardown_ascend_shm_buffer(MappedShm &shm) {
         if (!shm.ipc_key_data.empty()) {
             (void)aclrtIpcMemClose(shm.ipc_key_data.data());
         }
-        MC_LOG(INFO) << "Free ipc mem suc.";
+        MC_LOG_INFO << "Free ipc mem suc.";
         shm.ipc_key_data.clear();
     } else {
         aclrtUnmapMem(shm.shm_buffer);
@@ -2461,19 +2464,19 @@ void RealClient::teardown_ascend_shm_buffer(MappedShm &shm) {
                 reinterpret_cast<aclrtDrvMemHandle>(shm.vmm_handle));
         }
         shm.vmm_handle = 0;
-        MC_LOG(INFO) << "Free vmm mem suc.";
+        MC_LOG_INFO << "Free vmm mem suc.";
     }
 #endif
 }
 
 tl::expected<void, ErrorCode> RealClient::ascend_unmap_shm_internal(
     const UUID &client_id) {
-    MC_LOG(INFO) << "[ascend_unmap_shm] client_id=" << client_id
+    MC_LOG_INFO << "[ascend_unmap_shm] client_id=" << client_id
               << ", action=unmapping";
     std::unique_lock<std::shared_mutex> lock(dummy_client_mutex_);
     auto it = shm_contexts_.find(client_id);
     if (it == shm_contexts_.end()) {
-        MC_LOG(ERROR) << "[ascend_unmap_shm] client_id=" << client_id
+        MC_LOG_ERROR << "[ascend_unmap_shm] client_id=" << client_id
                    << ", error=shm_not_mapped";
         return tl::make_unexpected(ErrorCode::INVALID_PARAMS);
     }
@@ -2497,7 +2500,7 @@ tl::expected<void, ErrorCode> RealClient::ascend_unmap_shm_internal(
             auto context_result = set_context_if_needed(protocol, shm.device_id,
                                                         "POSIX shm cleanup");
             if (!context_result) {
-                MC_LOG(WARNING) << "Skip unregisterLocalMemory for POSIX shm: "
+                MC_LOG_WARNING << "Skip unregisterLocalMemory for POSIX shm: "
                              << shm.shm_name
                              << ", error: " << toString(context_result.error());
             } else
@@ -2508,17 +2511,17 @@ tl::expected<void, ErrorCode> RealClient::ascend_unmap_shm_internal(
                     auto res =
                         client_->unregisterLocalMemory(shm.shm_buffer, true);
                     if (!res) {
-                        MC_LOG(WARNING) << "Failed to unregister local memory for "
+                        MC_LOG_WARNING << "Failed to unregister local memory for "
                                         "POSIX shm: "
                                      << shm.shm_name
                                      << ", error: " << toString(res.error());
                     }
                 }
             if (munmap(shm.shm_buffer, shm.shm_size) != 0) {
-                MC_LOG(ERROR) << "Failed to munmap POSIX shared memory: "
+                MC_LOG_ERROR << "Failed to munmap POSIX shared memory: "
                            << shm.shm_name << ", error: " << strerror(errno);
             } else {
-                MC_LOG(INFO) << "Unmapped POSIX shared memory: " << shm.shm_name
+                MC_LOG_INFO << "Unmapped POSIX shared memory: " << shm.shm_name
                           << ", size: " << shm.shm_size;
             }
         }
@@ -2548,7 +2551,7 @@ tl::expected<void, ErrorCode> RealClient::unregister_shm_buffer_internal(
     std::unique_lock<std::shared_mutex> lock(dummy_client_mutex_);
     auto it = shm_contexts_.find(client_id);
     if (it == shm_contexts_.end()) {
-        MC_LOG(ERROR) << "client_id=" << client_id << ", error=shm_not_mapped";
+        MC_LOG_ERROR << "client_id=" << client_id << ", error=shm_not_mapped";
         return tl::make_unexpected(ErrorCode::INVALID_PARAMS);
     }
     auto &context = it->second;
@@ -2566,7 +2569,7 @@ tl::expected<void, ErrorCode> RealClient::unregister_shm_buffer_internal(
     if (shm_it == context.mapped_shms.end()) {
         std::stringstream addr_stream;
         addr_stream << "0x" << std::hex << dummy_base_addr;
-        MC_LOG(ERROR) << "Share memory not found for dummy address: "
+        MC_LOG_ERROR << "Share memory not found for dummy address: "
                    << addr_stream.str() << " (client_id: " << client_id << ")";
         return tl::make_unexpected(ErrorCode::INVALID_PARAMS);
     }
@@ -2585,16 +2588,16 @@ tl::expected<void, ErrorCode> RealClient::unregister_shm_buffer_internal(
 #endif
             auto rc = client_->unregisterLocalMemory(shm_it->shm_buffer, true);
             if (!rc) {
-                MC_LOG(ERROR) << "Failed to unregister memory: "
+                MC_LOG_ERROR << "Failed to unregister memory: "
                            << shm_it->shm_name;
                 return tl::make_unexpected(ErrorCode::INTERNAL_ERROR);
             }
             if (munmap(shm_it->shm_buffer, shm_it->shm_size) != 0) {
-                MC_LOG(ERROR) << "Failed to munmap shared memory: "
+                MC_LOG_ERROR << "Failed to munmap shared memory: "
                            << shm_it->shm_name
                            << ", error: " << strerror(errno);
             } else {
-                MC_LOG(INFO) << "Unmapped and cleaned up shared memory: "
+                MC_LOG_INFO << "Unmapped and cleaned up shared memory: "
                           << shm_it->shm_name << ", size: " << shm_it->shm_size;
             }
         }
@@ -2611,11 +2614,11 @@ std::shared_ptr<BufferHandle> RealClient::get_buffer_internal(
     const std::string &key,
     const std::shared_ptr<ClientBufferAllocator> &client_buffer_allocator) {
     if (!client_) {
-        MC_LOG(ERROR) << "Client is not initialized";
+        MC_LOG_ERROR << "Client is not initialized";
         return nullptr;
     }
     if (!client_buffer_allocator) {
-        MC_LOG(ERROR) << "Client buffer allocator is not provided";
+        MC_LOG_ERROR << "Client buffer allocator is not provided";
         return nullptr;
     }
 
@@ -2624,7 +2627,7 @@ std::shared_ptr<BufferHandle> RealClient::get_buffer_internal(
     // Per-step latency is already recorded unconditionally by the ubdiag
     // PerfPoints (GET_INTERNAL_QUERY/SELECT_REPLICA/ALLOC_BUFFER/...), which
     // are unaffected by this gate.
-    const bool breakdown_log = mooncake::logging::ShouldLog(google::INFO);
+    const bool breakdown_log = mooncake::ShouldLog(mooncake::LogLevel::kInfo);
     auto t0 = breakdown_log ? std::chrono::steady_clock::now()
                             : std::chrono::steady_clock::time_point{};
     auto t_query = t0, t_select = t0, t_alloc = t0;
@@ -2642,17 +2645,17 @@ std::shared_ptr<BufferHandle> RealClient::get_buffer_internal(
             query_result.error() == ErrorCode::REPLICA_IS_NOT_READY) {
             return nullptr;
         }
-        MC_LOG(ERROR) << "Query failed for key: " << key
+        MC_LOG_ERROR << "Query failed for key: " << key
                    << " with error: " << toString(query_result.error());
         return nullptr;
     }
 
-    MC_LOG(INFO) << "query_success key[" << key << "] replicas[" << query_result.value().replicas.size() << "]";
+    MC_LOG_INFO << "query_success key[" << key << "] replicas[" << query_result.value().replicas.size() << "]";
 
     const std::vector<Replica::Descriptor> &replica_list =
         query_result.value().replicas;
     if (replica_list.empty()) {
-        MC_LOG(ERROR) << "Empty replica list for key: " << key;
+        MC_LOG_ERROR << "Empty replica list for key: " << key;
         return nullptr;
     }
 
@@ -2668,7 +2671,7 @@ std::shared_ptr<BufferHandle> RealClient::get_buffer_internal(
     if (breakdown_log) t_select = std::chrono::steady_clock::now();
     pt_select.End(best_replica ? 0 : -1);
     if (!best_replica) {
-        MC_LOG(ERROR) << "No usable replica for key: " << key;
+        MC_LOG_ERROR << "No usable replica for key: " << key;
         return nullptr;
     }
 
@@ -2680,18 +2683,18 @@ std::shared_ptr<BufferHandle> RealClient::get_buffer_internal(
         const auto& endpoint = replica.get_memory_descriptor().buffer_descriptor.transport_endpoint_;
         bool is_local = local_endpoints.count(endpoint) > 0;
         replica_type = is_local ? "memory_local" : "memory_remote";
-        MC_LOG(INFO) << "replica_selected key[" << key << "] type[" << replica_type
+        MC_LOG_INFO << "replica_selected key[" << key << "] type[" << replica_type
                   << "] endpoint[" << endpoint << "] size[" << total_length << "]";
     } else if (replica.is_local_disk_replica()) {
         const auto& ld_desc = replica.get_local_disk_descriptor();
         bool is_local_holder = (ld_desc.client_id == client_->getClientId());
         replica_type = is_local_holder ? "local_disk_local" : "local_disk_remote";
-        MC_LOG(INFO) << "replica_selected key[" << key << "] type[" << replica_type
+        MC_LOG_INFO << "replica_selected key[" << key << "] type[" << replica_type
                   << "] endpoint[" << ld_desc.transport_endpoint << "] size[" << total_length << "]";
     } else {
         replica_type = "disk";
         std::string file_path = replica.get_disk_descriptor().file_path;
-        MC_LOG(INFO) << "replica_selected key[" << key << "] type[" << replica_type
+        MC_LOG_INFO << "replica_selected key[" << key << "] type[" << replica_type
                   << "] file_path[" << file_path << "] size[" << total_length << "]";
     }
 
@@ -2707,7 +2710,7 @@ std::shared_ptr<BufferHandle> RealClient::get_buffer_internal(
     if (breakdown_log) t_alloc = std::chrono::steady_clock::now();
     pt_alloc.End(alloc_result ? 0 : -1);
     if (!alloc_result) {
-        MC_LOG(ERROR) << "Failed to allocate buffer for get_buffer, key: " << key;
+        MC_LOG_ERROR << "Failed to allocate buffer for get_buffer, key: " << key;
         return nullptr;
     }
 
@@ -2722,7 +2725,7 @@ std::shared_ptr<BufferHandle> RealClient::get_buffer_internal(
         auto alloc_us = std::chrono::duration_cast<std::chrono::microseconds>(t_alloc - t_select).count();
         auto read_us = std::chrono::duration_cast<std::chrono::microseconds>(now - t_alloc).count();
         auto total_us = std::chrono::duration_cast<std::chrono::microseconds>(now - t0).count();
-        MC_LOG(INFO) << "get_breakdown key[" << key << "] query_us[" << query_us << "] select_us[" << select_us
+        MC_LOG_INFO << "get_breakdown key[" << key << "] query_us[" << query_us << "] select_us[" << select_us
                   << "] alloc_us[" << alloc_us << "] read_us[" << read_us << "] total_us[" << total_us
                   << "] type[" << replica_type << "] status[" << status << "]";
     };
@@ -2741,7 +2744,7 @@ std::shared_ptr<BufferHandle> RealClient::get_buffer_internal(
             batch_get_into_offload_object_internal(endpoint, objects);
         pt_ssd.End(read_result ? 0 : -1);
         if (!read_result) {
-            MC_LOG(ERROR) << "SSD read failed for key '" << key
+            MC_LOG_ERROR << "SSD read failed for key '" << key
                        << "': " << toString(read_result.error());
             log_breakdown("ssd_fail");
             return nullptr;
@@ -2755,7 +2758,7 @@ std::shared_ptr<BufferHandle> RealClient::get_buffer_internal(
     // the replica we selected, preventing accidental LOCAL_DISK picks.
     if (replica.is_disk_replica() &&
         gpu_staging::IsDevicePointer(buffer_handle->ptr(), nullptr)) {
-        MC_LOG(WARNING) << "DISK replica for key '" << key
+        MC_LOG_WARNING << "DISK replica for key '" << key
                      << "' received a device pointer from the allocator; "
                      << "file I/O cannot write to GPU memory 鈥?read will fail. "
                      << "Ensure client_buffer_allocator_ returns host memory.";
@@ -2772,7 +2775,7 @@ std::shared_ptr<BufferHandle> RealClient::get_buffer_internal(
     auto get_result = client_->Get(key, filtered_qr, slices);
     pt_read.End(get_result ? 0 : -1);
     if (!get_result) {
-        MC_LOG(ERROR) << "Get failed for key: " << key
+        MC_LOG_ERROR << "Get failed for key: " << key
                    << " with error: " << toString(get_result.error());
         log_breakdown("read_fail");
         return nullptr;
@@ -2785,7 +2788,7 @@ std::shared_ptr<BufferHandle> RealClient::get_buffer_internal(
 // Implementation of get_buffer method
 std::shared_ptr<BufferHandle> RealClient::get_buffer(const std::string &key) {
     mooncake::logging::ScopedTraceId trace(mooncake::logging::NewTraceId());
-    MC_LOG(INFO) << "get_buffer_start key[" << key << "]";
+    MC_LOG_INFO << "get_buffer_start key[" << key << "]";
     return execute_timed_operation<std::shared_ptr<BufferHandle>>(
         [&]() {
             UbDiag::PerfPoint pt_full(PerfKey::GET_BUFFER_INTERNAL_FULL,
@@ -2988,7 +2991,7 @@ RealClient::batch_get_buffer_internal(
                                                              nullptr);
 
     if (!client_) {
-        MC_LOG(ERROR) << "Client is not initialized";
+        MC_LOG_ERROR << "Client is not initialized";
         return final_results;
     }
 
@@ -3011,7 +3014,7 @@ RealClient::batch_get_buffer_internal(
     for (const auto &result : query_results) {
         if (result) num_found++;
     }
-    MC_LOG(INFO) << "batch_query_result num_keys[" << keys.size() << "] num_found[" << num_found << "]";
+    MC_LOG_INFO << "batch_query_result num_keys[" << keys.size() << "] num_found[" << num_found << "]";
 
     // 2. Prepare for batch get: filter valid keys and prepare buffers
     struct KeyOp {
@@ -3039,7 +3042,7 @@ RealClient::batch_get_buffer_internal(
         if (!query_results[i]) {
             if (query_results[i].error() != ErrorCode::OBJECT_NOT_FOUND &&
                 query_results[i].error() != ErrorCode::REPLICA_IS_NOT_READY) {
-                MC_LOG(ERROR) << "Query failed for key '" << key
+                MC_LOG_ERROR << "Query failed for key '" << key
                            << "': " << toString(query_results[i].error());
             }
             continue;
@@ -3047,7 +3050,7 @@ RealClient::batch_get_buffer_internal(
 
         auto query_result_values = query_results[i].value();
         if (query_result_values.replicas.empty()) {
-            MC_LOG(ERROR) << "Empty replica list for key: " << key;
+            MC_LOG_ERROR << "Empty replica list for key: " << key;
             continue;
         }
 
@@ -3060,7 +3063,7 @@ RealClient::batch_get_buffer_internal(
             SelectBestReplica(query_result_values.replicas, local_endpoints);
         pt_bsel.End(best_replica ? 0 : -1);
         if (!best_replica) {
-            MC_LOG(ERROR) << "No usable replica for key: " << key;
+            MC_LOG_ERROR << "No usable replica for key: " << key;
             continue;
         }
         const auto replica = *best_replica;
@@ -3077,7 +3080,7 @@ RealClient::batch_get_buffer_internal(
         auto alloc_result = allocator->allocate(total_size);
         pt_balloc.End(alloc_result ? 0 : -1);
         if (!alloc_result) {
-            MC_LOG(ERROR) << "Failed to allocate buffer for key: " << key;
+            MC_LOG_ERROR << "Failed to allocate buffer for key: " << key;
             continue;
         }
 
@@ -3103,7 +3106,7 @@ RealClient::batch_get_buffer_internal(
         // returns device memory for DISK, the read will silently fail.
         if (replica.is_disk_replica() &&
             gpu_staging::IsDevicePointer(buffer_handle->ptr(), nullptr)) {
-            MC_LOG(WARNING)
+            MC_LOG_WARNING
                 << "DISK replica for key '" << key
                 << "' received a device pointer from the allocator; "
                 << "file I/O cannot write to GPU memory 鈥?read will fail. "
@@ -3151,7 +3154,7 @@ RealClient::batch_get_buffer_internal(
                     std::make_shared<BufferHandle>(
                         std::move(*op.buffer_handle));
             } else {
-                MC_LOG(ERROR) << "BatchGet failed for key '" << valid_ops[i].key
+                MC_LOG_ERROR << "BatchGet failed for key '" << valid_ops[i].key
                            << "': " << toString(batch_get_results[i].error());
             }
         }
@@ -3181,7 +3184,7 @@ RealClient::batch_get_buffer_internal(
                 }
             }
             if (!replica_ptr) {
-                MC_LOG(ERROR) << "No LOCAL_DISK replica found for key: " << op.key;
+                MC_LOG_ERROR << "No LOCAL_DISK replica found for key: " << op.key;
                 continue;
             }
             const auto &replica = *replica_ptr;
@@ -3205,7 +3208,7 @@ RealClient::batch_get_buffer_internal(
                         std::make_shared<BufferHandle>(
                             std::move(*op.buffer_handle));
                 } else {
-                    MC_LOG(ERROR) << "SSD read failed for key '" << key
+                    MC_LOG_ERROR << "SSD read failed for key '" << key
                                << "': " << toString(read_result.error());
                 }
             }
@@ -3224,7 +3227,7 @@ RealClient::batch_get_buffer_internal(
         auto prep_us = std::chrono::duration_cast<std::chrono::microseconds>(t_prep - t_query).count();
         auto read_us = std::chrono::duration_cast<std::chrono::microseconds>(t_read - t_prep).count();
         auto total_us = std::chrono::duration_cast<std::chrono::microseconds>(t_read - t0).count();
-        MC_LOG(INFO) << "batch_get_breakdown num_keys[" << keys.size()
+        MC_LOG_INFO << "batch_get_breakdown num_keys[" << keys.size()
                   << "] query_us[" << query_us << "] prep_us[" << prep_us
                   << "] read_us[" << read_us << "] total_us[" << total_us
                   << "] batch_get_ops[" << valid_ops.size()
@@ -3239,7 +3242,7 @@ RealClient::batch_get_buffer_internal(
 std::vector<std::shared_ptr<BufferHandle>> RealClient::batch_get_buffer(
     const std::vector<std::string> &keys) {
     mooncake::logging::ScopedTraceId trace(mooncake::logging::NewTraceId());
-    MC_LOG(INFO) << "batch_get_buffer_start num_keys[" << keys.size() << "]";
+    MC_LOG_INFO << "batch_get_buffer_start num_keys[" << keys.size() << "]";
     return execute_timed_operation<std::vector<std::shared_ptr<BufferHandle>>>(
         [&]() {
             UbDiag::PerfPoint pt_full(PerfKey::GET_BATCH_BUFFER_INTERNAL_FULL,
@@ -3267,7 +3270,7 @@ std::vector<std::shared_ptr<BufferHandle>> RealClient::batch_get_buffer(
 tl::expected<void, ErrorCode> RealClient::register_buffer_internal(
     void *buffer, size_t size) {
     if (!client_) {
-        MC_LOG(ERROR) << "Client is not initialized";
+        MC_LOG_ERROR << "Client is not initialized";
         return tl::unexpected(ErrorCode::INVALID_PARAMS);
     }
     auto result = client_->RegisterLocalMemory(buffer, size, kWildcardLocation,
@@ -3289,12 +3292,12 @@ int RealClient::register_buffer(void *buffer, size_t size) {
 tl::expected<void, ErrorCode> RealClient::unregister_buffer_internal(
     void *buffer) {
     if (!client_) {
-        MC_LOG(ERROR) << "Client is not initialized";
+        MC_LOG_ERROR << "Client is not initialized";
         return tl::unexpected(ErrorCode::INVALID_PARAMS);
     }
     auto unregister_result = client_->unregisterLocalMemory(buffer, true);
     if (!unregister_result) {
-        MC_LOG(ERROR) << "Unregister buffer failed with error: "
+        MC_LOG_ERROR << "Unregister buffer failed with error: "
                    << toString(unregister_result.error());
         return tl::unexpected(unregister_result.error());
     }
@@ -3334,7 +3337,7 @@ RealClient::resolve_registered_buffer(void *buffer) const {
 tl::expected<RealClient::RangedReadMetadata, ErrorCode>
 RealClient::resolve_ranged_read_metadata(const std::string &key) {
     if (!client_) {
-        MC_LOG(ERROR) << "Client is not initialized";
+        MC_LOG_ERROR << "Client is not initialized";
         return tl::unexpected(ErrorCode::INVALID_PARAMS);
     }
 
@@ -3350,17 +3353,17 @@ RealClient::resolve_ranged_read_metadata(const std::string &key) {
             query_result.error() == ErrorCode::REPLICA_IS_NOT_READY) {
             return tl::unexpected(query_result.error());
         }
-        MC_LOG(ERROR) << "Query failed for key: " << key
+        MC_LOG_ERROR << "Query failed for key: " << key
                    << " with error: " << toString(query_result.error());
         return tl::unexpected(query_result.error());
     }
 
-    MC_LOG(INFO) << "query_success key[" << key << "] replicas["
+    MC_LOG_INFO << "query_success key[" << key << "] replicas["
               << query_result.value().replicas.size() << "]";
 
     const auto &replica_list = query_result.value().replicas;
     if (replica_list.empty()) {
-        MC_LOG(ERROR) << "Internal error: replica_list is empty";
+        MC_LOG_ERROR << "Internal error: replica_list is empty";
         return tl::unexpected(ErrorCode::INVALID_PARAMS);
     }
 
@@ -3374,7 +3377,7 @@ RealClient::resolve_ranged_read_metadata(const std::string &key) {
     auto t_select = std::chrono::steady_clock::now();
     pt_select.End(best_replica ? 0 : -1);
     if (!best_replica) {
-        MC_LOG(ERROR) << "No usable replica for key: " << key;
+        MC_LOG_ERROR << "No usable replica for key: " << key;
         return tl::unexpected(ErrorCode::INVALID_REPLICA);
     }
 
@@ -3388,20 +3391,20 @@ RealClient::resolve_ranged_read_metadata(const std::string &key) {
                 .transport_endpoint_;
         bool is_local = local_endpoints.count(endpoint) > 0;
         replica_type = is_local ? "memory_local" : "memory_remote";
-        MC_LOG(INFO) << "replica_selected key[" << key << "] type["
+        MC_LOG_INFO << "replica_selected key[" << key << "] type["
                   << replica_type << "] endpoint[" << endpoint << "] size["
                   << total_size << "]";
     } else if (replica.is_local_disk_replica()) {
         const auto& ld_desc = replica.get_local_disk_descriptor();
         bool is_local_holder = (ld_desc.client_id == client_->getClientId());
         replica_type = is_local_holder ? "local_disk_local" : "local_disk_remote";
-        MC_LOG(INFO) << "replica_selected key[" << key << "] type["
+        MC_LOG_INFO << "replica_selected key[" << key << "] type["
                   << replica_type << "] endpoint[" << ld_desc.transport_endpoint << "] size["
                   << total_size << "]";
     } else {
         replica_type = "disk";
         std::string file_path = replica.get_disk_descriptor().file_path;
-        MC_LOG(INFO) << "replica_selected key[" << key << "] type["
+        MC_LOG_INFO << "replica_selected key[" << key << "] type["
                   << replica_type << "] file_path[" << file_path << "] size["
                   << total_size << "]";
     }
@@ -3431,13 +3434,13 @@ tl::expected<int64_t, ErrorCode> RealClient::execute_ranged_read(
 
     if (size_is_buffer_capacity) {
         if (size < total_size) {
-            MC_LOG(ERROR) << "User buffer too small. Required: " << total_size
+            MC_LOG_ERROR << "User buffer too small. Required: " << total_size
                        << ", provided: " << size;
             return tl::unexpected(ErrorCode::INVALID_PARAMS);
         }
         size = total_size;
     } else if (size > total_size || src_offset > total_size - size) {
-        MC_LOG(ERROR) << "Range overflow: src_offset=" << src_offset
+        MC_LOG_ERROR << "Range overflow: src_offset=" << src_offset
                    << " + size=" << size << " > total=" << total_size;
         return tl::unexpected(ErrorCode::INVALID_PARAMS);
     }
@@ -3460,7 +3463,7 @@ tl::expected<int64_t, ErrorCode> RealClient::execute_ranged_read(
                 batch_get_into_offload_object_internal(endpoint, objects);
             pt_ssd.End(result ? 0 : -1);
             if (!result) {
-                MC_LOG(ERROR) << "SSD read failed for key '" << key
+                MC_LOG_ERROR << "SSD read failed for key '" << key
                            << "': " << toString(result.error());
                 return tl::unexpected(result.error());
             }
@@ -3477,7 +3480,7 @@ tl::expected<int64_t, ErrorCode> RealClient::execute_ranged_read(
             auto alloc_result = client_buffer_allocator_->allocate(total_size);
             pt_alloc.End(alloc_result ? 0 : -1);
             if (!alloc_result) {
-                MC_LOG(ERROR) << "Failed to allocate temp buffer for DISK full "
+                MC_LOG_ERROR << "Failed to allocate temp buffer for DISK full "
                            << "read, key: " << key << ", size: " << total_size;
                 return tl::unexpected(ErrorCode::NO_AVAILABLE_HANDLE);
             }
@@ -3491,7 +3494,7 @@ tl::expected<int64_t, ErrorCode> RealClient::execute_ranged_read(
             auto get_result = client_->Get(key, filtered_qr, tmp_slices);
             pt_read.End(get_result ? 0 : -1);
             if (!get_result) {
-                MC_LOG(ERROR) << "DISK Get failed for key: " << key
+                MC_LOG_ERROR << "DISK Get failed for key: " << key
                            << " with error: " << toString(get_result.error());
                 return tl::unexpected(get_result.error());
             }
@@ -3500,7 +3503,7 @@ tl::expected<int64_t, ErrorCode> RealClient::execute_ranged_read(
             if (auto r = scatter_host_to_maybe_device(
                     dst, src, total_size, "DISK full read, key: " + key);
                 !r) {
-                MC_LOG(ERROR) << "DISK full read scatter failed for key '" << key
+                MC_LOG_ERROR << "DISK full read scatter failed for key '" << key
                            << "': " << toString(r.error());
                 return tl::unexpected(r.error());
             }
@@ -3518,7 +3521,7 @@ tl::expected<int64_t, ErrorCode> RealClient::execute_ranged_read(
         auto get_result = client_->Get(key, filtered_qr, slices);
         pt_read.End(get_result ? 0 : -1);
         if (!get_result) {
-            MC_LOG(ERROR) << "Get failed for key: " << key
+            MC_LOG_ERROR << "Get failed for key: " << key
                        << " with error: " << toString(get_result.error());
             return tl::unexpected(get_result.error());
         }
@@ -3541,7 +3544,7 @@ tl::expected<int64_t, ErrorCode> RealClient::execute_ranged_read(
         auto alloc_result = client_buffer_allocator_->allocate(buf_size);
         pt_alloc.End(alloc_result ? 0 : -1);
         if (!alloc_result) {
-            MC_LOG(ERROR) << "Failed to allocate temp buffer for ranged disk "
+            MC_LOG_ERROR << "Failed to allocate temp buffer for ranged disk "
                        << "read, key: " << key << ", size: " << buf_size;
             return tl::unexpected(ErrorCode::NO_AVAILABLE_HANDLE);
         }
@@ -3554,7 +3557,7 @@ tl::expected<int64_t, ErrorCode> RealClient::execute_ranged_read(
         if (auto r = scatter_host_to_maybe_device(
                 dst, src, size, "ranged disk read, key: " + key);
             !r) {
-            MC_LOG(ERROR) << "Ranged disk read scatter failed for key '" << key
+            MC_LOG_ERROR << "Ranged disk read scatter failed for key '" << key
                        << "': " << toString(r.error());
             return tl::unexpected(r.error());
         }
@@ -3580,7 +3583,7 @@ tl::expected<int64_t, ErrorCode> RealClient::execute_ranged_read(
                     batch_get_into_offload_object_internal(endpoint, objects);
                 pt_ssd.End(result ? 0 : -1);
                 if (!result) {
-                    MC_LOG(ERROR) << "Ranged SSD read failed for key '" << key
+                    MC_LOG_ERROR << "Ranged SSD read failed for key '" << key
                                << "': " << toString(result.error());
                 }
                 return result;
@@ -3603,7 +3606,7 @@ tl::expected<int64_t, ErrorCode> RealClient::execute_ranged_read(
                 auto get_result = client_->Get(key, filtered_qr, tmp_slices);
                 pt_read.End(get_result ? 0 : -1);
                 if (!get_result) {
-                    MC_LOG(ERROR)
+                    MC_LOG_ERROR
                         << "DISK Get failed for key: " << key
                         << " with error: " << toString(get_result.error());
                     return tl::unexpected(get_result.error());
@@ -3614,7 +3617,7 @@ tl::expected<int64_t, ErrorCode> RealClient::execute_ranged_read(
     }
 
     if (!replica.is_memory_replica()) {
-        MC_LOG(ERROR) << "ranged reads only support memory/disk replicas";
+        MC_LOG_ERROR << "ranged reads only support memory/disk replicas";
         return tl::unexpected(ErrorCode::INVALID_REPLICA);
     }
 
@@ -3627,7 +3630,7 @@ tl::expected<int64_t, ErrorCode> RealClient::execute_ranged_read(
     auto get_result = client_->Get(key, query_result, slices, src_offset);
     pt_read.End(get_result ? 0 : -1);
     if (!get_result) {
-        MC_LOG(ERROR) << "Ranged Get failed for key: " << key
+        MC_LOG_ERROR << "Ranged Get failed for key: " << key
                    << " with error: " << toString(get_result.error());
         return tl::unexpected(get_result.error());
     }
@@ -3643,13 +3646,13 @@ tl::expected<int64_t, ErrorCode> RealClient::get_into_range_internal(
         if ((metadata_result.error() == ErrorCode::OBJECT_NOT_FOUND ||
              metadata_result.error() == ErrorCode::REPLICA_IS_NOT_READY) &&
             src_offset == 0) {
-            MC_VLOG(1) << "Object not found for key: " << key;
+            MC_LOG_INFO << "Object not found for key: " << key;
         }
         auto now = std::chrono::steady_clock::now();
         auto total_us =
             std::chrono::duration_cast<std::chrono::microseconds>(now - t0)
                 .count();
-        MC_LOG(INFO) << "get_into_breakdown key[" << key
+        MC_LOG_INFO << "get_into_breakdown key[" << key
                   << "] query_us[0] select_us[0] read_us[0] total_us["
                   << total_us << "] type[unknown] mode[unknown] status["
                   << toString(metadata_result.error()) << "]";
@@ -3687,7 +3690,7 @@ tl::expected<int64_t, ErrorCode> RealClient::get_into_range_internal(
     auto total_us = std::chrono::duration_cast<std::chrono::microseconds>(
                         read_end - t0)
                         .count();
-    MC_LOG(INFO) << "get_into_breakdown key[" << key << "] query_us["
+    MC_LOG_INFO << "get_into_breakdown key[" << key << "] query_us["
               << metadata.query_us << "] select_us[" << metadata.select_us
               << "] read_us[" << read_us << "] total_us[" << total_us
               << "] type[" << metadata.replica_type << "] mode[" << mode
@@ -3699,7 +3702,7 @@ tl::expected<int64_t, ErrorCode> RealClient::get_into_range_internal(
 int64_t RealClient::get_into(const std::string &key, void *buffer,
                              size_t size) {
     mooncake::logging::ScopedTraceId trace(mooncake::logging::NewTraceId());
-    MC_LOG(INFO) << "get_into_start key[" << key << "] size[" << size << "]";
+    MC_LOG_INFO << "get_into_start key[" << key << "] size[" << size << "]";
     auto result = execute_timed_operation<tl::expected<int64_t, ErrorCode>>(
         [&]() {
             UbDiag::PerfPoint pt_full(PerfKey::GET_INTO_INTERNAL,
@@ -3754,7 +3757,7 @@ RealClient::get_into_ranges_internal(
     std::vector<size_t> resolved_buffer_capacities;
     if (buffer_capacities != nullptr) {
         if (buffer_capacities->size() != buffer_count) {
-            MC_LOG(ERROR) << "get_into_ranges: buffer capacities size mismatch";
+            MC_LOG_ERROR << "get_into_ranges: buffer capacities size mismatch";
             return build_ranged_read_internal_error_results(
                 buffer_count, all_keys, all_dst_offsets,
                 ErrorCode::INVALID_PARAMS);
@@ -3766,7 +3769,7 @@ RealClient::get_into_ranges_internal(
         for (size_t i = 0; i < buffer_count; ++i) {
             auto it = registered_buffer_sizes_.find(buffers[i]);
             if (it == registered_buffer_sizes_.end()) {
-                MC_LOG(ERROR)
+                MC_LOG_ERROR
                     << "get_into_ranges: buffer is not registered at index "
                     << i;
                 continue;
@@ -3800,7 +3803,7 @@ RealClient::get_into_ranges_internal(
                     (all_dst_offsets[i][j][k] > buffer_size ||
                      all_sizes[i][j][k] >
                          buffer_size - all_dst_offsets[i][j][k])) {
-                    MC_LOG(ERROR)
+                    MC_LOG_ERROR
                         << "get_into_ranges: destination overflow, "
                            "buffer_index="
                         << i << " key_index=" << j << " fragment_index=" << k
@@ -3816,7 +3819,7 @@ RealClient::get_into_ranges_internal(
                          metadata_result.error() ==
                              ErrorCode::REPLICA_IS_NOT_READY) &&
                         all_src_offsets[i][j][k] == 0) {
-                        MC_VLOG(1)
+                        MC_LOG_INFO
                             << "Object not found for key: " << all_keys[i][j];
                     }
                     prepared.results[i][j][k] =
@@ -3863,7 +3866,7 @@ std::vector<int> RealClient::batch_put_from(
     const std::vector<std::string> &keys, const std::vector<void *> &buffers,
     const std::vector<size_t> &sizes, const ReplicateConfig &config) {
     mooncake::logging::ScopedTraceId trace(mooncake::logging::NewTraceId());
-    MC_LOG(INFO) << "batch_put_from_start num_keys[" << keys.size()
+    MC_LOG_INFO << "batch_put_from_start num_keys[" << keys.size()
                  << "] total_size[" << sum_sizes(sizes) << "]";
     auto internal_results =
         execute_timed_operation<std::vector<tl::expected<void, ErrorCode>>>(
@@ -3908,7 +3911,7 @@ RealClient::batch_put_from_dummy_helper(
 #ifdef USE_ASCEND_DIRECT
     if (!ContextManager::getInstance().setCurrentContextByPhysicalId(
             device_id)) {
-        MC_LOG(ERROR) << "Failed to set context for physical device " << device_id;
+        MC_LOG_ERROR << "Failed to set context for physical device " << device_id;
         return std::vector<tl::expected<void, ErrorCode>>(
             keys.size(), tl::unexpected(ErrorCode::INVALID_PARAMS));
     }
@@ -3917,7 +3920,7 @@ RealClient::batch_put_from_dummy_helper(
     std::shared_lock<std::shared_mutex> lock(dummy_client_mutex_);
     auto it = shm_contexts_.find(client_id);
     if (it == shm_contexts_.end()) {
-        MC_LOG(ERROR) << "client_id=" << client_id << ", error=shm_not_mapped";
+        MC_LOG_ERROR << "client_id=" << client_id << ", error=shm_not_mapped";
         return std::vector<tl::expected<void, ErrorCode>>(
             keys.size(), tl::unexpected(ErrorCode::INVALID_PARAMS));
     }
@@ -3936,18 +3939,18 @@ std::vector<tl::expected<void, ErrorCode>> RealClient::batch_put_from_internal(
     const std::vector<std::string> &keys, const std::vector<void *> &buffers,
     const std::vector<size_t> &sizes, const ReplicateConfig &config) {
     if (config.prefer_alloc_in_same_node) {
-        MC_LOG(ERROR) << "prefer_alloc_in_same_node is not supported.";
+        MC_LOG_ERROR << "prefer_alloc_in_same_node is not supported.";
         return std::vector<tl::expected<void, ErrorCode>>(
             keys.size(), tl::unexpected(ErrorCode::INVALID_PARAMS));
     }
     if (!client_) {
-        MC_LOG(ERROR) << "Client is not initialized";
+        MC_LOG_ERROR << "Client is not initialized";
         return std::vector<tl::expected<void, ErrorCode>>(
             keys.size(), tl::unexpected(ErrorCode::INVALID_PARAMS));
     }
 
     if (keys.size() != buffers.size() || keys.size() != sizes.size()) {
-        MC_LOG(ERROR) << "Mismatched sizes for keys, buffers, and sizes";
+        MC_LOG_ERROR << "Mismatched sizes for keys, buffers, and sizes";
         return std::vector<tl::expected<void, ErrorCode>>(
             keys.size(), tl::unexpected(ErrorCode::INVALID_PARAMS));
     }
@@ -3980,7 +3983,7 @@ std::vector<tl::expected<void, ErrorCode>> RealClient::batch_put_from_internal(
         if (it != all_slices.end()) {
             ordered_batched_slices.emplace_back(it->second);
         } else {
-            MC_LOG(ERROR) << "Missing slices for key: " << key;
+            MC_LOG_ERROR << "Missing slices for key: " << key;
             return std::vector<tl::expected<void, ErrorCode>>(
                 keys.size(), tl::unexpected(ErrorCode::INVALID_PARAMS));
         }
@@ -3996,16 +3999,16 @@ tl::expected<void, ErrorCode> RealClient::put_from_internal(
     // NOTE: The buffer address must be previously registered with
     // register_buffer() for zero-copy RDMA operations to work correctly
     if (config.prefer_alloc_in_same_node) {
-        MC_LOG(ERROR) << "prefer_alloc_in_same_node is not supported.";
+        MC_LOG_ERROR << "prefer_alloc_in_same_node is not supported.";
         return tl::unexpected(ErrorCode::INVALID_PARAMS);
     }
     if (!client_) {
-        MC_LOG(ERROR) << "Client is not initialized";
+        MC_LOG_ERROR << "Client is not initialized";
         return tl::unexpected(ErrorCode::INVALID_PARAMS);
     }
 
     if (size == 0) {
-        MC_LOG(WARNING) << "Attempting to put empty data for key: " << key;
+        MC_LOG_WARNING << "Attempting to put empty data for key: " << key;
         return {};
     }
 
@@ -4031,7 +4034,7 @@ tl::expected<void, ErrorCode> RealClient::put_from_internal(
 int RealClient::put_from(const std::string &key, void *buffer, size_t size,
                          const ReplicateConfig &config) {
     mooncake::logging::ScopedTraceId trace(mooncake::logging::NewTraceId());
-    MC_LOG(INFO) << "put_from_start key[" << key << "] size[" << size << "]";
+    MC_LOG_INFO << "put_from_start key[" << key << "] size[" << size << "]";
     auto result = execute_timed_operation<tl::expected<void, ErrorCode>>(
         [&]() { return put_from_internal(key, buffer, size, config); },
         [](const auto &ret) { return ret.has_value(); },
@@ -4051,20 +4054,20 @@ tl::expected<void, ErrorCode> RealClient::upsert_internal(
     const ReplicateConfig &config,
     std::shared_ptr<ClientBufferAllocator> client_buffer_allocator) {
     if (config.prefer_alloc_in_same_node) {
-        MC_LOG(ERROR) << "prefer_alloc_in_same_node is not supported.";
+        MC_LOG_ERROR << "prefer_alloc_in_same_node is not supported.";
         return tl::unexpected(ErrorCode::INVALID_PARAMS);
     }
     if (!client_) {
-        MC_LOG(ERROR) << "Client is not initialized";
+        MC_LOG_ERROR << "Client is not initialized";
         return tl::unexpected(ErrorCode::INVALID_PARAMS);
     }
     if (!client_buffer_allocator) {
-        MC_LOG(ERROR) << "Client buffer allocator is not provided";
+        MC_LOG_ERROR << "Client buffer allocator is not provided";
         return tl::unexpected(ErrorCode::INVALID_PARAMS);
     }
     auto alloc_result = client_buffer_allocator->allocate(value.size_bytes());
     if (!alloc_result) {
-        MC_LOG(ERROR) << "Failed to allocate buffer for upsert operation, key: "
+        MC_LOG_ERROR << "Failed to allocate buffer for upsert operation, key: "
                    << key << ", value size: " << value.size();
         return tl::unexpected(ErrorCode::INVALID_PARAMS);
     }
@@ -4102,7 +4105,7 @@ tl::expected<void, ErrorCode> RealClient::upsert_dummy_helper(
     std::shared_lock<std::shared_mutex> lock(dummy_client_mutex_);
     auto it = shm_contexts_.find(client_id);
     if (it == shm_contexts_.end()) {
-        MC_LOG(ERROR) << "client_id=" << client_id << ", error=shm_not_mapped";
+        MC_LOG_ERROR << "client_id=" << client_id << ", error=shm_not_mapped";
         return tl::unexpected(ErrorCode::INVALID_PARAMS);
     }
     auto &context = it->second;
@@ -4113,15 +4116,15 @@ tl::expected<void, ErrorCode> RealClient::upsert_from_internal(
     const std::string &key, void *buffer, size_t size,
     const ReplicateConfig &config) {
     if (config.prefer_alloc_in_same_node) {
-        MC_LOG(ERROR) << "prefer_alloc_in_same_node is not supported.";
+        MC_LOG_ERROR << "prefer_alloc_in_same_node is not supported.";
         return tl::unexpected(ErrorCode::INVALID_PARAMS);
     }
     if (!client_) {
-        MC_LOG(ERROR) << "Client is not initialized";
+        MC_LOG_ERROR << "Client is not initialized";
         return tl::unexpected(ErrorCode::INVALID_PARAMS);
     }
     if (size == 0) {
-        MC_LOG(WARNING) << "Attempting to upsert empty data for key: " << key;
+        MC_LOG_WARNING << "Attempting to upsert empty data for key: " << key;
         return {};
     }
 
@@ -4159,17 +4162,17 @@ RealClient::batch_upsert_from_internal(const std::vector<std::string> &keys,
                                        const std::vector<size_t> &sizes,
                                        const ReplicateConfig &config) {
     if (config.prefer_alloc_in_same_node) {
-        MC_LOG(ERROR) << "prefer_alloc_in_same_node is not supported.";
+        MC_LOG_ERROR << "prefer_alloc_in_same_node is not supported.";
         return std::vector<tl::expected<void, ErrorCode>>(
             keys.size(), tl::unexpected(ErrorCode::INVALID_PARAMS));
     }
     if (!client_) {
-        MC_LOG(ERROR) << "Client is not initialized";
+        MC_LOG_ERROR << "Client is not initialized";
         return std::vector<tl::expected<void, ErrorCode>>(
             keys.size(), tl::unexpected(ErrorCode::INVALID_PARAMS));
     }
     if (keys.size() != buffers.size() || keys.size() != sizes.size()) {
-        MC_LOG(ERROR) << "Mismatched sizes for keys, buffers, and sizes";
+        MC_LOG_ERROR << "Mismatched sizes for keys, buffers, and sizes";
         return std::vector<tl::expected<void, ErrorCode>>(
             keys.size(), tl::unexpected(ErrorCode::INVALID_PARAMS));
     }
@@ -4225,7 +4228,7 @@ tl::expected<void, ErrorCode> RealClient::upsert_from_dummy_helper(
     std::shared_lock<std::shared_mutex> lock(dummy_client_mutex_);
     auto it = shm_contexts_.find(client_id);
     if (it == shm_contexts_.end()) {
-        MC_LOG(ERROR) << "client_id=" << client_id << ", error=shm_not_mapped";
+        MC_LOG_ERROR << "client_id=" << client_id << ", error=shm_not_mapped";
         return tl::unexpected(ErrorCode::INVALID_PARAMS);
     }
     auto &context = it->second;
@@ -4234,7 +4237,7 @@ tl::expected<void, ErrorCode> RealClient::upsert_from_dummy_helper(
     const MappedShm *last_hit_shm = nullptr;
     if (!map_dummy_buffer_to_real(context, dummy_buffer, size, last_hit_shm,
                                   real_buffer)) {
-        MC_LOG(ERROR) << "Dummy buffer at " << dummy_buffer << " (size " << size
+        MC_LOG_ERROR << "Dummy buffer at " << dummy_buffer << " (size " << size
                    << ") not found in any mapped shared memory for client "
                    << client_id;
         return tl::unexpected(ErrorCode::INVALID_PARAMS);
@@ -4252,7 +4255,7 @@ RealClient::batch_upsert_from_dummy_helper(
     std::shared_lock<std::shared_mutex> lock(dummy_client_mutex_);
     auto it = shm_contexts_.find(client_id);
     if (it == shm_contexts_.end()) {
-        MC_LOG(ERROR) << "client_id=" << client_id << ", error=shm_not_mapped";
+        MC_LOG_ERROR << "client_id=" << client_id << ", error=shm_not_mapped";
         return std::vector<tl::expected<void, ErrorCode>>(
             keys.size(), tl::unexpected(ErrorCode::INVALID_PARAMS));
     }
@@ -4266,7 +4269,7 @@ RealClient::batch_upsert_from_dummy_helper(
         void *real_ptr = nullptr;
         if (!map_dummy_buffer_to_real(context, dummy_buffers[i], sizes[i],
                                       last_hit_shm, real_ptr)) {
-            MC_LOG(ERROR) << "Dummy buffer at " << dummy_buffers[i] << " (size "
+            MC_LOG_ERROR << "Dummy buffer at " << dummy_buffers[i] << " (size "
                        << sizes[i]
                        << ") not found in any mapped shared memory for client "
                        << client_id;
@@ -4283,15 +4286,15 @@ tl::expected<void, ErrorCode> RealClient::upsert_parts_internal(
     const ReplicateConfig &config,
     std::shared_ptr<ClientBufferAllocator> client_buffer_allocator) {
     if (config.prefer_alloc_in_same_node) {
-        MC_LOG(ERROR) << "prefer_alloc_in_same_node is not supported.";
+        MC_LOG_ERROR << "prefer_alloc_in_same_node is not supported.";
         return tl::unexpected(ErrorCode::INVALID_PARAMS);
     }
     if (!client_) {
-        MC_LOG(ERROR) << "Client is not initialized";
+        MC_LOG_ERROR << "Client is not initialized";
         return tl::unexpected(ErrorCode::INVALID_PARAMS);
     }
     if (!client_buffer_allocator) {
-        MC_LOG(ERROR) << "Client buffer allocator is not provided";
+        MC_LOG_ERROR << "Client buffer allocator is not provided";
         return tl::unexpected(ErrorCode::INVALID_PARAMS);
     }
 
@@ -4300,13 +4303,13 @@ tl::expected<void, ErrorCode> RealClient::upsert_parts_internal(
         total_size += value.size_bytes();
     }
     if (total_size == 0) {
-        MC_LOG(WARNING) << "Attempting to upsert empty data for key: " << key;
+        MC_LOG_WARNING << "Attempting to upsert empty data for key: " << key;
         return {};
     }
 
     auto alloc_result = client_buffer_allocator->allocate(total_size);
     if (!alloc_result) {
-        MC_LOG(ERROR)
+        MC_LOG_ERROR
             << "Failed to allocate buffer for upsert_parts operation, key: "
             << key << ", total size: " << total_size;
         return tl::unexpected(ErrorCode::INVALID_PARAMS);
@@ -4324,7 +4327,7 @@ tl::expected<void, ErrorCode> RealClient::upsert_parts_internal(
 
     auto result = client_->Upsert(key, slices, config);
     if (!result) {
-        MC_LOG(ERROR) << "Upsert operation failed with error: "
+        MC_LOG_ERROR << "Upsert operation failed with error: "
                    << toString(result.error());
         return tl::unexpected(result.error());
     }
@@ -4354,7 +4357,7 @@ tl::expected<void, ErrorCode> RealClient::upsert_parts_dummy_helper(
     std::shared_lock<std::shared_mutex> lock(dummy_client_mutex_);
     auto it = shm_contexts_.find(client_id);
     if (it == shm_contexts_.end()) {
-        MC_LOG(ERROR) << "client_id=" << client_id << ", error=shm_not_mapped";
+        MC_LOG_ERROR << "client_id=" << client_id << ", error=shm_not_mapped";
         return tl::unexpected(ErrorCode::INVALID_PARAMS);
     }
     auto &context = it->second;
@@ -4368,19 +4371,19 @@ tl::expected<void, ErrorCode> RealClient::upsert_batch_internal(
     const ReplicateConfig &config,
     std::shared_ptr<ClientBufferAllocator> client_buffer_allocator) {
     if (config.prefer_alloc_in_same_node) {
-        MC_LOG(ERROR) << "prefer_alloc_in_same_node is not supported.";
+        MC_LOG_ERROR << "prefer_alloc_in_same_node is not supported.";
         return tl::unexpected(ErrorCode::INVALID_PARAMS);
     }
     if (!client_) {
-        MC_LOG(ERROR) << "Client is not initialized";
+        MC_LOG_ERROR << "Client is not initialized";
         return tl::unexpected(ErrorCode::INVALID_PARAMS);
     }
     if (keys.size() != values.size()) {
-        MC_LOG(ERROR) << "Key and value size mismatch";
+        MC_LOG_ERROR << "Key and value size mismatch";
         return tl::unexpected(ErrorCode::INVALID_PARAMS);
     }
     if (!client_buffer_allocator) {
-        MC_LOG(ERROR) << "Client buffer allocator is not provided";
+        MC_LOG_ERROR << "Client buffer allocator is not provided";
         return tl::unexpected(ErrorCode::INVALID_PARAMS);
     }
     std::vector<BufferHandle> buffer_handles;
@@ -4393,7 +4396,7 @@ tl::expected<void, ErrorCode> RealClient::upsert_batch_internal(
         auto alloc_result =
             client_buffer_allocator->allocate(value.size_bytes());
         if (!alloc_result) {
-            MC_LOG(ERROR)
+            MC_LOG_ERROR
                 << "Failed to allocate buffer for upsert_batch operation, key: "
                 << key << ", value size: " << value.size();
             return tl::unexpected(ErrorCode::INVALID_PARAMS);
@@ -4413,7 +4416,7 @@ tl::expected<void, ErrorCode> RealClient::upsert_batch_internal(
         if (it != batched_slices.end()) {
             ordered_batched_slices.emplace_back(it->second);
         } else {
-            MC_LOG(ERROR) << "Missing slices for key: " << key;
+            MC_LOG_ERROR << "Missing slices for key: " << key;
             return tl::unexpected(ErrorCode::INVALID_PARAMS);
         }
     }
@@ -4436,7 +4439,7 @@ tl::expected<void, ErrorCode> RealClient::upsert_batch_dummy_helper(
     std::shared_lock<std::shared_mutex> lock(dummy_client_mutex_);
     auto it = shm_contexts_.find(client_id);
     if (it == shm_contexts_.end()) {
-        MC_LOG(ERROR) << "client_id=" << client_id << ", error=shm_not_mapped";
+        MC_LOG_ERROR << "client_id=" << client_id << ", error=shm_not_mapped";
         return tl::unexpected(ErrorCode::INVALID_PARAMS);
     }
     auto &context = it->second;
@@ -4468,7 +4471,7 @@ std::vector<int64_t> RealClient::batch_get_into(
     const std::vector<std::string> &keys, const std::vector<void *> &buffers,
     const std::vector<size_t> &sizes) {
     mooncake::logging::ScopedTraceId trace(mooncake::logging::NewTraceId());
-    MC_LOG(INFO) << "batch_get_into_start num_keys[" << keys.size()
+    MC_LOG_INFO << "batch_get_into_start num_keys[" << keys.size()
                  << "] total_size[" << sum_sizes(sizes) << "]";
     auto internal_results =
         execute_timed_operation<std::vector<tl::expected<int64_t, ErrorCode>>>(
@@ -4517,7 +4520,7 @@ RealClient::batch_get_into_dummy_helper(
 #ifdef USE_ASCEND_DIRECT
     if (!ContextManager::getInstance().setCurrentContextByPhysicalId(
             device_id)) {
-        MC_LOG(ERROR) << "Failed to set context for physical device " << device_id;
+        MC_LOG_ERROR << "Failed to set context for physical device " << device_id;
         co_return std::vector<tl::expected<int64_t, ErrorCode>>(
             keys.size(), tl::unexpected(ErrorCode::INVALID_PARAMS));
     }
@@ -4529,7 +4532,7 @@ RealClient::batch_get_into_dummy_helper(
         dummy_client_mutex_);
     auto it = shm_contexts_.find(client_id);
     if (it == shm_contexts_.end()) {
-        MC_LOG(ERROR) << "client_id=" << client_id << ", error=shm_not_mapped";
+        MC_LOG_ERROR << "client_id=" << client_id << ", error=shm_not_mapped";
         co_return std::vector<tl::expected<int64_t, ErrorCode>>(
             keys.size(), tl::unexpected(ErrorCode::INVALID_PARAMS));
     }
@@ -4578,7 +4581,7 @@ RealClient::batch_put_from_multi_buffers_dummy_helper(
 #ifdef USE_ASCEND_DIRECT
     if (!ContextManager::getInstance().setCurrentContextByPhysicalId(
             device_id)) {
-        MC_LOG(ERROR) << "Failed to set context for physical device " << device_id;
+        MC_LOG_ERROR << "Failed to set context for physical device " << device_id;
         return std::vector<tl::expected<void, ErrorCode>>(
             keys.size(), tl::unexpected(ErrorCode::INVALID_PARAMS));
     }
@@ -4587,7 +4590,7 @@ RealClient::batch_put_from_multi_buffers_dummy_helper(
     std::shared_lock<std::shared_mutex> lock(dummy_client_mutex_);
     auto it = shm_contexts_.find(client_id);
     if (it == shm_contexts_.end()) {
-        MC_LOG(ERROR) << "client_id=" << client_id << ", error=shm_not_mapped";
+        MC_LOG_ERROR << "client_id=" << client_id << ", error=shm_not_mapped";
         return std::vector<tl::expected<void, ErrorCode>>(
             keys.size(), tl::unexpected(ErrorCode::INVALID_PARAMS));
     }
@@ -4613,7 +4616,7 @@ RealClient::batch_get_into_multi_buffers_dummy_helper(
 #ifdef USE_ASCEND_DIRECT
     if (!ContextManager::getInstance().setCurrentContextByPhysicalId(
             device_id)) {
-        MC_LOG(ERROR) << "Failed to set context for physical device " << device_id;
+        MC_LOG_ERROR << "Failed to set context for physical device " << device_id;
         return std::vector<tl::expected<int64_t, ErrorCode>>(
             keys.size(), tl::unexpected(ErrorCode::INVALID_PARAMS));
     }
@@ -4622,7 +4625,7 @@ RealClient::batch_get_into_multi_buffers_dummy_helper(
     std::shared_lock<std::shared_mutex> lock(dummy_client_mutex_);
     auto it = shm_contexts_.find(client_id);
     if (it == shm_contexts_.end()) {
-        MC_LOG(ERROR) << "client_id=" << client_id << ", error=shm_not_mapped";
+        MC_LOG_ERROR << "client_id=" << client_id << ", error=shm_not_mapped";
         return std::vector<tl::expected<int64_t, ErrorCode>>(
             keys.size(), tl::unexpected(ErrorCode::INVALID_PARAMS));
     }
@@ -4646,7 +4649,7 @@ tl::expected<int64_t, ErrorCode> RealClient::get_into_range_shm_helper(
     std::shared_lock<std::shared_mutex> lock(dummy_client_mutex_);
     auto it = shm_contexts_.find(client_id);
     if (it == shm_contexts_.end()) {
-        MC_LOG(ERROR) << "client_id=" << client_id << ", error=shm_not_mapped";
+        MC_LOG_ERROR << "client_id=" << client_id << ", error=shm_not_mapped";
         return tl::unexpected(ErrorCode::INVALID_PARAMS);
     }
     auto &context = it->second;
@@ -4654,7 +4657,7 @@ tl::expected<int64_t, ErrorCode> RealClient::get_into_range_shm_helper(
     void *real_buffer = nullptr;
     if (!map_dummy_buffer_range_to_real(context, dummy_buffer, dst_offset, size,
                                         real_buffer)) {
-        MC_LOG(ERROR) << "Dummy buffer at " << dummy_buffer
+        MC_LOG_ERROR << "Dummy buffer at " << dummy_buffer
                    << " (dst_offset=" << dst_offset << ", size=" << size
                    << ") not found in any mapped shared memory for client "
                    << client_id;
@@ -4675,7 +4678,7 @@ RealClient::get_into_ranges_shm_helper(
 #ifdef USE_ASCEND_DIRECT
     if (!ContextManager::getInstance().setCurrentContextByPhysicalId(
             device_id)) {
-        MC_LOG(ERROR) << "Failed to set context for physical device " << device_id;
+        MC_LOG_ERROR << "Failed to set context for physical device " << device_id;
         return std::vector<
             std::vector<std::vector<tl::expected<int64_t, ErrorCode>>>>(
             dummy_buffers.size(),
@@ -4696,7 +4699,7 @@ RealClient::get_into_ranges_shm_helper(
     std::shared_lock<std::shared_mutex> lock(dummy_client_mutex_);
     auto it = shm_contexts_.find(client_id);
     if (it == shm_contexts_.end()) {
-        MC_LOG(ERROR) << "client_id=" << client_id << ", error=shm_not_mapped";
+        MC_LOG_ERROR << "client_id=" << client_id << ", error=shm_not_mapped";
         fill_ranged_read_results_with_error(prepared.results,
                                             ErrorCode::INVALID_PARAMS);
         return prepared.results;
@@ -4727,13 +4730,13 @@ RealClient::batch_get_into_internal(const std::vector<std::string> &keys,
     auto start_time = std::chrono::steady_clock::now();
     // Validate preconditions
     if (!client_) {
-        MC_LOG(ERROR) << "Client is not initialized";
+        MC_LOG_ERROR << "Client is not initialized";
         return std::vector<tl::expected<int64_t, ErrorCode>>(
             keys.size(), tl::unexpected(ErrorCode::INVALID_PARAMS));
     }
 
     if (keys.size() != buffers.size() || keys.size() != sizes.size()) {
-        MC_LOG(ERROR) << "Input vector sizes mismatch: keys=" << keys.size()
+        MC_LOG_ERROR << "Input vector sizes mismatch: keys=" << keys.size()
                    << ", buffers=" << buffers.size()
                    << ", sizes=" << sizes.size();
         return std::vector<tl::expected<int64_t, ErrorCode>>(
@@ -4759,7 +4762,7 @@ RealClient::batch_get_into_internal(const std::vector<std::string> &keys,
     for (const auto &result : query_results) {
         if (result) num_found++;
     }
-    MC_LOG(INFO) << "batch_get_into_query_result num_keys[" << num_keys
+    MC_LOG_INFO << "batch_get_into_query_result num_keys[" << num_keys
               << "] num_found[" << num_found << "]";
 
     // Process each key individually and prepare for batch transfer
@@ -4793,7 +4796,7 @@ RealClient::batch_get_into_internal(const std::vector<std::string> &keys,
             results[i] = tl::unexpected(error);
             if (error != ErrorCode::OBJECT_NOT_FOUND &&
                 error != ErrorCode::REPLICA_IS_NOT_READY) {
-                MC_LOG(ERROR) << "Query failed for key '" << key
+                MC_LOG_ERROR << "Query failed for key '" << key
                            << "': " << toString(error);
             }
             continue;
@@ -4802,7 +4805,7 @@ RealClient::batch_get_into_internal(const std::vector<std::string> &keys,
         // Validate replica list
         auto query_result_values = query_results[i].value();
         if (query_result_values.replicas.empty()) {
-            MC_LOG(ERROR) << "Empty replica list for key: " << key;
+            MC_LOG_ERROR << "Empty replica list for key: " << key;
             results[i] = tl::unexpected(ErrorCode::INVALID_REPLICA);
             continue;
         }
@@ -4817,7 +4820,7 @@ RealClient::batch_get_into_internal(const std::vector<std::string> &keys,
             SelectBestReplica(query_result_values.replicas, local_endpoints);
         pt_select.End(best_replica ? 0 : -1);
         if (!best_replica) {
-            MC_LOG(ERROR) << "No usable replica for key: " << key;
+            MC_LOG_ERROR << "No usable replica for key: " << key;
             results[i] = tl::unexpected(ErrorCode::INVALID_REPLICA);
             continue;
         }
@@ -4828,7 +4831,7 @@ RealClient::batch_get_into_internal(const std::vector<std::string> &keys,
 
         // Validate buffer capacity
         if (sizes[i] < total_size) {
-            MC_LOG(ERROR) << "Buffer too small for key '" << key
+            MC_LOG_ERROR << "Buffer too small for key '" << key
                        << "': required=" << total_size
                        << ", available=" << sizes[i];
             results[i] = tl::unexpected(ErrorCode::INVALID_PARAMS);
@@ -4891,7 +4894,7 @@ RealClient::batch_get_into_internal(const std::vector<std::string> &keys,
             std::chrono::duration_cast<std::chrono::microseconds>(t_prep -
                                                                   start_time)
                 .count();
-        MC_LOG(INFO) << "batch_get_into_breakdown num_keys[" << num_keys
+        MC_LOG_INFO << "batch_get_into_breakdown num_keys[" << num_keys
                   << "] query_us[" << query_us << "] prep_us[" << prep_us
                   << "] read_us[0] total_us[" << total_us
                   << "] mem_ops[0] disk_ops[0] ssd_offload_ops[0] success[0]";
@@ -4928,7 +4931,7 @@ RealClient::batch_get_into_internal(const std::vector<std::string> &keys,
             if (!batch_get_results[j]) {
                 batch_get_success = false;
                 const auto error = batch_get_results[j].error();
-                MC_LOG(ERROR) << "BatchGet failed for key '" << op.key
+                MC_LOG_ERROR << "BatchGet failed for key '" << op.key
                            << "': " << toString(error);
                 results[op.original_index] = tl::unexpected(error);
             }
@@ -4956,7 +4959,7 @@ RealClient::batch_get_into_internal(const std::vector<std::string> &keys,
                 }
             }
             if (!replica_ptr) {
-                MC_LOG(ERROR) << "No DISK replica found for key: " << op.key;
+                MC_LOG_ERROR << "No DISK replica found for key: " << op.key;
                 results[op.original_index] =
                     tl::unexpected(ErrorCode::INVALID_REPLICA);
                 continue;
@@ -4969,7 +4972,7 @@ RealClient::batch_get_into_internal(const std::vector<std::string> &keys,
                 client_buffer_allocator_->allocate(op.total_size);
             pt_alloc.End(alloc_result ? 0 : -1);
             if (!alloc_result) {
-                MC_LOG(ERROR) << "Failed to allocate temp buffer for DISK "
+                MC_LOG_ERROR << "Failed to allocate temp buffer for DISK "
                            << "read, key: " << op.key
                            << ", size: " << op.total_size;
                 results[op.original_index] =
@@ -5003,7 +5006,7 @@ RealClient::batch_get_into_internal(const std::vector<std::string> &keys,
                 auto handle_it = disk_temp_handles.find(key);
                 if (!disk_results[di]) {
                     disk_read_success = false;
-                    MC_LOG(ERROR) << "DISK BatchGet failed for key '" << key
+                    MC_LOG_ERROR << "DISK BatchGet failed for key '" << key
                                << "': " << toString(disk_results[di].error());
                     results[op.original_index] =
                         tl::unexpected(disk_results[di].error());
@@ -5015,7 +5018,7 @@ RealClient::batch_get_into_internal(const std::vector<std::string> &keys,
                         op.total_size, "DISK read, key: " + key);
                     !r) {
                     disk_read_success = false;
-                    MC_LOG(ERROR) << "DISK scatter failed for key '" << key
+                    MC_LOG_ERROR << "DISK scatter failed for key '" << key
                                << "': " << toString(r.error());
                     results[op.original_index] = tl::make_unexpected(r.error());
                 }
@@ -5040,7 +5043,7 @@ RealClient::batch_get_into_internal(const std::vector<std::string> &keys,
             }
         }
         if (!replica_ptr) {
-            MC_LOG(ERROR) << "No LOCAL_DISK replica found for key: "
+            MC_LOG_ERROR << "No LOCAL_DISK replica found for key: "
                        << op_it.first;
             continue;
         }
@@ -5061,7 +5064,7 @@ RealClient::batch_get_into_internal(const std::vector<std::string> &keys,
             offload_objects_it.first, offload_objects_it.second);
         pt_ssd_read.End(batch_get_offload_result ? 0 : -1);
         if (!batch_get_offload_result) {
-            MC_LOG(ERROR) << "Batch get store object failed endpoint["
+            MC_LOG_ERROR << "Batch get store object failed endpoint["
                        << offload_objects_it.first << "] objects["
                        << offload_objects_it.second.size() << "] error["
                        << toString(batch_get_offload_result.error()) << "]";
@@ -5092,7 +5095,7 @@ RealClient::batch_get_into_internal(const std::vector<std::string> &keys,
         std::chrono::duration_cast<std::chrono::microseconds>(t_read -
                                                               start_time)
             .count();
-    MC_LOG(INFO) << "batch_get_into_breakdown num_keys[" << num_keys
+    MC_LOG_INFO << "batch_get_into_breakdown num_keys[" << num_keys
               << "] query_us[" << query_us << "] prep_us[" << prep_us
               << "] read_us[" << read_us << "] total_us[" << total_us
               << "] mem_ops[" << valid_operations.size() << "] disk_ops["
@@ -5105,13 +5108,13 @@ RealClient::batch_get_into_internal(const std::vector<std::string> &keys,
 std::vector<tl::expected<bool, ErrorCode>> RealClient::batchIsExist_internal(
     const std::vector<std::string> &keys) {
     if (!client_) {
-        MC_LOG(ERROR) << "Client is not initialized";
+        MC_LOG_ERROR << "Client is not initialized";
         return std::vector<tl::expected<bool, ErrorCode>>(
             keys.size(), tl::unexpected(ErrorCode::INVALID_PARAMS));
     }
 
     if (keys.empty()) {
-        MC_LOG(WARNING) << "Empty keys vector provided to batchIsExist_internal";
+        MC_LOG_WARNING << "Empty keys vector provided to batchIsExist_internal";
         return std::vector<tl::expected<bool, ErrorCode>>();
     }
 
@@ -5127,16 +5130,16 @@ int RealClient::put_from_with_metadata(const std::string &key, void *buffer,
     // NOTE: The buffer address must be previously registered with
     // register_buffer() for zero-copy RDMA operations to work correctly
     if (config.prefer_alloc_in_same_node) {
-        MC_LOG(ERROR) << "prefer_alloc_in_same_node is not supported.";
+        MC_LOG_ERROR << "prefer_alloc_in_same_node is not supported.";
         return -1;
     }
     if (!client_) {
-        MC_LOG(ERROR) << "Client is not initialized";
+        MC_LOG_ERROR << "Client is not initialized";
         return -1;
     }
 
     if (size == 0) {
-        MC_LOG(WARNING) << "Attempting to put empty data for key: " << key;
+        MC_LOG_WARNING << "Attempting to put empty data for key: " << key;
         return 0;
     }
 
@@ -5162,7 +5165,7 @@ int RealClient::put_from_with_metadata(const std::string &key, void *buffer,
     }
     auto put_result = client_->Put(key, slices, config);
     if (!put_result) {
-        MC_LOG(ERROR) << "Put operation failed with error: "
+        MC_LOG_ERROR << "Put operation failed with error: "
                    << toString(put_result.error());
         return -toInt(put_result.error());
     }
@@ -5179,7 +5182,7 @@ std::vector<int> RealClient::batch_put_from_multi_buffers(
     const std::vector<std::vector<size_t>> &sizes,
     const ReplicateConfig &config) {
     mooncake::logging::ScopedTraceId trace(mooncake::logging::NewTraceId());
-    MC_LOG(INFO) << "batch_put_from_multi_buffers_start num_keys["
+    MC_LOG_INFO << "batch_put_from_multi_buffers_start num_keys["
                  << keys.size() << "] total_size[" << sum_nested_sizes(sizes)
                  << "]";
     auto internal_results =
@@ -5224,14 +5227,14 @@ RealClient::batch_put_from_multi_buffers_internal(
     const std::vector<std::vector<size_t>> &all_sizes,
     const ReplicateConfig &config) {
     if (!client_) {
-        MC_LOG(ERROR) << "Client is not initialized";
+        MC_LOG_ERROR << "Client is not initialized";
         return std::vector<tl::expected<void, ErrorCode>>(
             keys.size(), tl::unexpected(ErrorCode::INVALID_PARAMS));
     }
 
     if ((keys.size() != all_buffers.size()) ||
         (all_buffers.size() != all_sizes.size())) {
-        MC_LOG(ERROR) << "Mismatched sizes for keys, buffers, and sizes";
+        MC_LOG_ERROR << "Mismatched sizes for keys, buffers, and sizes";
         return std::vector<tl::expected<void, ErrorCode>>(
             keys.size(), tl::unexpected(ErrorCode::INVALID_PARAMS));
     }
@@ -5241,7 +5244,7 @@ RealClient::batch_put_from_multi_buffers_internal(
         const auto &buffers = all_buffers[i];
         const auto &sizes = all_sizes[i];
         if (buffers.size() != sizes.size()) {
-            MC_LOG(ERROR) << "Mismatched buffers and sizes of key:" << keys[i];
+            MC_LOG_ERROR << "Mismatched buffers and sizes of key:" << keys[i];
             return std::vector<tl::expected<void, ErrorCode>>(
                 keys.size(), tl::unexpected(ErrorCode::INVALID_PARAMS));
         }
@@ -5294,13 +5297,13 @@ RealClient::batch_get_into_multi_buffers_internal(
     bool prefer_alloc_in_same_node) {
     // Validate preconditions
     if (!client_) {
-        MC_LOG(ERROR) << "Client is not initialized";
+        MC_LOG_ERROR << "Client is not initialized";
         return std::vector<tl::expected<int64_t, ErrorCode>>(
             keys.size(), tl::unexpected(ErrorCode::INVALID_PARAMS));
     }
 
     if (keys.size() != all_buffers.size() || keys.size() != all_sizes.size()) {
-        MC_LOG(ERROR) << "Input vector sizes mismatch: keys=" << keys.size()
+        MC_LOG_ERROR << "Input vector sizes mismatch: keys=" << keys.size()
                    << ", buffers=" << all_buffers.size()
                    << ", sizes=" << all_sizes.size();
         return std::vector<tl::expected<int64_t, ErrorCode>>(
@@ -5346,7 +5349,7 @@ RealClient::batch_get_into_multi_buffers_internal(
             const auto error = query_results[i].error();
             results.emplace_back(tl::unexpected(error));
             if (error != ErrorCode::OBJECT_NOT_FOUND) {
-                MC_LOG(ERROR) << "Query failed for key '" << key
+                MC_LOG_ERROR << "Query failed for key '" << key
                            << "': " << toString(error);
             }
             continue;
@@ -5354,7 +5357,7 @@ RealClient::batch_get_into_multi_buffers_internal(
         // Validate replica list
         auto query_result_values = query_results[i].value();
         if (query_result_values.replicas.empty()) {
-            MC_LOG(ERROR) << "Empty replica list for key: " << key;
+            MC_LOG_ERROR << "Empty replica list for key: " << key;
             results.emplace_back(tl::unexpected(ErrorCode::INVALID_REPLICA));
             continue;
         }
@@ -5364,7 +5367,7 @@ RealClient::batch_get_into_multi_buffers_internal(
         const auto *best_replica =
             SelectBestReplica(query_result_values.replicas, local_endpoints);
         if (!best_replica) {
-            MC_LOG(ERROR) << "No usable replica for key: " << key;
+            MC_LOG_ERROR << "No usable replica for key: " << key;
             results.emplace_back(tl::unexpected(ErrorCode::INVALID_REPLICA));
             continue;
         }
@@ -5376,7 +5379,7 @@ RealClient::batch_get_into_multi_buffers_internal(
             dst_total_size += size;
         }
         if (dst_total_size < total_size) {
-            MC_LOG(ERROR) << "Buffer too small for key '" << key
+            MC_LOG_ERROR << "Buffer too small for key '" << key
                        << "': required=" << total_size
                        << ", available=" << dst_total_size;
             results.emplace_back(tl::unexpected(ErrorCode::INVALID_PARAMS));
@@ -5408,7 +5411,7 @@ RealClient::batch_get_into_multi_buffers_internal(
             results.emplace_back(static_cast<int64_t>(total_size));
             continue;
         } else {
-            MC_LOG(ERROR) << "Unsupported replica type for key: " << key;
+            MC_LOG_ERROR << "Unsupported replica type for key: " << key;
             results.emplace_back(tl::unexpected(ErrorCode::INVALID_PARAMS));
             continue;
         }
@@ -5448,7 +5451,7 @@ RealClient::batch_get_into_multi_buffers_internal(
             const auto &op = valid_operations[j];
             if (!batch_get_results[j]) {
                 const auto error = batch_get_results[j].error();
-                MC_LOG(ERROR) << "BatchGet failed for key '" << op.key
+                MC_LOG_ERROR << "BatchGet failed for key '" << op.key
                            << "': " << toString(error);
                 results[op.original_index] = tl::unexpected(error);
             }
@@ -5480,7 +5483,7 @@ RealClient::batch_get_into_multi_buffers_internal(
                     }
                 }
                 if (!replica_ptr) {
-                    MC_LOG(ERROR)
+                    MC_LOG_ERROR
                         << "No LOCAL_DISK replica found for key: " << key;
                     results[op.original_index] =
                         tl::make_unexpected(ErrorCode::INVALID_REPLICA);
@@ -5495,7 +5498,7 @@ RealClient::batch_get_into_multi_buffers_internal(
                     slice_total += op.sizes[j];
                 }
                 if (slice_total < op.total_size) {
-                    MC_LOG(ERROR) << "Slice size too small for key " << key
+                    MC_LOG_ERROR << "Slice size too small for key " << key
                                << ": slices=" << slice_total
                                << ", total=" << op.total_size;
                     results[op.original_index] =
@@ -5518,7 +5521,7 @@ RealClient::batch_get_into_multi_buffers_internal(
                     for (auto &[key, slices] : objects) {
                         auto disk_it = valid_local_disk_ops.find(key);
                         if (disk_it == valid_local_disk_ops.end()) continue;
-                        MC_LOG(ERROR) << "SSD read failed for key '" << key
+                        MC_LOG_ERROR << "SSD read failed for key '" << key
                                    << "': " << toString(read_result.error());
                         results[disk_it->second.original_index] =
                             tl::make_unexpected(read_result.error());
@@ -5566,7 +5569,7 @@ RealClient::batch_get_into_multi_buffers_internal(
                 auto alloc_result =
                     client_buffer_allocator_->allocate(op.total_size);
                 if (!alloc_result) {
-                    MC_LOG(ERROR)
+                    MC_LOG_ERROR
                         << "Failed to allocate temp buffer for DISK "
                         << "read, key: " << key << ", size: " << op.total_size;
                     results[op.original_index] =
@@ -5585,7 +5588,7 @@ RealClient::batch_get_into_multi_buffers_internal(
                     }
                 }
                 if (!replica_ptr) {
-                    MC_LOG(ERROR) << "No DISK replica found for key: " << key;
+                    MC_LOG_ERROR << "No DISK replica found for key: " << key;
                     results[op.original_index] =
                         tl::make_unexpected(ErrorCode::INVALID_REPLICA);
                     continue;
@@ -5611,7 +5614,7 @@ RealClient::batch_get_into_multi_buffers_internal(
                     auto &op = valid_local_disk_ops.at(key);
                     auto handle_it = temp_handles.find(key);
                     if (!disk_results[di]) {
-                        MC_LOG(ERROR)
+                        MC_LOG_ERROR
                             << "DISK BatchGet failed for key '" << key
                             << "': " << toString(disk_results[di].error());
                         results[op.original_index] =
@@ -5635,7 +5638,7 @@ tl::expected<PingResponse, ErrorCode> RealClient::ping(const UUID &client_id) {
     std::shared_lock<std::shared_mutex> lock(dummy_client_mutex_);
 
     if (!client_) {
-        MC_LOG(ERROR) << "client_id=" << client_id << ", error=client_not_ready";
+        MC_LOG_ERROR << "client_id=" << client_id << ", error=client_not_ready";
         return tl::make_unexpected(ErrorCode::INTERNAL_ERROR);
     }
 
@@ -5645,7 +5648,7 @@ tl::expected<PingResponse, ErrorCode> RealClient::ping(const UUID &client_id) {
     PodUUID pod_client_id = {client_id.first, client_id.second};
     if (!dummy_client_ping_queue_.push(pod_client_id)) {
         // Queue is full
-        MC_LOG(ERROR) << "client_id=" << client_id
+        MC_LOG_ERROR << "client_id=" << client_id
                    << ", error=dummy_client_ping_queue_";
         return tl::make_unexpected(ErrorCode::INTERNAL_ERROR);
     }
@@ -5671,7 +5674,7 @@ void RealClient::dummy_client_monitor_func() {
         std::vector<UUID> expired_clients;
         for (auto it = client_ttl.begin(); it != client_ttl.end();) {
             if (it->second < now) {
-                MC_LOG(INFO) << "client_id=" << it->first
+                MC_LOG_INFO << "client_id=" << it->first
                           << ", action=client_expired";
                 expired_clients.push_back(it->first);
                 it = client_ttl.erase(it);
@@ -5703,10 +5706,10 @@ int RealClient::start_dummy_client_monitor() {
     dummy_client_monitor_thread_ =
         std::thread(&RealClient::dummy_client_monitor_func, this);
     if (!dummy_client_monitor_thread_.joinable()) {
-        MC_LOG(ERROR) << "Failed to start dummy_client_monitor_thread";
+        MC_LOG_ERROR << "Failed to start dummy_client_monitor_thread";
         return -1;
     }
-    MC_LOG(INFO) << "start dummy_client_monitor_thread";
+    MC_LOG_INFO << "start dummy_client_monitor_thread";
     return 0;
 }
 
@@ -5714,7 +5717,7 @@ void RealClient::stop_dummy_client_monitor() {
     dummy_client_monitor_running_ = false;
     if (dummy_client_monitor_thread_.joinable()) {
         dummy_client_monitor_thread_.join();
-        MC_LOG(INFO) << "dummy_client_monitor_thread stopped";
+        MC_LOG_INFO << "dummy_client_monitor_thread stopped";
     }
 }
 int RealClient::start_ipc_server() {
@@ -5748,7 +5751,7 @@ int RealClient::stop_ipc_server() {
 void RealClient::ipc_server_func() {
     int server_sock = socket(AF_UNIX, SOCK_STREAM, 0);
     if (server_sock < 0) {
-        MC_LOG(ERROR) << "Failed to create IPC socket";
+        MC_LOG_ERROR << "Failed to create IPC socket";
         return;
     }
 
@@ -5761,24 +5764,24 @@ void RealClient::ipc_server_func() {
 
     if (bind(server_sock, (struct sockaddr *)&addr,
              sizeof(sa_family_t) + strlen(&addr.sun_path[1]) + 1) < 0) {
-        MC_LOG(ERROR) << "Failed to bind IPC socket: " << strerror(errno);
+        MC_LOG_ERROR << "Failed to bind IPC socket: " << strerror(errno);
         close(server_sock);
         return;
     }
 
     if (listen(server_sock, 5) < 0) {
-        MC_LOG(ERROR) << "Failed to listen on IPC socket: " << strerror(errno);
+        MC_LOG_ERROR << "Failed to listen on IPC socket: " << strerror(errno);
         close(server_sock);
         return;
     }
 
-    LOG(INFO) << "IPC server is listening";
+    LOG_INFO << "IPC server is listening";
 
     while (ipc_running_) {
         int client_sock = accept(server_sock, nullptr, nullptr);
         if (client_sock < 0) {
             if (ipc_running_) {
-                MC_LOG(ERROR) << "Accept failed: " << strerror(errno);
+                MC_LOG_ERROR << "Accept failed: " << strerror(errno);
             }
             continue;
         }
@@ -5796,7 +5799,7 @@ void RealClient::ipc_server_func() {
         IpcRequestType req_type;
         if (recv(client_sock, &req_type, sizeof(req_type), MSG_WAITALL) !=
             sizeof(req_type)) {
-            MC_LOG(ERROR) << "Failed to read IPC request type";
+            MC_LOG_ERROR << "Failed to read IPC request type";
             close(client_sock);
             continue;
         }
@@ -5806,21 +5809,21 @@ void RealClient::ipc_server_func() {
         } else if (req_type == IPC_SHM_FD_REQUEST) {
             handle_ipc_shm_fd_request(client_sock);
         } else {
-            MC_LOG(ERROR) << "Unknown IPC request type: " << req_type;
+            MC_LOG_ERROR << "Unknown IPC request type: " << req_type;
         }
 
         close(client_sock);
     }
 
     close(server_sock);
-    MC_LOG(INFO) << "IPC server stopped";
+    MC_LOG_INFO << "IPC server stopped";
 }
 
 void RealClient::handle_ipc_shm_register(int client_sock) {
     ShmRegisterRequest req;
     int fd = ipc_recv_fd(client_sock, &req, sizeof(req));
     if (fd < 0) {
-        MC_LOG(ERROR) << "Failed to receive fd for SHM_REGISTER";
+        MC_LOG_ERROR << "Failed to receive fd for SHM_REGISTER";
         return;
     }
 
@@ -5836,7 +5839,7 @@ void RealClient::handle_ipc_shm_register(int client_sock) {
 void RealClient::handle_ipc_shm_fd_request(int client_sock) {
     ShmFdRequest req;
     if (recv(client_sock, &req, sizeof(req), MSG_WAITALL) != sizeof(req)) {
-        MC_LOG(ERROR) << "Failed to read ShmFdRequest payload";
+        MC_LOG_ERROR << "Failed to read ShmFdRequest payload";
         return;
     }
 
@@ -5849,7 +5852,7 @@ void RealClient::handle_ipc_shm_fd_request(int client_sock) {
     {
         std::shared_lock<std::shared_mutex> lock(dummy_client_mutex_);
         if (shm_contexts_.find(client_id) == shm_contexts_.end()) {
-            MC_LOG(ERROR) << "Unregistered client_id in fd request: "
+            MC_LOG_ERROR << "Unregistered client_id in fd request: "
                        << client_id.first << ":" << client_id.second;
             ::send(client_sock, &resp, sizeof(resp), 0);
             return;
@@ -5858,13 +5861,13 @@ void RealClient::handle_ipc_shm_fd_request(int client_sock) {
 
     // Currently only SHM_SEG_HOT_CACHE is supported
     if (req.segment_type != SHM_SEG_HOT_CACHE) {
-        MC_LOG(ERROR) << "Unknown segment_type: " << req.segment_type;
+        MC_LOG_ERROR << "Unknown segment_type: " << req.segment_type;
         ::send(client_sock, &resp, sizeof(resp), 0);
         return;
     }
 
     if (!client_ || !client_->IsHotCacheEnabled()) {
-        MC_LOG(ERROR) << "Hot cache not available for fd request";
+        MC_LOG_ERROR << "Hot cache not available for fd request";
         ::send(client_sock, &resp, sizeof(resp), 0);
         return;
     }
@@ -5872,7 +5875,7 @@ void RealClient::handle_ipc_shm_fd_request(int client_sock) {
     auto hot_cache = client_->GetHotCache();
     auto seg = hot_cache->GetShmSegment();
     if (!seg || seg->fd < 0) {
-        MC_LOG(ERROR) << "Hot cache shm segment not available";
+        MC_LOG_ERROR << "Hot cache shm segment not available";
         ::send(client_sock, &resp, sizeof(resp), 0);
         return;
     }
@@ -5881,7 +5884,7 @@ void RealClient::handle_ipc_shm_fd_request(int client_sock) {
     resp.shm_size = seg->size;
 
     if (ipc_send_fd(client_sock, seg->fd, &resp, sizeof(resp)) < 0) {
-        MC_LOG(ERROR) << "Failed to send hot cache fd to dummy client";
+        MC_LOG_ERROR << "Failed to send hot cache fd to dummy client";
     }
 }
 
@@ -5892,9 +5895,9 @@ std::vector<Replica::Descriptor> RealClient::get_replica_desc(
         std::vector<Replica::Descriptor> replica_list = {};
         if (query_result.error() == ErrorCode::OBJECT_NOT_FOUND ||
             query_result.error() == ErrorCode::REPLICA_IS_NOT_READY) {
-            MC_LOG(ERROR) << "Object not found for key: " << key;
+            MC_LOG_ERROR << "Object not found for key: " << key;
         } else {
-            MC_LOG(ERROR) << "Query failed for key: " << key
+            MC_LOG_ERROR << "Query failed for key: " << key
                        << " with error: " << toString(query_result.error());
         }
         return replica_list;
@@ -5902,7 +5905,7 @@ std::vector<Replica::Descriptor> RealClient::get_replica_desc(
     const std::vector<Replica::Descriptor> &replica_list =
         query_result.value().replicas;
     if (replica_list.empty()) {
-        MC_LOG(ERROR) << "Empty replica list for key: " << key;
+        MC_LOG_ERROR << "Empty replica list for key: " << key;
     }
     return replica_list;
 }
@@ -5912,7 +5915,7 @@ RealClient::batch_get_replica_desc(const std::vector<std::string> &keys) {
     auto query_results = client_->BatchQuery(keys);
     std::map<std::string, std::vector<Replica::Descriptor>> replica_map;
     if (query_results.size() != keys.size()) {
-        MC_LOG(ERROR) << "Batch query response size mismatch in "
+        MC_LOG_ERROR << "Batch query response size mismatch in "
                       "batch_get_allocated_buffer_desc: expected "
                    << keys.size() << ", got " << query_results.size() << ".";
         return replica_map;
@@ -5922,7 +5925,7 @@ RealClient::batch_get_replica_desc(const std::vector<std::string> &keys) {
         if (query_results[i]) {
             replica_map[keys[i]] = query_results[i].value().replicas;
         } else {
-            MC_LOG(ERROR) << "batch_get_replica failed for key: " << keys[i]
+            MC_LOG_ERROR << "batch_get_replica failed for key: " << keys[i]
                        << " with error: " << toString(query_results[i].error());
         }
     }
@@ -5932,7 +5935,7 @@ RealClient::batch_get_replica_desc(const std::vector<std::string> &keys) {
 std::vector<std::string> RealClient::batch_replica_clear(
     const std::vector<std::string> &keys, const std::string &segment_name) {
     if (!client_) {
-        MC_LOG(ERROR) << "batch_replica_clear: client not initialized";
+        MC_LOG_ERROR << "batch_replica_clear: client not initialized";
         return {};
     }
     auto result =
@@ -5940,7 +5943,7 @@ std::vector<std::string> RealClient::batch_replica_clear(
     if (result) {
         return result.value();
     }
-    MC_LOG(ERROR) << "batch_replica_clear failed: " << toString(result.error());
+    MC_LOG_ERROR << "batch_replica_clear failed: " << toString(result.error());
     return {};
 }
 
@@ -5979,7 +5982,7 @@ RealClient::batch_get_offload_object(const std::vector<std::string> &keys,
         [s]() { return s->file_storage->BatchGet(s->keys, s->sizes); });
     auto result = try_result.value();
     if (!result) {
-        MC_LOG(ERROR) << "Batch get offload object failed,err_code = "
+        MC_LOG_ERROR << "Batch get offload object failed,err_code = "
                    << result.error();
         co_return tl::make_unexpected(result.error());
     }
@@ -5991,7 +5994,7 @@ RealClient::batch_get_offload_object(const std::vector<std::string> &keys,
 
 bool RealClient::release_offload_buffer(uint64_t batch_id) {
     if (!file_storage_) {
-        MC_LOG(WARNING)
+        MC_LOG_WARNING
             << "release_offload_buffer called but file_storage_ is null";
         return false;
     }
@@ -6019,12 +6022,12 @@ RealClient::batch_get_into_offload_object_internal(
         target_rpc_service_addr, keys, sizes);
     pt_rpc.End(batchGetResp ? 0 : -1);
     if (!batchGetResp) {
-        MC_LOG(ERROR) << "Batch get offload object failed with error: "
+        MC_LOG_ERROR << "Batch get offload object failed with error: "
                    << batchGetResp.error();
         return tl::make_unexpected(batchGetResp.error());
     }
     if (batchGetResp->pointers.size() != keys.size()) {
-        MC_LOG(ERROR) << "Pointer count mismatch from owner: expected="
+        MC_LOG_ERROR << "Pointer count mismatch from owner: expected="
                    << keys.size() << ", got=" << batchGetResp->pointers.size();
         return tl::make_unexpected(ErrorCode::INVALID_PARAMS);
     }
@@ -6042,7 +6045,7 @@ RealClient::batch_get_into_offload_object_internal(
             .count());
     int64_t total_size = 0;
     for (auto s : sizes) total_size += s;
-    MC_LOG(INFO) << "ssd_read_detail endpoint[" << target_rpc_service_addr
+    MC_LOG_INFO << "ssd_read_detail endpoint[" << target_rpc_service_addr
               << "] num_keys[" << objects.size()
               << "] total_size[" << total_size
               << "] elapsed_ms[" << elapsed_time
@@ -6058,7 +6061,7 @@ RealClient::batch_get_into_offload_object_internal(
     pt_release.End(0);
 
     if (!result) {
-        MC_LOG(ERROR) << "Batch get into offload object failed with error: "
+        MC_LOG_ERROR << "Batch get into offload object failed with error: "
                    << result.error();
         return result;
     }
@@ -6070,11 +6073,7 @@ RealClient::batch_get_into_offload_object_internal(
 
 ClientRequester::ClientRequester() {
     coro_io::client_pool<coro_rpc::coro_rpc_client>::pool_config pool_conf{};
-    const char *value = std::getenv("MC_RPC_PROTOCOL");
-    if (value && std::string_view(value) == "rdma") {
-        pool_conf.client_config.socket_config =
-            coro_io::ib_socket_t::config_t{};
-    }
+    detail::ApplyRpcProtocolSocketConfig(pool_conf.client_config.socket_config);
     // Configure reasonable retry limits for SSD offload RPC connections.
     // - connect_retry_count: Maximum connection retry attempts (default: 3)
     // - reconnect_wait_time: Wait time between retries (default: 1000ms)
@@ -6100,7 +6099,7 @@ ClientRequester::batch_get_offload_object(const std::string &client_addr,
         invoke_rpc<&RealClient::batch_get_offload_object,
                    BatchGetOffloadObjectResponse>(client_addr, keys, sizes);
     if (!result) {
-        MC_LOG(ERROR)
+        MC_LOG_ERROR
             << "Failed to invoke batch_get_offload_object, client_addr = "
             << client_addr << ", error is: " << result.error();
     }
@@ -6115,11 +6114,11 @@ void ClientRequester::release_offload_buffer(const std::string &client_addr,
     if (!result) {
         // This is expected in some cases (e.g., network issues, buffer already
         // GC'd) Log at INFO level since GC will eventually clean up anyway
-        MC_VLOG(1) << "Failed to release_offload_buffer for batch_id=" << batch_id
+        MC_LOG_INFO << "Failed to release_offload_buffer for batch_id=" << batch_id
                 << " at " << client_addr
                 << " (will be GC'd): " << result.error();
     } else {
-        MC_VLOG(1) << "Successfully released buffer for batch_id=" << batch_id
+        MC_LOG_INFO << "Successfully released buffer for batch_id=" << batch_id
                 << " at " << client_addr;
     }
 }
@@ -6137,12 +6136,12 @@ tl::expected<ReturnType, ErrorCode> ClientRequester::invoke_rpc(
                         std::forward<Args>(args)...);
                 });
             if (!ret.has_value()) {
-                MC_LOG(ERROR) << "Dummy Client not available";
+                MC_LOG_ERROR << "Dummy Client not available";
                 co_return tl::make_unexpected(ErrorCode::RPC_FAIL);
             }
             auto result = co_await std::move(ret.value());
             if (!result) {
-                MC_LOG(ERROR) << "RPC call failed: " << result.error().msg;
+                MC_LOG_ERROR << "RPC call failed: " << result.error().msg;
                 co_return tl::make_unexpected(ErrorCode::RPC_FAIL);
             }
             co_return result->result();

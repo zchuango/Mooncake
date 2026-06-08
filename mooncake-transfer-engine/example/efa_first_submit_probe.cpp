@@ -35,7 +35,8 @@
 //                   --warmup=1 --iters=5
 
 #include <gflags/gflags.h>
-#include <glog/logging.h>
+#include "log_macros.h"
+
 #include <numa.h>
 
 #include <chrono>
@@ -92,8 +93,8 @@ static int runTarget() {
     rc = engine->registerLocalMemory(buf, FLAGS_buffer_size, "cpu:0");
     LOG_ASSERT(!rc) << "registerLocalMemory failed";
 
-    LOG(INFO) << "[target] ready, addr=" << engine->getLocalIpAndPort();
-    LOG(INFO) << "[target] Ctrl-C to stop";
+    LOG_INFO << "[target] ready, addr=" << engine->getLocalIpAndPort();
+    LOG_INFO << "[target] Ctrl-C to stop";
 
     pause();  // block until SIGINT
 
@@ -104,7 +105,7 @@ static int runTarget() {
 
 static int runInitiator() {
     if (FLAGS_segment_id.empty()) {
-        LOG(ERROR) << "--segment_id is required for initiator";
+        LOG_ERROR << "--segment_id is required for initiator";
         return 1;
     }
 
@@ -136,7 +137,7 @@ static int runInitiator() {
     LOG_ASSERT(seg_desc) << "getSegmentDescByID failed";
     uint64_t remote_base = (uint64_t)seg_desc->buffers[0].addr;
 
-    LOG(INFO) << "[initiator] peer=" << FLAGS_segment_id
+    LOG_INFO << "[initiator] peer=" << FLAGS_segment_id
               << " warmup=" << (FLAGS_warmup ? "ON" : "OFF")
               << " iters=" << FLAGS_iters << " xfer_size=" << FLAGS_xfer_size;
 
@@ -146,7 +147,7 @@ static int runInitiator() {
         auto t0 = std::chrono::steady_clock::now();
         int wrc = efa->warmupSegment(FLAGS_segment_id);
         auto elapsed = std::chrono::steady_clock::now() - t0;
-        LOG(INFO) << "warmup: " << toMs(elapsed) << " ms (rc=" << wrc << ")";
+        LOG_INFO << "warmup: " << toMs(elapsed) << " ms (rc=" << wrc << ")";
     }
 
     for (int i = 0; i < FLAGS_iters; ++i) {
@@ -178,7 +179,7 @@ static int runInitiator() {
         engine->freeBatchID(batch_id);
 
         auto elapsed = std::chrono::steady_clock::now() - t0;
-        LOG(INFO) << "submit #" << i << ": " << toMs(elapsed) << " ms";
+        LOG_INFO << "submit #" << i << ": " << toMs(elapsed) << " ms";
     }
 
     engine->unregisterLocalMemory(buf);
@@ -194,6 +195,6 @@ int main(int argc, char **argv) {
     if (FLAGS_mode == "target") return runTarget();
     if (FLAGS_mode == "initiator") return runInitiator();
 
-    LOG(ERROR) << "--mode must be 'target' or 'initiator'";
+    LOG_ERROR << "--mode must be 'target' or 'initiator'";
     return 1;
 }

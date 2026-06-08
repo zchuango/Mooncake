@@ -13,10 +13,11 @@
 // limitations under the License.
 
 #include "transport/maca_transport/maca_transport.h"
+#include "log_macros.h"
 
 #include <bits/stdint-uintn.h>
 #include "cuda_alike.h"
-#include <glog/logging.h>
+
 
 #include <algorithm>
 #include <cassert>
@@ -34,7 +35,7 @@
 
 static bool checkCudaErrorReturn(cudaError_t result, const char *message) {
     if (result != cudaSuccess) {
-        LOG(ERROR) << message << " (Error code: " << result << " - "
+        LOG_ERROR << message << " (Error code: " << result << " - "
                    << cudaGetErrorString(result) << ")" << std::endl;
         return false;
     }
@@ -66,7 +67,7 @@ static bool enableP2PAccess(int src_device_id, int dst_device_id) {
     }
 
     if (!canAccessPeer) {
-        LOG(ERROR) << "MacaTransport: device " << src_device_id
+        LOG_ERROR << "MacaTransport: device " << src_device_id
                    << " cannot p2p access device " << dst_device_id;
         cudaSetDevice(original_device);
         return false;
@@ -81,7 +82,7 @@ static bool enableP2PAccess(int src_device_id, int dst_device_id) {
     cudaError_t result = cudaDeviceEnablePeerAccess(dst_device_id, 0);
 
     if (result != cudaSuccess && result != cudaErrorPeerAccessAlreadyEnabled) {
-        LOG(ERROR) << "MacaTransport: failed to enable p2p access (Error code: "
+        LOG_ERROR << "MacaTransport: failed to enable p2p access (Error code: "
                    << result << " - " << cudaGetErrorString(result) << ")"
                    << std::endl;
         cudaSetDevice(original_device);
@@ -97,7 +98,7 @@ static bool enableP2PAccess(int src_device_id, int dst_device_id) {
     result = cudaDeviceEnablePeerAccess(src_device_id, 0);
 
     if (result != cudaSuccess && result != cudaErrorPeerAccessAlreadyEnabled) {
-        LOG(ERROR) << "MacaTransport: failed to enable p2p access (Error code: "
+        LOG_ERROR << "MacaTransport: failed to enable p2p access (Error code: "
                    << result << " - " << cudaGetErrorString(result) << ")"
                    << std::endl;
         cudaSetDevice(original_device);
@@ -114,7 +115,7 @@ static int getDeviceFromPointer(void *ptr) {
     cudaPointerAttributes attr;
     cudaError_t err = cudaPointerGetAttributes(&attr, ptr);
     if (err != cudaSuccess) {
-        LOG(ERROR) << "MacaTransport: cudaPointerGetAttributes failed for "
+        LOG_ERROR << "MacaTransport: cudaPointerGetAttributes failed for "
                    << ptr;
         return -1;
     }
@@ -128,7 +129,7 @@ static int getDeviceFromPointer(void *ptr) {
 MacaTransport::MacaTransport() {
     int num_devices = getNumDevices();
     if (globalConfig().trace) {
-        LOG(INFO) << "MacaTransport: num_devices: " << num_devices;
+        LOG_INFO << "MacaTransport: num_devices: " << num_devices;
     }
 
     for (int src_device_id = 0; src_device_id < num_devices; ++src_device_id) {
@@ -136,12 +137,12 @@ MacaTransport::MacaTransport() {
              ++dst_device_id) {
             if (enableP2PAccess(src_device_id, dst_device_id)) {
                 if (globalConfig().trace) {
-                    LOG(INFO)
+                    LOG_INFO
                         << "MacaTransport: enabled p2p access between device "
                         << src_device_id << " and " << dst_device_id;
                 }
             } else {
-                LOG(ERROR)
+                LOG_ERROR
                     << "MacaTransport: failed to enable p2p access between "
                        "device "
                     << src_device_id << " and " << dst_device_id;
@@ -176,7 +177,7 @@ Status MacaTransport::submitTransfer(
     BatchID batch_id, const std::vector<TransferRequest> &entries) {
     auto &batch_desc = *((BatchDesc *)(batch_id));
     if (batch_desc.task_list.size() + entries.size() > batch_desc.batch_size) {
-        LOG(ERROR) << "MacaTransport: Exceed the limitation of current batch's "
+        LOG_ERROR << "MacaTransport: Exceed the limitation of current batch's "
                       "capacity";
         return Status::InvalidArgument(
             "MacaTransport: Exceed the limitation of capacity, batch id: " +
@@ -314,17 +315,17 @@ int MacaTransport::registerLocalMemory(void *addr, size_t length,
                                        bool update_metadata) {
     std::lock_guard<std::mutex> lock(register_mutex_);
     if (globalConfig().trace) {
-        LOG(INFO) << "register memory: addr " << addr << ", length " << length;
+        LOG_INFO << "register memory: addr " << addr << ", length " << length;
     }
     cudaPointerAttributes attr;
     cudaError_t err = cudaPointerGetAttributes(&attr, addr);
     if (err != cudaSuccess) {
-        LOG(ERROR) << "MacaTransport: cudaPointerGetAttributes failed";
+        LOG_ERROR << "MacaTransport: cudaPointerGetAttributes failed";
         return -1;
     }
 
     if (attr.type != cudaMemoryTypeDevice) {
-        LOG(ERROR) << "Unsupported memory type, " << addr << " " << attr.type;
+        LOG_ERROR << "Unsupported memory type, " << addr << " " << attr.type;
         return -1;
     }
 
@@ -337,7 +338,7 @@ int MacaTransport::registerLocalMemory(void *addr, size_t length,
     CUresult cu_err =
         cuMemGetAddressRange(&base_ptr, &alloc_size, (CUdeviceptr)addr);
     if (cu_err != CUDA_SUCCESS) {
-        LOG(ERROR) << "MacaTransport: cuMemGetAddressRange failed "
+        LOG_ERROR << "MacaTransport: cuMemGetAddressRange failed "
                    << "for addr " << addr << " (error " << cu_err << ")";
         return -1;
     }
@@ -350,7 +351,7 @@ int MacaTransport::registerLocalMemory(void *addr, size_t length,
     cudaIpcMemHandle_t handle;
     err = cudaIpcGetMemHandle(&handle, (void *)base_ptr);
     if (err != cudaSuccess) {
-        LOG(ERROR) << "MacaTransport: cudaIpcGetMemHandle failed";
+        LOG_ERROR << "MacaTransport: cudaIpcGetMemHandle failed";
         return -1;
     }
 
@@ -377,7 +378,7 @@ int MacaTransport::unregisterLocalMemory(void *addr, bool update_metadata) {
     if (cu_err == CUDA_SUCCESS) {
         key_ptr = (void *)base_ptr;
     } else {
-        LOG(WARNING)
+        LOG_WARNING
             << "MacaTransport: cuMemGetAddressRange failed for "
             << "addr " << addr << " during unregister (error " << cu_err
             << "). Memory may already be freed, using provided address.";
@@ -419,7 +420,7 @@ int MacaTransport::relocateSharedMemoryAddress(uint64_t &dest_addr,
                     cudaError_t err = cudaIpcOpenMemHandle(
                         &shm_addr, handle, cudaIpcMemLazyEnablePeerAccess);
                     if (err != cudaSuccess) {
-                        LOG(ERROR) << "MacaTransport: "
+                        LOG_ERROR << "MacaTransport: "
                                       "cudaIpcOpenMemHandle failed: "
                                    << cudaGetErrorString(err);
                         return -1;
@@ -430,7 +431,7 @@ int MacaTransport::relocateSharedMemoryAddress(uint64_t &dest_addr,
                     remap_entries_[std::make_pair(target_id, entry.addr)] =
                         shm_entry;
                 } else {
-                    LOG(ERROR) << "Mismatched MACA data transfer method";
+                    LOG_ERROR << "Mismatched MACA data transfer method";
                     return -1;
                 }
             }
@@ -441,7 +442,7 @@ int MacaTransport::relocateSharedMemoryAddress(uint64_t &dest_addr,
         }
         index++;
     }
-    LOG(ERROR) << "Requested address " << (void *)dest_addr << " to "
+    LOG_ERROR << "Requested address " << (void *)dest_addr << " to "
                << (void *)(dest_addr + length) << " not found!";
     return ERR_INVALID_ARGUMENT;
 }
@@ -464,11 +465,11 @@ void *MacaTransport::allocatePinnedLocalMemory(size_t size) {
     void *ptr = nullptr;
     cudaError_t res = cudaMalloc(&ptr, size);
     if (res == cudaSuccess) {
-        LOG(INFO) << "MacaTransport: allocated device memory " << size
+        LOG_INFO << "MacaTransport: allocated device memory " << size
                   << " bytes";
         return ptr;
     } else {
-        LOG(ERROR) << "MacaTransport: cudaMalloc failed: "
+        LOG_ERROR << "MacaTransport: cudaMalloc failed: "
                    << cudaGetErrorString(res);
         return nullptr;
     }

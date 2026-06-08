@@ -567,7 +567,7 @@
 /**
  * Assert that a condition is true.
  *
- * This crashes the program with an XLOG(FATAL) message if the condition is
+ * This crashes the program with an XLOG_FATAL message if the condition is
  * false.  Unlike assert() CHECK statements are always enabled, regardless of
  * the setting of NDEBUG.
  */

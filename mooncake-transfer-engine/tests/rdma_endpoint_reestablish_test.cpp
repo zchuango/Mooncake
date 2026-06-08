@@ -33,7 +33,8 @@
  */
 
 #include <gflags/gflags.h>
-#include <glog/logging.h>
+#include "log_macros.h"
+
 #include <gtest/gtest.h>
 #include <numa.h>
 #include <sys/time.h>
@@ -132,7 +133,7 @@ struct TEContext {
 
         if (!segment_id.empty()) {
             segment_opened_ = true;
-            LOG(INFO) << "Opening segment " << segment_id << "...";
+            LOG_INFO << "Opening segment " << segment_id << "...";
             segment_handle_ = engine_->openSegment(segment_id);
             auto segment_desc =
                 engine_->getMetadata()->getSegmentDescByID(segment_handle_);
@@ -155,23 +156,23 @@ class RDMAEndpointReestablishTest : public ::testing::Test {
 
         const char *env = std::getenv("MC_METADATA_SERVER");
         metadata_server = env ? env : "127.0.0.1:18222";
-        LOG(INFO) << "metadata_server: " << metadata_server;
+        LOG_INFO << "metadata_server: " << metadata_server;
 
         env = std::getenv("MC_TARGET_SERVER_NAME");
         target_server_name = env ? env : "127.0.0.1:12345";
-        LOG(INFO) << "target_server_name: " << target_server_name;
+        LOG_INFO << "target_server_name: " << target_server_name;
 
         env = std::getenv("MC_INITIATOR_SERVER_NAME");
         initiator_server_name = env ? env : "127.0.0.1:12346";
-        LOG(INFO) << "initiator_server_name: " << initiator_server_name;
+        LOG_INFO << "initiator_server_name: " << initiator_server_name;
 
         env = std::getenv("MC_TARGET_DEVICE_NAME");
         target_device_name = env ? env : "erdma_0";
-        LOG(INFO) << "target_device_name: " << target_device_name;
+        LOG_INFO << "target_device_name: " << target_device_name;
 
         env = std::getenv("MC_INITIATOR_DEVICE_NAME");
         initiator_device_name = env ? env : "erdma_1";
-        LOG(INFO) << "initiator_device_name: " << initiator_device_name;
+        LOG_INFO << "initiator_device_name: " << initiator_device_name;
     }
 
     void TearDown() override { google::ShutdownGoogleLogging(); }
@@ -185,13 +186,13 @@ class RDMAEndpointReestablishTest : public ::testing::Test {
 
 TEST_F(RDMAEndpointReestablishTest, EndpointReestablish) {
     // 1. Setup Target (will stay alive until test function exits)
-    LOG(INFO) << "========== Setting up Target ==========";
+    LOG_INFO << "========== Setting up Target ==========";
     TEContext target_ctx(target_server_name, metadata_server, "",
                          target_device_name);
-    LOG(INFO) << "Target is up. Waiting for RDMA connections and operations...";
+    LOG_INFO << "Target is up. Waiting for RDMA connections and operations...";
 
     // 2. Phase 1: Initiator Start, Connect & Write
-    LOG(INFO) << "========== Phase 1: Start, Connect & Write ==========";
+    LOG_INFO << "========== Phase 1: Start, Connect & Write ==========";
     {
         TEContext init_ctx(initiator_server_name, metadata_server,
                            target_server_name, initiator_device_name);
@@ -201,7 +202,7 @@ TEST_F(RDMAEndpointReestablishTest, EndpointReestablish) {
             init_ctx.local_addr_[i] = static_cast<uint8_t>(i % 256);
         }
 
-        LOG(INFO) << "Writing " << kDataLength << " bytes to Target...";
+        LOG_INFO << "Writing " << kDataLength << " bytes to Target...";
         auto batch_id = init_ctx.engine_->allocateBatchID(1);
         TransferRequest entry;
         entry.opcode = TransferRequest::WRITE;
@@ -215,20 +216,20 @@ TEST_F(RDMAEndpointReestablishTest, EndpointReestablish) {
 
         wait_for_transfer(init_ctx.engine_.get(), batch_id, "WRITE");
 
-        LOG(INFO) << "Phase 1: Write Completed. Tearing down connection...";
+        LOG_INFO << "Phase 1: Write Completed. Tearing down connection...";
     }
 
-    LOG(INFO) << "Simulating Initiator Crash/Restart... Waiting 2 seconds.";
+    LOG_INFO << "Simulating Initiator Crash/Restart... Waiting 2 seconds.";
     sleep(2);
 
     // 3. Phase 2: Restart, Re-establish Endpoint & Read
-    LOG(INFO) << "========== Phase 2: Restart, Re-establish Endpoint & Read "
+    LOG_INFO << "========== Phase 2: Restart, Re-establish Endpoint & Read "
                  "==========";
     {
         TEContext init_ctx(initiator_server_name, metadata_server,
                            target_server_name, initiator_device_name);
 
-        LOG(INFO) << "Reading data back over new Endpoint...";
+        LOG_INFO << "Reading data back over new Endpoint...";
         auto batch_id = init_ctx.engine_->allocateBatchID(1);
         TransferRequest entry;
         entry.opcode = TransferRequest::READ;
@@ -246,7 +247,7 @@ TEST_F(RDMAEndpointReestablishTest, EndpointReestablish) {
         for (size_t i = 0; i < kDataLength; ++i) {
             if (init_ctx.local_addr_[i] != static_cast<uint8_t>(i % 256)) {
                 ok = false;
-                LOG(ERROR) << "Data mismatch at offset " << i << ", expected "
+                LOG_ERROR << "Data mismatch at offset " << i << ", expected "
                            << (i % 256) << ", got "
                            << (int)init_ctx.local_addr_[i];
                 break;
@@ -254,7 +255,7 @@ TEST_F(RDMAEndpointReestablishTest, EndpointReestablish) {
         }
 
         ASSERT_TRUE(ok) << "Endpoint Reconstruction Verification Failed!";
-        LOG(INFO)
+        LOG_INFO
             << ">>> ENDPOINT RECONSTRUCTION VERIFICATION: \033[32mSUCCESS\033";
     }
 }

@@ -1,4 +1,5 @@
 #include <c10/util/Exception.h>
+#include "log_macros.h"
 #include <connection_poller.h>
 #include <ATen/cuda/CUDAContext.h>
 #include <cuda.h>
@@ -83,7 +84,7 @@ ConnectionContext::ConnectionContext(int backendIndex, int rank, int size,
 
 ConnectionContext::~ConnectionContext() {
     if (resource_abandoned_) {
-        LOG(WARNING) << "Resource leak in ConnectionContext: cleanup skipped "
+        LOG_WARNING << "Resource leak in ConnectionContext: cleanup skipped "
                         "due to hung operations.";
         return;
     }
@@ -268,7 +269,7 @@ bool ConnectionContext::pollPeer(int pollingRank) {
                 buffer_data = store_->get(bufferKey);
 
                 if (buffer_data.size() < sizeof(SegmentInfo)) {
-                    LOG(WARNING)
+                    LOG_WARNING
                         << "Rank " << rank_ << " got invalid buffer data from "
                         << pollingRank << ".";
                     peerState.increaseCheckStoreBackoff();
@@ -351,7 +352,7 @@ bool ConnectionContext::pollPeer(int pollingRank) {
                 }
                 state_changed = true;
             } else if (status.s == TransferStatusEnum::FAILED) {
-                LOG(WARNING) << "Warmup request " << rank_ << " -> "
+                LOG_WARNING << "Warmup request " << rank_ << " -> "
                              << pollingRank << " failed.";
                 // Free resources and retry
                 engine_->freeBatchID(peerState.warmupBatchId.value());
@@ -442,7 +443,7 @@ bool ConnectionContext::pollPeer(int pollingRank) {
                 store_->deleteKey(
                     getExtensionStateStoreKey(backendIndex_, pollingRank));
             } catch (const std::exception& e) {
-                LOG(WARNING) << "Rank " << rank_
+                LOG_WARNING << "Rank " << rank_
                              << " got an exception when deleteKey for peer "
                              << pollingRank << ": " << e.what();
             }

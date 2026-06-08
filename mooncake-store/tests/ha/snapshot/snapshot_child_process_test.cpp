@@ -1,4 +1,5 @@
 #include "master_service.h"
+#include "log_macros.h"
 #include "master_metric_manager.h"
 #include "ha/snapshot/catalog/snapshot_catalog_store.h"
 #include "ha/snapshot/object/snapshot_object_store.h"
@@ -8,7 +9,7 @@
 #include "ha/oplog/etcd_oplog_store.h"
 #endif
 
-#include <glog/logging.h>
+
 #include <gtest/gtest.h>
 
 #include <chrono>
@@ -987,7 +988,7 @@ TEST_F(SnapshotChildProcessTest, PersistState_FailFast_StopsOnFirstError) {
     ASSERT_FALSE(result.has_value()) << "PersistState should fail";
 
     const auto& error_msg = result.error().message;
-    LOG(INFO) << "PersistState error: " << error_msg;
+    LOG_INFO << "PersistState error: " << error_msg;
 
     // Should contain "metadata" (first upload that fails)
     EXPECT_NE(error_msg.find("metadata"), std::string::npos)
@@ -1048,7 +1049,7 @@ TEST_F(SnapshotChildProcessTest, UploadFail_WithBackupDir_SavesAllFiles) {
 
     // Verify error message contains ALL files (non-fail-fast with backup_dir)
     const auto& error_msg = result.error().message;
-    LOG(INFO) << "PersistState error: " << error_msg;
+    LOG_INFO << "PersistState error: " << error_msg;
 
     EXPECT_NE(error_msg.find("metadata"), std::string::npos)
         << "Error should contain 'metadata', got: " << error_msg;

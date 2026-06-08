@@ -1,5 +1,5 @@
 // eviction_strategy_test.cpp
-#include <glog/logging.h>
+
 #include <gtest/gtest.h>
 
 #include <memory>

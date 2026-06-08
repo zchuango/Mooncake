@@ -1,6 +1,6 @@
 #include "ha_metric_manager.h"
 
-#include <glog/logging.h>
+
 
 #include <iomanip>
 #include <sstream>

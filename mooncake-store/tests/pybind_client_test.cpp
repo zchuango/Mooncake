@@ -1,5 +1,6 @@
 #include <gflags/gflags.h>
-#include <glog/logging.h>
+#include "log_macros.h"
+
 #include <gtest/gtest.h>
 
 #include <barrier>
@@ -49,7 +50,7 @@ class RealClientTest : public ::testing::Test {
         if (getenv("PROTOCOL")) FLAGS_protocol = getenv("PROTOCOL");
         if (getenv("DEVICE_NAME")) FLAGS_device_name = getenv("DEVICE_NAME");
 
-        LOG(INFO) << "Protocol: " << FLAGS_protocol
+        LOG_INFO << "Protocol: " << FLAGS_protocol
                   << ", Device name: " << FLAGS_device_name
                   << ", Metadata: P2PHANDSHAKE";
 
@@ -217,7 +218,7 @@ TEST_F(RealClientTest, BasicPutGetOperations) {
     ASSERT_TRUE(master_.Start(InProcMasterConfigBuilder().build()))
         << "Failed to start in-proc master";
     master_address_ = master_.master_address();
-    LOG(INFO) << "Started in-proc master at " << master_address_;
+    LOG_INFO << "Started in-proc master at " << master_address_;
 
     // Setup the client
     const std::string rdma_devices = (FLAGS_protocol == std::string("rdma"))
@@ -356,7 +357,7 @@ TEST_F(RealClientTest, GetWithLeaseTimeOut) {
             }
         }
 
-        LOG(INFO) << "Batch get buffer " << fail_count << " out of "
+        LOG_INFO << "Batch get buffer " << fail_count << " out of "
                   << num_slices << " keys failed";
         ASSERT_NE(fail_count, 0) << "Should fail for some keys";
 
@@ -375,7 +376,7 @@ TEST_F(RealClientTest, GetWithLeaseTimeOut) {
                 fail_count++;
             }
         }
-        LOG(INFO) << "Batch get into " << fail_count << " out of " << num_slices
+        LOG_INFO << "Batch get into " << fail_count << " out of " << num_slices
                   << " keys failed";
         ASSERT_NE(fail_count, 0) << "Should fail for some keys";
 
@@ -642,7 +643,7 @@ TEST_F(RealClientTest, TestSetupExistTransferEngine) {
     ASSERT_TRUE(master_.Start(InProcMasterConfigBuilder().build()))
         << "Failed to start in-proc master";
     master_address_ = master_.master_address();
-    LOG(INFO) << "Started in-proc master at " << master_address_;
+    LOG_INFO << "Started in-proc master at " << master_address_;
 
     // Setup the client
     const std::string rdma_devices = (FLAGS_protocol == std::string("rdma"))
@@ -683,7 +684,7 @@ TEST_F(RealClientTest, TestBatchPutAndGetMultiBuffers) {
     ASSERT_TRUE(master_.Start(InProcMasterConfigBuilder().build()))
         << "Failed to start in-proc master";
     master_address_ = master_.master_address();
-    LOG(INFO) << "Started in-proc master at " << master_address_;
+    LOG_INFO << "Started in-proc master at " << master_address_;
 
     // Setup the client
     const std::string rdma_devices = (FLAGS_protocol == std::string("rdma"))
@@ -759,7 +760,7 @@ TEST_F(RealClientTest, TestBatchAndNormalGetReplicaDesc) {
     ASSERT_TRUE(master_.Start(InProcMasterConfigBuilder().build()))
         << "Failed to start in-proc master";
     master_address_ = master_.master_address();
-    LOG(INFO) << "Started in-proc master at " << master_address_;
+    LOG_INFO << "Started in-proc master at " << master_address_;
 
     // Setup the client
     const std::string rdma_devices = (FLAGS_protocol == std::string("rdma"))
@@ -887,7 +888,7 @@ TEST_F(RealClientTest, SetupWithConfigDict) {
     ASSERT_TRUE(master_.Start(InProcMasterConfigBuilder().build()))
         << "Failed to start in-proc master";
     master_address_ = master_.master_address();
-    LOG(INFO) << "Started in-proc master at " << master_address_;
+    LOG_INFO << "Started in-proc master at " << master_address_;
 
     // Setup the client using ConfigDict
     const std::string rdma_devices = (FLAGS_protocol == std::string("rdma"))

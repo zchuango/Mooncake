@@ -14,9 +14,10 @@
 // limitations under the License.
 
 #include "transport/ascend_transport/ascend_direct_transport/async_transfer_executor.h"
+#include "log_macros.h"
 #include "transport/ascend_transport/ascend_direct_transport/utils.h"
 
-#include <glog/logging.h>
+
 
 #include <chrono>
 
@@ -46,7 +47,7 @@ int AsyncTransferExecutor::initialize() {
     }
     running_ = true;
     query_thread_ = std::thread(&AsyncTransferExecutor::queryThreadLoop, this);
-    LOG(INFO) << "AsyncTransferExecutor query thread started";
+    LOG_INFO << "AsyncTransferExecutor query thread started";
     return 0;
 }
 
@@ -60,7 +61,7 @@ void AsyncTransferExecutor::finalize() {
     if (query_thread_.joinable()) {
         query_thread_.join();
     }
-    LOG(INFO) << "AsyncTransferExecutor query thread stopped";
+    LOG_INFO << "AsyncTransferExecutor query thread stopped";
     cleanupConnections();
     finalizeEngines();
     finalized_ = true;
@@ -71,7 +72,7 @@ TransferExecutorBase::ExecuteResult AsyncTransferExecutor::execute(
     adxl::TransferOp operation,
     const std::vector<Transport::Slice*>& slice_list) {
     if (local_engine_idx >= adxl_engines_.size()) {
-        LOG(ERROR) << "Invalid local_engine_idx: " << local_engine_idx;
+        LOG_ERROR << "Invalid local_engine_idx: " << local_engine_idx;
         return {.ret = -1, .status = adxl::FAILED, .retryable = false};
     }
 
@@ -205,7 +206,7 @@ bool AsyncTransferExecutor::processOneBatch(
 
     auto fail_batch = [&](const std::string& message,
                           const std::string& target_adxl_engine_name) {
-        LOG(ERROR) << message;
+        LOG_ERROR << message;
         for (auto* slice : slice_list) {
             slice->markFailed();
         }

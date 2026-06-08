@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include "tent/platform/rocm.h"
+#include "log_macros.h"
 
 namespace mooncake {
 namespace tent {
@@ -129,7 +130,7 @@ HIPStreamPool::DevicePool* HIPStreamPool::getDevicePool(int deviceId) {
     int actualDeviceCount = 0;
     if (hipGetDeviceCount(&actualDeviceCount) != hipSuccess ||
         deviceId >= actualDeviceCount) {
-        LOG(ERROR) << "Invalid HIP device id " << deviceId;
+        LOG_ERROR << "Invalid HIP device id " << deviceId;
         return nullptr;
     }
 

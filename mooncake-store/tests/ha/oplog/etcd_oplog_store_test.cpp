@@ -1,7 +1,8 @@
 #include "ha/oplog/etcd_oplog_store.h"
+#include "log_macros.h"
 
 #include <gflags/gflags.h>
-#include <glog/logging.h>
+
 #include <gtest/gtest.h>
 
 #include <chrono>
@@ -330,7 +331,7 @@ TEST_F(EtcdOpLogStoreTest, TestCleanupOpLogBefore_Empty) {
 // ========== 3.1.7 Cluster ID validation tests ==========
 
 TEST_F(EtcdOpLogStoreTest, TestInvalidClusterId_Rejected) {
-    // Invalid cluster_id (containing slashes) should trigger LOG(FATAL) and
+    // Invalid cluster_id (containing slashes) should trigger LOG_FATAL and
     // terminate
     EXPECT_DEATH(
         {

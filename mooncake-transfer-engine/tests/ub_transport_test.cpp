@@ -13,7 +13,8 @@
 // limitations under the License.
 
 #include <gflags/gflags.h>
-#include <glog/logging.h>
+#include "log_macros.h"
+
 #include <gtest/gtest.h>
 #include <sys/time.h>
 
@@ -170,7 +171,7 @@ TEST_F(UBTransportTest, MultiWrite) {
             if (status.s == TransferStatusEnum::COMPLETED)
                 completed = true;
             else if (status.s == TransferStatusEnum::FAILED) {
-                LOG(INFO) << "FAILED";
+                LOG_INFO << "FAILED";
                 completed = true;
             }
         }
@@ -204,7 +205,7 @@ TEST_F(UBTransportTest, MultipleRead) {
             if (status.s == TransferStatusEnum::COMPLETED)
                 completed = true;
             else if (status.s == TransferStatusEnum::FAILED) {
-                LOG(INFO) << "FAILED";
+                LOG_INFO << "FAILED";
                 completed = true;
             }
         }

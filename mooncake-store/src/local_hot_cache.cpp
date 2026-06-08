@@ -5,7 +5,8 @@
 #include <cstdlib>
 #include <cstdint>
 #include <shared_mutex>
-#include <glog/logging.h>
+
+#include "log_macros.h"
 
 namespace mooncake {
 namespace {
@@ -40,10 +41,10 @@ LocalHotCache::LocalHotCache(size_t total_size_bytes, size_t block_size_bytes,
                 ShmHelper::getInstance()->allocate(total_size);
             shm_segment_ =
                 ShmHelper::getInstance()->get_shm(bulk_memory_standard_);
-            LOG(INFO) << "Hot cache allocated via shm, size=" << total_size
+            LOG_INFO << "Hot cache allocated via shm, size=" << total_size
                       << " fd=" << shm_segment_->fd;
         } catch (const std::exception& e) {
-            LOG(ERROR) << "Failed to allocate shm for hot cache: " << e.what();
+            LOG_ERROR << "Failed to allocate shm for hot cache: " << e.what();
             return;
         }
     } else {
@@ -120,7 +121,7 @@ HotMemBlock* LocalHotCache::GetHotKey(const std::string& key) {
     }
     HotMemBlock* blk = *(it->second);
     if (!blk) {
-        LOG(ERROR) << "Invalid block for key: " << key;
+        LOG_ERROR << "Invalid block for key: " << key;
         return nullptr;
     }
 
@@ -305,7 +306,7 @@ bool LocalHotCacheHandler::SubmitPutTask(const std::string& key,
     // Try to get a free block (may evict from LRU tail)
     HotMemBlock* block = hot_cache_->GetFreeBlock();
     if (!block) {
-        LOG(ERROR) << "Hot cache is fully in-use, fail to get a free block: "
+        LOG_ERROR << "Hot cache is fully in-use, fail to get a free block: "
                    << key;
         return false;
     }
@@ -331,7 +332,7 @@ bool LocalHotCacheHandler::SubmitPutTask(const std::string& key,
         if (shutdown_) {
             // Must return block to avoid leak
             hot_cache_->PutHotKey(block);
-            LOG(WARNING)
+            LOG_WARNING
                 << "Attempting to submit task to shutdown LocalHotCacheHandler";
             return false;
         }
@@ -342,7 +343,7 @@ bool LocalHotCacheHandler::SubmitPutTask(const std::string& key,
 }
 
 void LocalHotCacheHandler::workerThread() {
-    VLOG(2) << "LocalHotCacheHandler worker thread started";
+    LOG_INFO << "LocalHotCacheHandler worker thread started";
 
     while (true) {
         HotCachePutTask task;
@@ -369,12 +370,12 @@ void LocalHotCacheHandler::workerThread() {
             try {
                 // Insert the pre-filled block into LRU
                 if (task.hot_cache->PutHotKey(task.block)) {
-                    VLOG(2) << "Put task completed: " << task.key;
+                    LOG_INFO << "Put task completed: " << task.key;
                 } else {
-                    VLOG(2) << "Put task skipped: " << task.key;
+                    LOG_INFO << "Put task skipped: " << task.key;
                 }
             } catch (const std::exception& e) {
-                LOG(ERROR) << "Exception during async hot cache put for key "
+                LOG_ERROR << "Exception during async hot cache put for key "
                            << task.key << ": " << e.what();
                 // Ensure block is returned to pool on exception
                 // Clear key to force return-to-pool behavior
@@ -384,6 +385,6 @@ void LocalHotCacheHandler::workerThread() {
         }
     }
 
-    VLOG(2) << "LocalHotCacheHandler worker thread exiting";
+    LOG_INFO << "LocalHotCacheHandler worker thread exiting";
 }
 }  // namespace mooncake

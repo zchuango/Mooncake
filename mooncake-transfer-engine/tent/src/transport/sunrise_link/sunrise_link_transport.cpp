@@ -13,9 +13,10 @@
 // limitations under the License.
 
 #include "tent/transport/sunrise_link/sunrise_link_transport.h"
+#include "log_macros.h"
 
 #include <dlfcn.h>
-#include <glog/logging.h>
+
 
 #include <cassert>
 #include <cstddef>
@@ -231,7 +232,7 @@ class ThreadLocalTangStreamPool {
         tangGetDevice(&saved_dev);
         tangError_t set_ret = tangSetDevice(device_id);
         if (set_ret != tangSuccess) {
-            LOG(ERROR) << "tangSetDevice(" << device_id
+            LOG_ERROR << "tangSetDevice(" << device_id
                        << ") failed for stream creation: " << set_ret << " "
                        << tangGetErrorString(set_ret);
             return nullptr;
@@ -242,7 +243,7 @@ class ThreadLocalTangStreamPool {
             tangStreamCreateWithFlags(&stream, tangStreamNonBlocking);
         if (saved_dev >= 0) tangSetDevice(saved_dev);
         if (create_ret != tangSuccess) {
-            LOG(ERROR) << "tangStreamCreateWithFlags failed: " << create_ret
+            LOG_ERROR << "tangStreamCreateWithFlags failed: " << create_ret
                        << " " << tangGetErrorString(create_ret)
                        << ", device=" << device_id;
             return nullptr;
@@ -288,13 +289,13 @@ Status SunriseLinkTransport::install(std::string& local_segment_name,
 
     auto status = initSunriseLink();
     if (!status.ok()) {
-        LOG(WARNING) << "SunriseLink transport initSunriseLink fail";
+        LOG_WARNING << "SunriseLink transport initSunriseLink fail";
         return status;
     }
 
     status = detectTopology();
     if (!status.ok()) {
-        LOG(WARNING) << "SunriseLink transport detectTopology fail";
+        LOG_WARNING << "SunriseLink transport detectTopology fail";
         return status;
     }
 
@@ -304,7 +305,7 @@ Status SunriseLinkTransport::install(std::string& local_segment_name,
             ? conf_->get("transports/sunrise_link/async_memcpy_threshold", 0) *
                   1024
             : 0;
-    LOG(INFO) << "SunriseLink transport installed successfully";
+    LOG_INFO << "SunriseLink transport installed successfully";
 
     return Status::OK();
 }
@@ -314,7 +315,7 @@ Status SunriseLinkTransport::initSunriseLink() {
         dlopen(TangRtSharedObjectPath("libptml_shared.so").c_str(), RTLD_NOW);
     if (!ptml_handle_) {
         char* error = dlerror();
-        LOG(ERROR) << "Failed to load libptml_shared.so: "
+        LOG_ERROR << "Failed to load libptml_shared.so: "
                    << (error ? error : "unknown error");
         return Status::InternalError("Failed to load PTML library");
     }
@@ -323,7 +324,7 @@ Status SunriseLinkTransport::initSunriseLink() {
     do {                                                             \
         void* tmp = dlsym(handle, symbol);                           \
         if (tmp == nullptr) {                                        \
-            LOG(ERROR) << "dlsym failed on " << symbol;              \
+            LOG_ERROR << "dlsym failed on " << symbol;              \
             return Status::InternalError("Failed to load " #symbol); \
         }                                                            \
         *(void**)&funcptr = tmp;                                     \
@@ -337,25 +338,25 @@ Status SunriseLinkTransport::initSunriseLink() {
 
     ptmlReturn_t ret = ptmlInit();
     if (ret != PTML_SUCCESS) {
-        LOG(ERROR) << "ptmlInit failed, error code: " << ret;
+        LOG_ERROR << "ptmlInit failed, error code: " << ret;
         return Status::InternalError("Failed to initialize PTML");
     }
 
     ret = ptmlPtlinkEnableAll();
     if (ret != PTML_SUCCESS) {
-        LOG(WARNING) << "ptmlPtlinkEnableAll failed, error code: " << ret;
+        LOG_WARNING << "ptmlPtlinkEnableAll failed, error code: " << ret;
     }
 
     runtime_lib_handle_ =
         dlopen(TangRtSharedObjectPath("libtangrt_shared.so").c_str(), RTLD_NOW);
     if (!runtime_lib_handle_) {
         char* error = dlerror();
-        LOG(ERROR) << "Failed to load libtangrt_shared.so: "
+        LOG_ERROR << "Failed to load libtangrt_shared.so: "
                    << (error ? error : "unknown error");
         return Status::InternalError("Failed to load Tang library");
     }
 
-    LOG(INFO) << "SunriseLink runtime initialized successfully (PTML + Tang)";
+    LOG_INFO << "SunriseLink runtime initialized successfully (PTML + Tang)";
     return Status::OK();
 }
 
@@ -367,7 +368,7 @@ Status SunriseLinkTransport::detectTopology() {
     int device_count = 0;
     ptmlReturn_t pret = ptmlDeviceGetCount(&device_count);
     if (pret != PTML_SUCCESS || device_count <= 0) {
-        LOG(ERROR) << "ptmlDeviceGetCount failed, ret=" << pret
+        LOG_ERROR << "ptmlDeviceGetCount failed, ret=" << pret
                    << " count=" << device_count;
         return Status::InternalError("ptmlDeviceGetCount failed");
     }
@@ -383,7 +384,7 @@ Status SunriseLinkTransport::detectTopology() {
             dev, kMaxPhytopoPorts * sizeof(ptPhyTopo_t),
             phytopo.data() + static_cast<size_t>(dev) * kMaxPhytopoPorts);
         if (pret != PTML_SUCCESS) {
-            LOG(WARNING) << "ptmlPtlinkPhytopoDetect failed for device " << dev
+            LOG_WARNING << "ptmlPtlinkPhytopoDetect failed for device " << dev
                          << " ret=" << pret;
             continue;
         }
@@ -412,7 +413,7 @@ Status SunriseLinkTransport::detectTopology() {
             topology_map_[dev].push_back(peer);
             info.active_ports.push_back(lp);
 
-            LOG(INFO) << "PTLink topo dev=" << dev << " port=" << lp << " link "
+            LOG_INFO << "PTLink topo dev=" << dev << " port=" << lp << " link "
                       << lc << " -> " << rc << " (remote_port="
                       << static_cast<int>(row[p].remote_port) << ")";
         }
@@ -420,7 +421,7 @@ Status SunriseLinkTransport::detectTopology() {
         local_devices_.push_back(std::move(info));
     }
 
-    LOG(INFO) << "SunriseLink topology: " << device_count << " device(s), "
+    LOG_INFO << "SunriseLink topology: " << device_count << " device(s), "
               << c2c_port_by_pair_.size() << " C2C port mapping(s)";
     return Status::OK();
 }
@@ -603,7 +604,7 @@ Status SunriseLinkTransport::startTransfer(SunriseLinkTask* task,
             tangError_t ret =
                 tangMemcpy(dst, src, len, tangMemcpyDeviceToDevice);
             if (ret != tangSuccess) {
-                LOG(ERROR)
+                LOG_ERROR
                     << "SunriseLink IPC same-device memcpy failed, tang ret="
                     << ret << " " << tangGetErrorString(ret)
                     << " dev=" << src_dev;
@@ -641,7 +642,7 @@ Status SunriseLinkTransport::startTransfer(SunriseLinkTask* task,
                                        p_ds);
         }
         if (ret != tangSuccess) {
-            LOG(ERROR) << "SunriseLink IPC peer copy failed, tang ret=" << ret
+            LOG_ERROR << "SunriseLink IPC peer copy failed, tang ret=" << ret
                        << " " << tangGetErrorString(ret)
                        << " src_dev=" << src_dev << " dst_dev=" << dst_dev
                        << " remote_dev=" << remote_dev
@@ -709,7 +710,7 @@ Status SunriseLinkTransport::startTransfer(SunriseLinkTask* task,
         }
         ret = tangMemcpy(dst, src, len, tangMemcpyDeviceToDevice);
         if (ret != tangSuccess) {
-            LOG(ERROR)
+            LOG_ERROR
                 << "SunriseLink IPC local-device memcpy failed, tang ret="
                 << ret << " " << tangGetErrorString(ret) << " dev=" << src_dev;
             task->status_word = TransferStatusEnum::FAILED;
@@ -822,7 +823,7 @@ Status SunriseLinkTransport::startTransfer(SunriseLinkTask* task,
     }
 
     if (ret != tangSuccess) {
-        LOG(ERROR) << "SunriseLink transfer failed, tang ret=" << ret << " "
+        LOG_ERROR << "SunriseLink transfer failed, tang ret=" << ret << " "
                    << tangGetErrorString(ret) << " src_dev=" << src_dev
                    << " dst_dev=" << dst_dev << " src_attr_ret=" << src_attr_ret
                    << " dst_attr_ret=" << dst_attr_ret
@@ -859,7 +860,7 @@ Status SunriseLinkTransport::getTransferStatus(SubBatchRef batch, int task_id,
                 task.status_word = TransferStatusEnum::FAILED;
             }
         } else {
-            LOG(ERROR)
+            LOG_ERROR
                 << "SunriseLink getTransferStatus: PENDING with null stream; "
                    "cannot complete async bookkeeping";
             task.status_word = TransferStatusEnum::FAILED;
@@ -886,7 +887,7 @@ Status SunriseLinkTransport::addMemoryBuffer(BufferDesc& desc,
         if (location.index() >= 0) {
             tangError_t sd = tangSetDevice(location.index());
             if (sd != tangSuccess) {
-                LOG(ERROR)
+                LOG_ERROR
                     << "tangSetDevice before tangIpcGetMemHandle failed: " << sd
                     << " " << tangGetErrorString(sd);
                 return Status::InternalError("tangSetDevice failed");
@@ -899,7 +900,7 @@ Status SunriseLinkTransport::addMemoryBuffer(BufferDesc& desc,
             tangSetDevice(saved_dev);
         }
         if (ret != tangSuccess) {
-            LOG(ERROR) << "tangIpcGetMemHandle failed: " << ret << " "
+            LOG_ERROR << "tangIpcGetMemHandle failed: " << ret << " "
                        << tangGetErrorString(ret);
             return Status::InternalError("tangIpcGetMemHandle failed");
         }
@@ -994,7 +995,7 @@ Status SunriseLinkTransport::relocateRemoteAddress(uint64_t& dest_addr,
         tangGetDevice(&saved_dev);
         tangError_t sd = tangSetDevice(location.index());
         if (sd != tangSuccess) {
-            LOG(ERROR) << "tangSetDevice before tangIpcOpenMemHandle failed: "
+            LOG_ERROR << "tangSetDevice before tangIpcOpenMemHandle failed: "
                        << sd << " " << tangGetErrorString(sd)
                        << ", target_gpu=" << location.index()
                        << ", saved_dev=" << saved_dev;
@@ -1006,7 +1007,7 @@ Status SunriseLinkTransport::relocateRemoteAddress(uint64_t& dest_addr,
             tangSetDevice(saved_dev);
         }
         if (ret != tangSuccess) {
-            LOG(ERROR) << "tangIpcOpenMemHandle failed: " << ret << " "
+            LOG_ERROR << "tangIpcOpenMemHandle failed: " << ret << " "
                        << tangGetErrorString(ret);
             return Status::InternalError("tangIpcOpenMemHandle failed");
         }
@@ -1069,7 +1070,7 @@ Status SunriseLinkTransport::uninstall() {
 
         metadata_.reset();
         installed_ = false;
-        LOG(INFO) << "SunriseLink transport uninstalled";
+        LOG_INFO << "SunriseLink transport uninstalled";
     }
     return Status::OK();
 }

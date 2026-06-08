@@ -13,15 +13,16 @@
 // limitations under the License.
 
 #include "tent/transfer_engine.h"
+#include "log_macros.h"
 
-#include <glog/logging.h>
+
 
 #include "tent/runtime/transfer_engine_impl.h"
 
 #define CAST(ptr) ((mooncake::tent::TransferEngineImpl*)ptr)
 #define CHECK_POINTER(ptr)                       \
     if (!ptr) {                                  \
-        LOG(ERROR) << "Invalid argument: " #ptr; \
+        LOG_ERROR << "Invalid argument: " #ptr; \
         return -1;                               \
     }
 
@@ -43,7 +44,7 @@ tent_engine_t tent_create_engine() {
     if (!tl_settings.path.empty()) {
         auto status = config->load(tl_settings.path);
         if (!status.ok()) {
-            LOG(WARNING) << "tent_create_engine: " << status.ToString()
+            LOG_WARNING << "tent_create_engine: " << status.ToString()
                          << ", fallback to default config";
         }
     }
@@ -85,7 +86,7 @@ int tent_open_segment(tent_engine_t engine, tent_segment_id_t* handle,
     CHECK_POINTER(segment_name);
     auto status = CAST(engine)->openSegment(*handle, segment_name);
     if (!status.ok()) {
-        LOG(ERROR) << "tent_open_segment: " << status.ToString();
+        LOG_ERROR << "tent_open_segment: " << status.ToString();
         return -1;
     }
     return 0;
@@ -95,7 +96,7 @@ int tent_close_segment(tent_engine_t engine, tent_segment_id_t handle) {
     CHECK_POINTER(engine);
     auto status = CAST(engine)->closeSegment(handle);
     if (!status.ok()) {
-        LOG(ERROR) << "tent_close_segment: " << status.ToString();
+        LOG_ERROR << "tent_close_segment: " << status.ToString();
         return -1;
     }
     return 0;
@@ -108,7 +109,7 @@ int tent_get_segment_info(tent_engine_t engine, tent_segment_id_t handle,
     mooncake::tent::SegmentInfo pinfo;
     auto status = CAST(engine)->getSegmentInfo(handle, pinfo);
     if (!status.ok()) {
-        LOG(ERROR) << "tent_get_segment_info: " << status.ToString();
+        LOG_ERROR << "tent_get_segment_info: " << status.ToString();
         return -1;
     }
     if (pinfo.type == mooncake::tent::SegmentInfo::Memory)
@@ -122,7 +123,7 @@ int tent_get_segment_info(tent_engine_t engine, tent_segment_id_t handle,
     info->buffers =
         (tent_buffer_info*)malloc(sizeof(tent_buffer_info) * info->num_buffers);
     if (!info->buffers) {
-        LOG(ERROR) << "tent_get_segment_info: out of memory";
+        LOG_ERROR << "tent_get_segment_info: out of memory";
         return -1;
     }
 
@@ -149,7 +150,7 @@ int tent_allocate_memory(tent_engine_t engine, void** addr, size_t size,
     if (location) options.location = location;
     auto status = CAST(engine)->allocateLocalMemory(addr, size, options);
     if (!status.ok()) {
-        LOG(ERROR) << "tent_allocate_memory: " << status.ToString();
+        LOG_ERROR << "tent_allocate_memory: " << status.ToString();
         return -1;
     }
     return 0;
@@ -160,7 +161,7 @@ int tent_free_memory(tent_engine_t engine, void* addr) {
     CHECK_POINTER(addr);
     auto status = CAST(engine)->freeLocalMemory(addr);
     if (!status.ok()) {
-        LOG(ERROR) << "tent_free_memory: " << status.ToString();
+        LOG_ERROR << "tent_free_memory: " << status.ToString();
         return -1;
     }
     return 0;
@@ -171,7 +172,7 @@ int tent_register_memory(tent_engine_t engine, void* addr, size_t size) {
     CHECK_POINTER(addr);
     auto status = CAST(engine)->registerLocalMemory(addr, size);
     if (!status.ok()) {
-        LOG(ERROR) << "tent_register_memory: " << status.ToString();
+        LOG_ERROR << "tent_register_memory: " << status.ToString();
         return -1;
     }
     return 0;
@@ -182,7 +183,7 @@ int tent_unregister_memory(tent_engine_t engine, void* addr, size_t size) {
     CHECK_POINTER(addr);
     auto status = CAST(engine)->unregisterLocalMemory(addr, size);
     if (!status.ok()) {
-        LOG(ERROR) << "tent_unregister_memory: " << status.ToString();
+        LOG_ERROR << "tent_unregister_memory: " << status.ToString();
         return -1;
     }
     return 0;
@@ -197,7 +198,7 @@ int tent_free_batch(tent_engine_t engine, tent_batch_id_t batch_id) {
     CHECK_POINTER(engine);
     auto status = CAST(engine)->freeBatch(batch_id);
     if (!status.ok()) {
-        LOG(ERROR) << "tent_free_batch: " << status.ToString();
+        LOG_ERROR << "tent_free_batch: " << status.ToString();
         return -1;
     }
     return 0;
@@ -220,7 +221,7 @@ int tent_submit(tent_engine_t engine, tent_batch_id_t batch_id,
     }
     auto status = CAST(engine)->submitTransfer(batch_id, req_list);
     if (!status.ok()) {
-        LOG(ERROR) << "tent_submit: " << status.ToString();
+        LOG_ERROR << "tent_submit: " << status.ToString();
         return -1;
     }
     return 0;
@@ -249,7 +250,7 @@ int tent_submit_notif(tent_engine_t engine, tent_batch_id_t batch_id,
     notifi.msg = message;
     auto status = CAST(engine)->submitTransfer(batch_id, req_list, notifi);
     if (!status.ok()) {
-        LOG(ERROR) << "tent_submit_notifi: " << status.ToString();
+        LOG_ERROR << "tent_submit_notifi: " << status.ToString();
         return -1;
     }
     return 0;
@@ -264,7 +265,7 @@ int tent_send_notifs(tent_engine_t engine, tent_segment_id_t handle,
     notifi.msg = message;
     auto status = CAST(engine)->sendNotification(handle, notifi);
     if (!status.ok()) {
-        LOG(ERROR) << "tent_send_notifs: " << status.ToString();
+        LOG_ERROR << "tent_send_notifs: " << status.ToString();
         return -1;
     }
     return 0;
@@ -276,7 +277,7 @@ int tent_recv_notifs(tent_engine_t engine, tent_notifi_info* info) {
     std::vector<mooncake::tent::Notification> notify_list;
     auto status = CAST(engine)->receiveNotification(notify_list);
     if (!status.ok()) {
-        LOG(ERROR) << "tent_recv_notifs: " << status.ToString();
+        LOG_ERROR << "tent_recv_notifs: " << status.ToString();
         return -1;
     }
     info->num_records = (int)notify_list.size();
@@ -284,7 +285,7 @@ int tent_recv_notifs(tent_engine_t engine, tent_notifi_info* info) {
         info->records = (tent_notifi_record*)malloc(sizeof(tent_notifi_record) *
                                                     info->num_records);
         if (!info->records) {
-            LOG(ERROR) << "tent_recv_notifs: out of memory";
+            LOG_ERROR << "tent_recv_notifs: out of memory";
             return -1;
         }
 
@@ -310,7 +311,7 @@ int tent_task_status(tent_engine_t engine, tent_batch_id_t batch_id,
     auto status =
         CAST(engine)->getTransferStatus(batch_id, task_id, internal_status);
     if (!status.ok()) {
-        LOG(ERROR) << "tent_overall_status: " << status.ToString();
+        LOG_ERROR << "tent_overall_status: " << status.ToString();
         return -1;
     }
     xfer_status->status = (int)internal_status.s;
@@ -326,7 +327,7 @@ int tent_overall_status(tent_engine_t engine, tent_batch_id_t batch_id,
     mooncake::tent::TransferStatus internal_status;
     auto status = CAST(engine)->getTransferStatus(batch_id, internal_status);
     if (!status.ok()) {
-        LOG(ERROR) << "tent_overall_status: " << status.ToString();
+        LOG_ERROR << "tent_overall_status: " << status.ToString();
         return -1;
     }
     xfer_status->status = (int)internal_status.s;
@@ -370,7 +371,7 @@ int tent_register_memory_with_perm(tent_engine_t engine, void* addr,
     auto perm = static_cast<mooncake::tent::Permission>(permission);
     auto status = CAST(engine)->registerLocalMemory({addr}, {size}, perm);
     if (!status.ok()) {
-        LOG(ERROR) << "tent_register_memory_with_perm: " << status.ToString();
+        LOG_ERROR << "tent_register_memory_with_perm: " << status.ToString();
         return -1;
     }
     return 0;
@@ -386,7 +387,7 @@ int tent_register_memory_batch(tent_engine_t engine, void** addrs,
     auto perm = static_cast<mooncake::tent::Permission>(permission);
     auto status = CAST(engine)->registerLocalMemory(addr_list, size_list, perm);
     if (!status.ok()) {
-        LOG(ERROR) << "tent_register_memory_batch: " << status.ToString();
+        LOG_ERROR << "tent_register_memory_batch: " << status.ToString();
         return -1;
     }
     return 0;
@@ -403,7 +404,7 @@ int tent_unregister_memory_batch(tent_engine_t engine, void** addrs,
     }
     auto status = CAST(engine)->unregisterLocalMemory(addr_list, size_list);
     if (!status.ok()) {
-        LOG(ERROR) << "tent_unregister_memory_batch: " << status.ToString();
+        LOG_ERROR << "tent_unregister_memory_batch: " << status.ToString();
         return -1;
     }
     return 0;
@@ -417,7 +418,7 @@ int tent_allocate_memory_ex(tent_engine_t engine, void** addr, size_t size,
     auto options = convert_options(opts);
     auto status = CAST(engine)->allocateLocalMemory(addr, size, options);
     if (!status.ok()) {
-        LOG(ERROR) << "tent_allocate_memory_ex: " << status.ToString();
+        LOG_ERROR << "tent_allocate_memory_ex: " << status.ToString();
         return -1;
     }
     return 0;
@@ -431,7 +432,7 @@ int tent_register_memory_ex(tent_engine_t engine, void* addr, size_t size,
     auto options = convert_options(opts);
     auto status = CAST(engine)->registerLocalMemory({addr}, {size}, options);
     if (!status.ok()) {
-        LOG(ERROR) << "tent_register_memory_ex: " << status.ToString();
+        LOG_ERROR << "tent_register_memory_ex: " << status.ToString();
         return -1;
     }
     return 0;
@@ -450,7 +451,7 @@ int tent_register_memory_batch_ex(tent_engine_t engine, void** addrs,
     auto status =
         CAST(engine)->registerLocalMemory(addr_list, size_list, options);
     if (!status.ok()) {
-        LOG(ERROR) << "tent_register_memory_batch_ex: " << status.ToString();
+        LOG_ERROR << "tent_register_memory_batch_ex: " << status.ToString();
         return -1;
     }
     return 0;
@@ -465,7 +466,7 @@ int tent_task_status_list(tent_engine_t engine, tent_batch_id_t batch_id,
     std::vector<mooncake::tent::TransferStatus> status_list;
     auto status = CAST(engine)->getTransferStatus(batch_id, status_list);
     if (!status.ok()) {
-        LOG(ERROR) << "tent_task_status_list: " << status.ToString();
+        LOG_ERROR << "tent_task_status_list: " << status.ToString();
         return -1;
     }
     size_t to_copy = std::min(status_list.size(), *count);

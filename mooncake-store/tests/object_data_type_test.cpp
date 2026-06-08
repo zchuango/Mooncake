@@ -2,7 +2,7 @@
 #include "replica.h"
 #include "master_service.h"
 
-#include <glog/logging.h>
+
 #include <gtest/gtest.h>
 
 #include <sstream>

@@ -14,7 +14,7 @@
 
 #include "tent/metastore/http.h"
 
-#include <glog/logging.h>
+
 
 namespace mooncake {
 namespace tent {

@@ -7,7 +7,7 @@
 // support creating MockOpLogStore).
 
 #include <gtest/gtest.h>
-#include <glog/logging.h>
+
 #include <xxhash.h>
 #include <ylt/struct_pack.hpp>
 
