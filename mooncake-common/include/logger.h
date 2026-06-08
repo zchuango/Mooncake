@@ -34,6 +34,12 @@ namespace mooncake {
 LogConfig LogConfigFromEnv();
 
 /**
+ * @brief Check whether detailed client-side logs are enabled via
+ *        MC_LOG_DETAIL_ENABLE. Only explicit truthy values enable it.
+ */
+bool DetailLogEnabledFromEnv();
+
+/**
  * @brief Logger singleton for mooncake async logging.
  *
  * Initializes spdlog async logger with rotating file sink.

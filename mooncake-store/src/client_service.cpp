@@ -74,20 +74,20 @@ Client::Client(const std::string& local_hostname,
       pinned_buffer_pool_(std::make_unique<PinnedBufferPool>()),
       write_thread_pool_(2),
       task_thread_pool_(4) {
-    LOG(INFO) << "client_id=" << client_id_;
+    LOG_INFO << "client_id=" << client_id_;
 
     if (metrics_) {
         if (metrics_->GetReportingInterval() > 0) {
-            LOG(INFO) << "Client metrics enabled with reporting thread started "
-                         "(interval: "
-                      << metrics_->GetReportingInterval() << "s)";
+            LOG_INFO << "Client metrics enabled with reporting thread started "
+                        "(interval: "
+                     << metrics_->GetReportingInterval() << "s)";
         } else {
-            LOG(INFO)
+            LOG_INFO
                 << "Client metrics enabled but reporting disabled (interval=0)";
         }
     } else {
-        LOG(INFO) << "Client metrics disabled (set MC_STORE_CLIENT_METRIC=1 to "
-                     "enable)";
+        LOG_INFO << "Client metrics disabled (set MC_STORE_CLIENT_METRIC=1 to "
+                    "enable)";
     }
 }
 
@@ -183,10 +183,10 @@ static std::optional<bool> get_auto_discover() {
     if (ev_ad) {
         int iv = std::stoi(ev_ad);
         if (iv == 1) {
-            LOG(INFO) << "auto discovery set by env MC_MS_AUTO_DISC";
+            LOG_INFO << "auto discovery set by env MC_MS_AUTO_DISC";
             return true;
         } else if (iv == 0) {
-            LOG(INFO) << "auto discovery not set by env MC_MS_AUTO_DISC";
+            LOG_INFO << "auto discovery not set by env MC_MS_AUTO_DISC";
             return false;
         } else {
             LOG_WARNING
@@ -214,7 +214,7 @@ static std::vector<std::string> get_auto_discover_filters() {
     std::vector<std::string> whitelst_filters;
     char* ev_ad = std::getenv("MC_MS_FILTERS");
     if (ev_ad) {
-        LOG(INFO) << "whitelist filters: " << ev_ad;
+        LOG_INFO << "whitelist filters: " << ev_ad;
         char delimiter = ',';
         char* end = ev_ad + std::strlen(ev_ad);
         char *start = ev_ad, *pos = ev_ad;
@@ -432,7 +432,7 @@ ErrorCode Client::InitTransferEngine(
             // Enable auto-discover for RDMA if no devices are specified
             if ((protocol == "rdma" || protocol == "efa") &&
                 !device_names.has_value()) {
-                LOG(INFO)
+                LOG_INFO
                     << "Set auto discovery ON by default for RDMA protocol, "
                        "since no "
                        "device names provided";
@@ -443,7 +443,7 @@ ErrorCode Client::InitTransferEngine(
 
         // Honor filters when auto-discovery is enabled; otherwise warn once
         if (auto_discover) {
-            LOG(INFO)
+            LOG_INFO
                 << "Transfer engine auto discovery is enabled for protocol: "
                 << protocol;
             auto filters = get_auto_discover_filters();
@@ -476,10 +476,10 @@ ErrorCode Client::InitTransferEngine(
     // TENT mode: Skip manual transport installation - TENT handles this
     // internally
     if (use_tent) {
-        LOG(INFO)
+        LOG_INFO
             << "Using TENT mode - transport configuration handled internally";
         if (device_names.has_value()) {
-            LOG(INFO)
+            LOG_INFO
                 << "Note: device_names parameter is ignored in TENT mode. "
                 << "Configure devices via TENT config file or environment "
                    "variables.";
@@ -488,8 +488,8 @@ ErrorCode Client::InitTransferEngine(
     }
 
     if (!auto_discover) {
-        LOG(INFO) << "Transfer engine auto discovery is disabled for protocol: "
-                  << protocol;
+        LOG_INFO << "Transfer engine auto discovery is disabled for protocol: "
+                 << protocol;
 
         Transport* transport = nullptr;
 
@@ -500,8 +500,8 @@ ErrorCode Client::InitTransferEngine(
                 return ErrorCode::INVALID_PARAMS;
             }
 
-            LOG(INFO) << "Using specified RDMA devices: "
-                      << device_names.value();
+            LOG_INFO << "Using specified RDMA devices: "
+                     << device_names.value();
 
             std::vector<std::string> devices =
                 splitString(device_names.value(), ',', /*skip_empty=*/true);
@@ -510,9 +510,9 @@ ErrorCode Client::InitTransferEngine(
             auto topology = transfer_engine_->getLocalTopology();
             if (topology) {
                 topology->discover(devices);
-                LOG(INFO) << "Topology discovery complete with specified "
-                             "devices. Found "
-                          << topology->getHcaList().size() << " HCAs";
+                LOG_INFO << "Topology discovery complete with specified "
+                            "devices. Found "
+                         << topology->getHcaList().size() << " HCAs";
             }
 
             transport = transfer_engine_->installTransport(protocol, nullptr);
@@ -635,7 +635,7 @@ std::optional<std::shared_ptr<Client>> Client::Create(
         if (!response) {
             LOG_ERROR << "Failed to get fsdir from master";
         } else if (response.value().empty()) {
-            LOG(INFO)
+            LOG_INFO
                 << "Storage root directory is not set. persisting data is "
                    "disabled.";
         } else {
@@ -644,8 +644,8 @@ std::optional<std::shared_ptr<Client>> Client::Create(
             if (pos != std::string::npos) {
                 std::string storage_root_dir = dir_string.substr(0, pos);
                 std::string fs_subdir = dir_string.substr(pos + 1);
-                LOG(INFO) << "Storage root directory is: " << storage_root_dir;
-                LOG(INFO) << "Fs subdir is: " << fs_subdir;
+                LOG_INFO << "Storage root directory is: " << storage_root_dir;
+                LOG_INFO << "Fs subdir is: " << fs_subdir;
                 // Initialize storage backend with default eviction settings
                 client->PrepareStorageBackend(storage_root_dir, fs_subdir, true,
                                               0);
@@ -656,7 +656,7 @@ std::optional<std::shared_ptr<Client>> Client::Create(
     } else {
         auto config = config_response.value();
         if (config.fsdir.empty()) {
-            LOG(INFO)
+            LOG_INFO
                 << "Storage root directory is not set. persisting data is "
                    "disabled.";
         } else {
@@ -664,11 +664,11 @@ std::optional<std::shared_ptr<Client>> Client::Create(
             if (pos != std::string::npos) {
                 std::string storage_root_dir = config.fsdir.substr(0, pos);
                 std::string fs_subdir = config.fsdir.substr(pos + 1);
-                LOG(INFO) << "Storage root directory is: " << storage_root_dir;
-                LOG(INFO) << "Fs subdir is: " << fs_subdir;
-                LOG(INFO) << "Disk eviction enabled: "
-                          << config.enable_disk_eviction;
-                LOG(INFO) << "Quota bytes: " << config.quota_bytes;
+                LOG_INFO << "Storage root directory is: " << storage_root_dir;
+                LOG_INFO << "Fs subdir is: " << fs_subdir;
+                LOG_INFO << "Disk eviction enabled: "
+                         << config.enable_disk_eviction;
+                LOG_INFO << "Quota bytes: " << config.quota_bytes;
                 // Initialize storage backend with config from master
                 client->PrepareStorageBackend(storage_root_dir, fs_subdir,
                                               config.enable_disk_eviction,
@@ -682,23 +682,23 @@ std::optional<std::shared_ptr<Client>> Client::Create(
 
     // this only performs RPC calls
     if (protocol == "rpc_only") {
-        LOG(INFO) << "Use rpc only. Skip initializing transfer engine.";
-        LOG(INFO) << "client_create_breakdown protocol[" << protocol
-                     << "] connect_master_us["
-                     << std::chrono::duration_cast<std::chrono::microseconds>(
-                            connect_end - connect_start)
-                            .count()
-                     << "] storage_config_us["
-                     << std::chrono::duration_cast<std::chrono::microseconds>(
-                            storage_config_end - storage_config_start)
-                            .count()
-                     << "] init_transfer_engine_us[0]"
-                     << " init_transfer_submitter_us[0]"
-                     << " total_us["
-                     << std::chrono::duration_cast<std::chrono::microseconds>(
-                            std::chrono::steady_clock::now() - create_start)
-                            .count()
-                     << "]";
+        LOG_INFO << "Use rpc only. Skip initializing transfer engine.";
+        LOG_INFO << "client_create_breakdown protocol[" << protocol
+                 << "] connect_master_us["
+                 << std::chrono::duration_cast<std::chrono::microseconds>(
+                        connect_end - connect_start)
+                        .count()
+                 << "] storage_config_us["
+                 << std::chrono::duration_cast<std::chrono::microseconds>(
+                        storage_config_end - storage_config_start)
+                        .count()
+                 << "] init_transfer_engine_us[0]"
+                 << " init_transfer_submitter_us[0]"
+                 << " total_us["
+                 << std::chrono::duration_cast<std::chrono::microseconds>(
+                        std::chrono::steady_clock::now() - create_start)
+                        .count()
+                 << "]";
         return client;
     }
 
@@ -714,8 +714,8 @@ std::optional<std::shared_ptr<Client>> Client::Create(
         }
     } else {
         client->transfer_engine_ = transfer_engine;
-        LOG(INFO) << "Use existing transfer engine instance. Skip its "
-                     "initialization.";
+        LOG_INFO << "Use existing transfer engine instance. Skip its "
+                    "initialization.";
     }
     const auto init_engine_end = std::chrono::steady_clock::now();
 
@@ -728,28 +728,28 @@ std::optional<std::shared_ptr<Client>> Client::Create(
         LOG_ERROR << "Failed to initialize local hot cache";
     }
 
-    LOG(INFO) << "client_create_breakdown protocol[" << protocol
-                 << "] connect_master_us["
-                 << std::chrono::duration_cast<std::chrono::microseconds>(
-                        connect_end - connect_start)
-                        .count()
-                 << "] storage_config_us["
-                 << std::chrono::duration_cast<std::chrono::microseconds>(
-                        storage_config_end - storage_config_start)
-                        .count()
-                 << "] init_transfer_engine_us["
-                 << std::chrono::duration_cast<std::chrono::microseconds>(
-                        init_engine_end - init_engine_start)
-                        .count()
-                 << "] init_transfer_submitter_us["
-                 << std::chrono::duration_cast<std::chrono::microseconds>(
-                        init_submitter_end - init_submitter_start)
-                        .count()
-                 << "] total_us["
-                 << std::chrono::duration_cast<std::chrono::microseconds>(
-                        std::chrono::steady_clock::now() - create_start)
-                        .count()
-                 << "]";
+    LOG_INFO << "client_create_breakdown protocol[" << protocol
+             << "] connect_master_us["
+             << std::chrono::duration_cast<std::chrono::microseconds>(
+                    connect_end - connect_start)
+                    .count()
+             << "] storage_config_us["
+             << std::chrono::duration_cast<std::chrono::microseconds>(
+                    storage_config_end - storage_config_start)
+                    .count()
+             << "] init_transfer_engine_us["
+             << std::chrono::duration_cast<std::chrono::microseconds>(
+                    init_engine_end - init_engine_start)
+                    .count()
+             << "] init_transfer_submitter_us["
+             << std::chrono::duration_cast<std::chrono::microseconds>(
+                    init_submitter_end - init_submitter_start)
+                    .count()
+             << "] total_us["
+             << std::chrono::duration_cast<std::chrono::microseconds>(
+                    std::chrono::steady_clock::now() - create_start)
+                    .count()
+             << "]";
     return client;
 }
 
@@ -951,8 +951,8 @@ tl::expected<void, ErrorCode> Client::Get(const std::string& object_key,
     }
     // Log cache hit statistics
     if (hot_cache_ && replica.is_memory_replica()) {
-        LOG_DEBUG << "Get completed: key=" << object_key
-                << " cache_hit=" << (cache_used ? 1 : 0);
+        DLOG_DEBUG << "Get completed: key=" << object_key
+                   << " cache_hit=" << (cache_used ? 1 : 0);
     }
 
     return {};
@@ -1095,8 +1095,8 @@ std::vector<tl::expected<void, ErrorCode>> Client::BatchGetWhenPreferSameNode(
         } else {
             for (size_t idx = 0; idx < op.key_indexes.size(); ++idx) {
                 auto index = op.key_indexes[idx];
-                LOG_DEBUG << "Transfer completed successfully for key: "
-                        << object_keys[index];
+                DLOG_DEBUG << "Transfer completed successfully for key: "
+                           << object_keys[index];
                 results[index] = {};
 
                 // Release the cache block after transfer completes (memcpy is
@@ -1224,8 +1224,9 @@ std::vector<tl::expected<void, ErrorCode>> Client::BatchGet(
             continue;
         }
 
-        LOG_DEBUG << "Submitted transfer for key " << key
-                << " using strategy: " << static_cast<int>(future->strategy());
+        DLOG_DEBUG << "Submitted transfer for key " << key
+                   << " using strategy: "
+                   << static_cast<int>(future->strategy());
 
         pending_transfers.emplace_back(i, key, std::move(*future), replica,
                                        cache_used);
@@ -1253,7 +1254,7 @@ std::vector<tl::expected<void, ErrorCode>> Client::BatchGet(
                        << " with error: " << static_cast<int>(result);
             results[index] = tl::unexpected(result);
         } else {
-            LOG_DEBUG << "Transfer completed successfully for key: " << key;
+            DLOG_DEBUG << "Transfer completed successfully for key: " << key;
             results[index] = {};
 
             // Frequency admission: only promote frequently accessed keys.
@@ -1292,19 +1293,21 @@ std::vector<tl::expected<void, ErrorCode>> Client::BatchGet(
 
     // Log overall cache hit statistics for the entire batch
     if (hot_cache_) {
-        LOG_DEBUG << "BatchGet completed: num_keys=" << object_keys.size()
-                << " total_cache_hits=" << total_cache_hits;
+        DLOG_DEBUG << "BatchGet completed: num_keys=" << object_keys.size()
+                   << " total_cache_hits=" << total_cache_hits;
     } else {
-        LOG_DEBUG << "BatchGet completed for " << object_keys.size() << " keys";
+        DLOG_DEBUG << "BatchGet completed for " << object_keys.size()
+                   << " keys";
     }
 
     size_t num_success = 0;
     for (const auto& r : results) {
         if (r.has_value()) num_success++;
     }
-    LOG_INFO << "batch_get_transfer_complete num_keys[" << object_keys.size()
-              << "] success[" << num_success << "] elapsed_us[" << us_batch_get
-              << "] pending_count[" << pending_transfers.size() << "]";
+    DLOG_INFO << "batch_get_transfer_complete num_keys[" << object_keys.size()
+               << "] success[" << num_success << "] elapsed_us["
+               << us_batch_get << "] pending_count["
+               << pending_transfers.size() << "]";
 
     return results;
 }
@@ -2676,7 +2679,7 @@ tl::expected<void, ErrorCode> Client::BatchGetOffloadObject(
         LOG_ERROR << "Failed to submit transfer operation";
         return tl::make_unexpected(ErrorCode::TRANSFER_FAIL);
     }
-    LOG_DEBUG << "Using transfer strategy: " << future->strategy();
+    DLOG_DEBUG << "Using transfer strategy: " << future->strategy();
     auto result = future->get();
     if (result != ErrorCode::OK) {
         LOG_ERROR << "Transfer failed, error code is " << result;
@@ -2948,7 +2951,7 @@ void Client::PutToLocalFile(const std::string& key,
                 auto revoke_result =
                     master_client_.PutRevoke(key, ReplicaType::DISK);
                 if (!revoke_result) {
-                    LOG(ERROR)
+                    LOG_ERROR
                         << "Failed to revoke put operation for key: " << key;
                 }
                 return;
@@ -3035,7 +3038,7 @@ ErrorCode Client::TransferData(const Replica::Descriptor& replica_descriptor,
                          std::chrono::steady_clock::now() - t0_transfer)
                          .count();
 
-    LOG_DEBUG << "Using transfer strategy: " << future->strategy();
+    DLOG_DEBUG << "Using transfer strategy: " << future->strategy();
 
     UbDiag::PerfPoint pt_wait(is_write ? PerfKey::PUT_SINGLE_TRANSFER_WAIT
                                        : PerfKey::GET_SINGLE_TRANSFER_WAIT,
@@ -3047,12 +3050,12 @@ ErrorCode Client::TransferData(const Replica::Descriptor& replica_descriptor,
 
     auto wait_us = std::chrono::duration_cast<std::chrono::microseconds>(
         std::chrono::steady_clock::now() - t0_transfer).count() - submit_us;
-    LOG_INFO << "transfer_data first_transfer_data["
-              << (first_transfer_data ? 1 : 0) << "] op["
-              << (is_write ? "WRITE" : "READ") << "] strategy["
-              << static_cast<int>(future->strategy()) << "] submit_us["
-              << submit_us << "] wait_us[" << wait_us << "] result["
-              << toString(result) << "]";
+    DLOG_INFO << "transfer_data first_transfer_data["
+               << (first_transfer_data ? 1 : 0) << "] op["
+               << (is_write ? "WRITE" : "READ") << "] strategy["
+               << static_cast<int>(future->strategy()) << "] submit_us["
+               << submit_us << "] wait_us[" << wait_us << "] result["
+               << toString(result) << "]";
     return result;
 }
 
@@ -3071,7 +3074,7 @@ ErrorCode Client::TransferReadInternal(
         return ErrorCode::TRANSFER_FAIL;
     }
 
-    LOG_DEBUG << "Using transfer strategy: " << future->strategy();
+    DLOG_DEBUG << "Using transfer strategy: " << future->strategy();
 
     return future->get();
 }
@@ -3303,9 +3306,9 @@ void Client::StorageHeartbeatThreadMain() {
         if (metadata) {
             int rc = metadata->updateLocalSegmentDesc();
             if (rc != 0) {
-                LOG(ERROR) << "Failed to re-publish segment descriptor "
-                           << "to metadata server, rc=" << rc
-                           << ", will retry in next heartbeat cycle";
+                LOG_ERROR << "Failed to re-publish segment descriptor "
+                          << "to metadata server, rc=" << rc
+                          << ", will retry in next heartbeat cycle";
                 segment_desc_publish_pending_.store(true);
             } else {
                 segment_desc_publish_pending_.store(false);
@@ -3316,9 +3319,9 @@ void Client::StorageHeartbeatThreadMain() {
             // when the HTTP metadata server is cleared on Master restart.
             rc = metadata->rePublishRpcMetaEntry(local_hostname_);
             if (rc != 0) {
-                LOG(ERROR) << "Failed to re-publish RPC meta entry "
-                           << "to metadata server, rc=" << rc
-                           << ", will retry in next heartbeat cycle";
+                LOG_ERROR << "Failed to re-publish RPC meta entry "
+                          << "to metadata server, rc=" << rc
+                          << ", will retry in next heartbeat cycle";
                 rpc_meta_publish_pending_.store(true);
             } else {
                 rpc_meta_publish_pending_.store(false);
@@ -3362,12 +3365,12 @@ void Client::StorageHeartbeatThreadMain() {
                 if (metadata) {
                     int rc = metadata->updateLocalSegmentDesc();
                     if (rc != 0) {
-                        LOG(ERROR)
+                        LOG_ERROR
                             << "Retry: failed to re-publish segment "
                             << "descriptor to metadata server, rc=" << rc;
                     } else {
-                        LOG(INFO) << "Retry: successfully re-published "
-                                  << "segment descriptor to metadata server";
+                        LOG_INFO << "Retry: successfully re-published "
+                                 << "segment descriptor to metadata server";
                         segment_desc_publish_pending_.store(false);
                     }
                 }
@@ -3379,12 +3382,12 @@ void Client::StorageHeartbeatThreadMain() {
                 if (metadata) {
                     int rc = metadata->rePublishRpcMetaEntry(local_hostname_);
                     if (rc != 0) {
-                        LOG(ERROR)
+                        LOG_ERROR
                             << "Retry: failed to re-publish RPC "
                             << "meta entry to metadata server, rc=" << rc;
                     } else {
-                        LOG(INFO) << "Retry: successfully re-published "
-                                  << "RPC meta entry to metadata server";
+                        LOG_INFO << "Retry: successfully re-published "
+                                 << "RPC meta entry to metadata server";
                         rpc_meta_publish_pending_.store(false);
                     }
                 }
@@ -3434,7 +3437,7 @@ void Client::StorageHeartbeatThreadMain() {
                 continue;
             }
 
-            LOG(INFO) << "Reconnected to master " << next_view.leader_address;
+            LOG_INFO << "Reconnected to master " << next_view.leader_address;
             ping_fail_count = 0;
         } else {
             const std::string current_master_address = direct_master_address_;
@@ -3449,7 +3452,7 @@ void Client::StorageHeartbeatThreadMain() {
                     std::chrono::milliseconds(fail_ping_interval_ms));
                 continue;
             }
-            LOG(INFO) << "Reconnected to master " << current_master_address;
+            LOG_INFO << "Reconnected to master " << current_master_address;
             last_ping_success_.store(true);
             ping_fail_count = 0;
         }
@@ -3601,10 +3604,10 @@ ErrorCode Client::InitLocalHotCache() {
             admission_sketch_.reset();
             return ErrorCode::INVALID_PARAMS;
         }
-        LOG(INFO) << "Local hot cache enabled with cache size=" << total_cache
-                  << ", block size=" << block_size
-                  << ", block amount=" << hot_cache_->GetCacheSize()
-                  << ", shm=" << (use_shm ? "on" : "off");
+        LOG_INFO << "Local hot cache enabled with cache size=" << total_cache
+                 << ", block size=" << block_size
+                 << ", block amount=" << hot_cache_->GetCacheSize()
+                 << ", shm=" << (use_shm ? "on" : "off");
         // Create async handler with 2 worker threads
         hot_cache_handler_ =
             std::make_unique<LocalHotCacheHandler>(hot_cache_, thread_num);

@@ -41,6 +41,8 @@ uint64_t CurrentTraceId();
 
 namespace mooncake {
 
+bool DetailLogEnabledFromEnv();
+
 // Build the "trace_id[<id>] " prefix on the calling thread. Mirrors the legacy
 // MC_LOG / AsyncLogMessage output format so log consumers stay unchanged.
 inline std::string TraceIdPrefix()
@@ -162,6 +164,11 @@ inline bool ShouldLog(spdlog::level::level_enum level)
     return true;
 }
 
+inline bool ShouldDetailLog(spdlog::level::level_enum level)
+{
+    return DetailLogEnabledFromEnv() && ShouldLog(level);
+}
+
 // Voidify: lowers a LogStream's ostream& back to void with an operator& whose
 // precedence sits between << and ?:. This makes the LOG_* macros expand to a
 // single conditional expression, so `if (c) LOG_X << ...; else ...;` is parsed
@@ -204,6 +211,31 @@ public:
 
 #define LOG_ERROR                                                           \
     !mooncake::ShouldLog(spdlog::level::err)                                \
+        ? (void)0                                                           \
+        : MC_LOG_STREAM_AT(spdlog::level::err)
+
+#define DLOG_TRACE                                                          \
+    !mooncake::ShouldDetailLog(spdlog::level::trace)                        \
+        ? (void)0                                                           \
+        : MC_LOG_STREAM_AT(spdlog::level::trace)
+
+#define DLOG_DEBUG                                                          \
+    !mooncake::ShouldDetailLog(spdlog::level::debug)                        \
+        ? (void)0                                                           \
+        : MC_LOG_STREAM_AT(spdlog::level::debug)
+
+#define DLOG_INFO                                                           \
+    !mooncake::ShouldDetailLog(spdlog::level::info)                         \
+        ? (void)0                                                           \
+        : MC_LOG_STREAM_AT(spdlog::level::info)
+
+#define DLOG_WARNING                                                        \
+    !mooncake::ShouldDetailLog(spdlog::level::warn)                         \
+        ? (void)0                                                           \
+        : MC_LOG_STREAM_AT(spdlog::level::warn)
+
+#define DLOG_ERROR                                                          \
+    !mooncake::ShouldDetailLog(spdlog::level::err)                          \
         ? (void)0                                                           \
         : MC_LOG_STREAM_AT(spdlog::level::err)
 

@@ -11,6 +11,7 @@
 #include <ylt/util/tl/expected.hpp>
 
 #include "mooncake_logging.h"
+#include "log_macros.h"
 #include "mutex.h"
 #include "rpc_service.h"
 #include "types.h"
@@ -337,12 +338,12 @@ tl::expected<ReturnType, ErrorCode> MasterClient::invoke_rpc(Args&&... args) {
                         std::forward<Args>(args)...);
                 });
             if (!ret.has_value()) {
-                LOG(ERROR) << "Client not available";
+                LOG_ERROR << "Client not available";
                 co_return tl::make_unexpected(ErrorCode::RPC_FAIL);
             }
             auto result = co_await std::move(ret.value());
             if (!result) {
-                LOG(ERROR) << "RPC call failed: " << result.error().msg;
+                LOG_ERROR << "RPC call failed: " << result.error().msg;
                 co_return tl::make_unexpected(ErrorCode::RPC_FAIL);
             }
             if (metrics_) {
@@ -378,13 +379,13 @@ std::vector<tl::expected<ResultType, ErrorCode>> MasterClient::invoke_batch_rpc(
                         std::forward<Args>(args)...);
                 });
             if (!ret.has_value()) {
-                LOG(ERROR) << "Client not available";
+                LOG_ERROR << "Client not available";
                 co_return std::vector<tl::expected<ResultType, ErrorCode>>(
                     input_size, tl::make_unexpected(ErrorCode::RPC_FAIL));
             }
             auto result = co_await std::move(ret.value());
             if (!result) {
-                LOG(ERROR) << "Batch RPC call failed: " << result.error().msg;
+                LOG_ERROR << "Batch RPC call failed: " << result.error().msg;
                 std::vector<tl::expected<ResultType, ErrorCode>> error_results;
                 error_results.reserve(input_size);
                 for (size_t i = 0; i < input_size; ++i) {
@@ -432,8 +433,8 @@ ErrorCode MasterClient::Connect(const std::string& master_addr) {
     std::string server_version = result.value();
     std::string client_version = GetMooncakeStoreVersion();
     if (server_version != client_version) {
-        LOG(ERROR) << "Version mismatch: server=" << server_version
-                   << " client=" << client_version;
+        LOG_ERROR << "Version mismatch: server=" << server_version
+                  << " client=" << client_version;
         timer.LogResponse("error_code=", ErrorCode::INVALID_VERSION);
         return ErrorCode::INVALID_VERSION;
     }
@@ -515,26 +516,28 @@ MasterClient::GetReplicaListByRegex(const std::string& str) {
 
 tl::expected<GetReplicaListResponse, ErrorCode> MasterClient::GetReplicaList(
     const std::string& object_key) {
-    ScopedVLogTimer timer(1, "MasterClient::GetReplicaList");
-    timer.LogRequest("object_key=", object_key);
+    DLOG_DEBUG << "MasterClient::GetReplicaList request object_key="
+               << object_key;
 
     const uint64_t trace_id = mooncake::logging::CurrentTraceId();
     auto result = invoke_rpc<&WrappedMasterService::GetReplicaList,
                              GetReplicaListResponse>(object_key, trace_id);
-    timer.LogResponseExpected(result);
+    DLOG_DEBUG << "MasterClient::GetReplicaList response has_value="
+               << result.has_value();
     return result;
 }
 
 std::vector<tl::expected<GetReplicaListResponse, ErrorCode>>
 MasterClient::BatchGetReplicaList(const std::vector<std::string>& object_keys) {
-    ScopedVLogTimer timer(1, "MasterClient::BatchGetReplicaList");
-    timer.LogRequest("keys_count=", object_keys.size());
+    DLOG_DEBUG << "MasterClient::BatchGetReplicaList request keys_count="
+               << object_keys.size();
 
     const uint64_t trace_id = mooncake::logging::CurrentTraceId();
     auto result = invoke_batch_rpc<&WrappedMasterService::BatchGetReplicaList,
                                    GetReplicaListResponse>(
         object_keys.size(), object_keys, trace_id);
-    timer.LogResponse("result=", result.size(), " operations");
+    DLOG_DEBUG << "MasterClient::BatchGetReplicaList response operations="
+               << result.size();
     return result;
 }
 

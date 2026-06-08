@@ -138,6 +138,66 @@ TEST(LoggingOutput, LevelGateDropsDebugWhenInfo) {
     EXPECT_NE(content.find("error_should_pass"), std::string::npos);
 }
 
+TEST(LoggingOutput, DetailLogDisabledByDefault) {
+    setenv_test("MC_LOG_DETAIL_ENABLE", nullptr);
+    std::string path = init_logger_to("/tmp/mooncake_ut_dlog_off", "INFO");
+    DLOG_INFO << "detail_should_be_dropped";
+    Logger::Instance().Shutdown();
+
+    std::string content = read_file(path);
+    EXPECT_EQ(content.find("detail_should_be_dropped"), std::string::npos);
+}
+
+TEST(LoggingOutput, DetailLogEnabledWritesWithTraceId) {
+    setenv_test("MC_LOG_DETAIL_ENABLE", "ON");
+    std::string path = init_logger_to("/tmp/mooncake_ut_dlog_on", "INFO");
+
+    uint64_t tid = logging::NewTraceId();
+    {
+        logging::ScopedTraceId _(tid);
+        DLOG_INFO << "detail_should_pass";
+    }
+    Logger::Instance().Shutdown();
+    setenv_test("MC_LOG_DETAIL_ENABLE", nullptr);
+
+    std::string content = read_file(path);
+    EXPECT_NE(content.find("detail_should_pass"), std::string::npos);
+    EXPECT_NE(content.find("trace_id[" + std::to_string(tid) + "]"),
+              std::string::npos);
+}
+
+TEST(LoggingOutput, DetailLogRespectsTotalSwitchAndLevel) {
+    setenv_test("MC_LOG_ENABLE", "off");
+    setenv_test("MC_LOG_DETAIL_ENABLE", "ON");
+    LogConfig disabled_config = LogConfigFromEnv();
+    disabled_config.logDir = "/tmp/mooncake_ut_dlog_total_off";
+    disabled_config.fileName = "app";
+    disabled_config.flushIntervalSecs = 0;
+    std::string cmd = "rm -rf " + disabled_config.logDir + " && mkdir -p " +
+                      disabled_config.logDir;
+    (void)system(cmd.c_str());
+    Logger::Instance().Init(disabled_config);
+    DLOG_INFO << "detail_total_off_should_drop";
+    Logger::Instance().Shutdown();
+
+    std::string content = read_file(disabled_config.logDir + "/app.log");
+    EXPECT_EQ(content.find("detail_total_off_should_drop"), std::string::npos);
+
+    setenv_test("MC_LOG_ENABLE", "on");
+    std::string path = init_logger_to("/tmp/mooncake_ut_dlog_level", "INFO");
+    DLOG_DEBUG << "detail_debug_should_drop";
+    DLOG_TRACE << "detail_trace_should_drop";
+    DLOG_INFO << "detail_info_should_pass";
+    Logger::Instance().Shutdown();
+    setenv_test("MC_LOG_ENABLE", nullptr);
+    setenv_test("MC_LOG_DETAIL_ENABLE", nullptr);
+
+    content = read_file(path);
+    EXPECT_EQ(content.find("detail_debug_should_drop"), std::string::npos);
+    EXPECT_EQ(content.find("detail_trace_should_drop"), std::string::npos);
+    EXPECT_NE(content.find("detail_info_should_pass"), std::string::npos);
+}
+
 // ===========================================================================
 // LOG_FATAL terminates the process (glog LOG(FATAL) parity)
 // ===========================================================================

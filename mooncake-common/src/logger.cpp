@@ -195,6 +195,19 @@ bool LogEnabledFromEnv()
 
 }  // namespace
 
+bool DetailLogEnabledFromEnv()
+{
+    const char *value = std::getenv("MC_LOG_DETAIL_ENABLE");
+    if (value == nullptr || *value == '\0') {
+        return false;
+    }
+    std::string lowered(value);
+    std::transform(lowered.begin(), lowered.end(), lowered.begin(),
+                   [](unsigned char ch) { return std::tolower(ch); });
+    return lowered == "on" || lowered == "1" || lowered == "true" ||
+           lowered == "yes";
+}
+
 LogConfig LogConfigFromEnv()
 {
     LogConfig config;

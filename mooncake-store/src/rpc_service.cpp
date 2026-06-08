@@ -271,7 +271,7 @@ bool MasterAdminServer::Start() {
         });
     }
 
-    LOG(INFO) << "Master admin server started on port " << http_server_.port();
+    LOG_INFO << "Master admin server started on port " << http_server_.port();
     return true;
 }
 
@@ -1816,8 +1816,8 @@ tl::expected<void, ErrorCode> WrappedMasterService::MountLocalDiskSegment(
     const UUID& client_id, bool enable_offloading) {
     ScopedVLogTimer timer(1, "MountLocalDiskSegment");
     timer.LogRequest("action=mount_local_disk_segment");
-    LOG(INFO) << "Mount local disk segment with client id is : " << client_id
-              << ", enable offloading is: " << enable_offloading;
+    LOG_INFO << "Mount local disk segment with client id is : " << client_id
+             << ", enable offloading is: " << enable_offloading;
     auto result =
         master_service_.MountLocalDiskSegment(client_id, enable_offloading);
 
