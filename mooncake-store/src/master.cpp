@@ -967,8 +967,10 @@ int main(int argc, char* argv[]) {
     if (!FLAGS_log_dir.empty() && !google::IsGoogleLoggingInitialized()) {
         google::InitGoogleLogging(argv[0]);
     }
-    // Initialize the spdlog async logger that backs LOG_* macros. Flush/shutdown
-    // is handled automatically by the Logger singleton destructor at exit.
+    // Initialize the spdlog async logger that backs LOG_* macros. Shutdown is
+    // called explicitly before main returns (see below): relying on the Logger
+    // singleton destructor races spdlog's own static teardown and can abort with
+    // "async flush: thread pool doesn't exist anymore".
     mooncake::Logger::Instance().Init(mooncake::LogConfigFromEnv());
 
     // Initialize the master configuration
@@ -1109,10 +1111,11 @@ int main(int argc, char* argv[]) {
         std::this_thread::sleep_for(std::chrono::seconds(1));
     }
 
+    int exit_code = 0;
     if (master_config.enable_ha) {
         mooncake::ha::MasterServiceSupervisor supervisor(
             mooncake::MasterServiceSupervisorConfig{master_config});
-        return supervisor.Start();
+        exit_code = supervisor.Start();
     } else {
         // version is not used in non-HA mode, just pass a dummy value
         mooncake::ViewVersionId version = 0;
@@ -1133,6 +1136,7 @@ int main(int argc, char* argv[]) {
             master_config.enable_metric_reporting);
         if (!admin_server.Start()) {
             LOG(ERROR) << "Failed to start master admin server";
+            mooncake::Logger::Instance().Shutdown();
             return 1;
         }
         admin_server.SetRuntimeState(
@@ -1141,6 +1145,10 @@ int main(int argc, char* argv[]) {
         admin_server.SetServiceAvailable(true);
 
         mooncake::RegisterRpcService(server, *wrapped_master_service);
-        return server.start();
+        exit_code = server.start();
     }
+
+    // Explicit shutdown while spdlog's thread pool is still alive (see Init).
+    mooncake::Logger::Instance().Shutdown();
+    return exit_code;
 }

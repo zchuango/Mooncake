@@ -16,10 +16,12 @@
 
 #include "logger.h"
 #include "rate_limiter.h"
+#include "log_macros.h"
 
 #include <spdlog/spdlog.h>
 #include <spdlog/async.h>
 #include <spdlog/sinks/rotating_file_sink.h>
+#include <spdlog/sinks/stdout_color_sinks.h>
 #include <stdexcept>
 #include <map>
 #include <filesystem>
@@ -41,11 +43,34 @@ static std::map<std::string, spdlog::level::level_enum> LEVEL_MAP = {
     { "OFF", spdlog::level::off }
 };
 
+namespace {
+// Always-on stderr console logger, independent of the file logger and the
+// MC_LOG_ENABLE kill switch. Synchronous (no thread pool), so it carries no
+// async-teardown hazard. Held here rather than in spdlog's registry so that
+// spdlog::drop_all() during re-init does not destroy it.
+std::shared_ptr<spdlog::logger> g_console_logger;
+}  // namespace
+
+spdlog::logger *ConsoleLogger() { return g_console_logger.get(); }
+
 class Logger::Impl {
 public:
     bool Init(const LogConfig &config)
     {
         spdlog::drop_all();
+
+        // Always-on console logger (stderr): independent of the file sink and
+        // the MC_LOG_ENABLE kill switch, synchronous to dodge async-teardown
+        // hazards. Recreated on each Init.
+        {
+            auto consoleSink =
+                std::make_shared<spdlog::sinks::stderr_color_sink_mt>();
+            g_console_logger = std::make_shared<spdlog::logger>(
+                "mooncake_console", consoleSink);
+            g_console_logger->set_level(spdlog::level::info);
+            g_console_logger->set_pattern(
+                "%Y-%m-%d %H:%M:%S.%6f | pid=%P tid=%t | %^%L%$ | %s:%# | %v");
+        }
 
         // Create log directory if not exists
         std::error_code ec;
@@ -90,6 +115,10 @@ public:
         // Configure rate limiter
         RateLimiter::Instance().SetRate(config.rateLimit);
 
+        // Initialization status — always to the terminal via the console logger.
+        CLOG_INFO << "mooncake logging initialized | file_dir=" << config.logDir
+                  << " | level=" << config.level << " | console=on";
+
         initialized_ = true;
         return true;
     }
@@ -100,6 +129,12 @@ public:
             logger_->flush();
         }
         spdlog::shutdown();
+        // Console logger lives outside spdlog's registry — flush and release it
+        // explicitly so it does not outlive shutdown.
+        if (g_console_logger) {
+            g_console_logger->flush();
+            g_console_logger.reset();
+        }
         initialized_ = false;
     }
 

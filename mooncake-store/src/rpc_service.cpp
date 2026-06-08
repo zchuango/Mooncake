@@ -937,8 +937,8 @@ WrappedMasterService::GetReplicaList(const std::string& key,
         std::chrono::duration_cast<std::chrono::microseconds>(
             std::chrono::steady_clock::now() - t0)
             .count();
-    LOG_INFO << "GetReplicaList client_id=" << client_id
-             << " host=" << ResolveClientHost(master_service_, client_id)
+    LOG_INFO << "GetReplicaList host="
+             << ResolveClientHost(master_service_, client_id)
              << " key=" << key << " latency_us=" << latency_us << " status="
              << (result.has_value() ? "ok" : toString(result.error()));
     return result;
@@ -1002,8 +1002,8 @@ WrappedMasterService::BatchGetReplicaList(
         std::chrono::duration_cast<std::chrono::microseconds>(
             std::chrono::steady_clock::now() - t0)
             .count();
-    LOG_INFO << "BatchGetReplicaList client_id=" << client_id
-             << " host=" << ResolveClientHost(master_service_, client_id)
+    LOG_INFO << "BatchGetReplicaList host="
+             << ResolveClientHost(master_service_, client_id)
              << " keys_count=" << total_keys
              << " success=" << (results.size() - failure_count)
              << " failures=" << failure_count

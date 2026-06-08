@@ -133,5 +133,9 @@ int main(int argc, char *argv[]) {
     LOG(INFO) << "Starting real client service on " << FLAGS_host << ":"
               << FLAGS_port;
 
-    return server.start();
+    int exit_code = server.start();
+    // Explicit shutdown while spdlog's thread pool is still alive — avoids the
+    // "async flush: thread pool doesn't exist anymore" abort at static teardown.
+    mooncake::Logger::Instance().Shutdown();
+    return exit_code;
 }

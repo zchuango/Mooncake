@@ -21,6 +21,7 @@
 #include "transport/kunpeng_transport/ub_endpoint.h"
 #include "transport/kunpeng_transport/urma/urma_endpoint.h"
 #include "mooncake_logging.h"
+#include "log_macros.h"
 
 namespace mooncake {
 UbTransport::UbTransport(UB_ENDPOINT_TYPE endpoint_type)
@@ -39,7 +40,7 @@ int UbTransport::install(std::string& local_server_name,
                          std::shared_ptr<TransferMetadata> meta,
                          std::shared_ptr<Topology> topo) {
     if (topo == nullptr) {
-        LOG(ERROR) << "UbTransport: missing topology";
+        LOG_ERROR << "UbTransport: missing topology";
         return ERR_INVALID_ARGUMENT;
     }
     metadata_ = meta;
@@ -47,36 +48,36 @@ int UbTransport::install(std::string& local_server_name,
     local_topology_ = topo;
     auto ret = initializeUbResources(this);
     if (ret) {
-        LOG(ERROR) << "UbTransport: cannot initialize Ub resources";
+        LOG_ERROR << "UbTransport: cannot initialize Ub resources";
         uninit(this);
         return ret;
     }
-    LOG(INFO) << "UbTransport: initialize Ub resources done";
+    LOG_INFO << "UbTransport: initialize Ub resources done";
 
     ret = allocateLocalSegmentID();
     if (ret) {
-        LOG(ERROR) << "Transfer engine cannot be initialized: cannot "
+        LOG_ERROR << "Transfer engine cannot be initialized: cannot "
                       "allocate local segment";
         uninit(this);
         return ret;
     }
-    LOG(INFO) << "Transfer engine allocate local segment done";
+    LOG_INFO << "Transfer engine allocate local segment done";
 
     ret = startHandshakeDaemon(local_server_name);
     if (ret) {
-        LOG(ERROR) << "UbTransport: cannot start handshake daemon";
+        LOG_ERROR << "UbTransport: cannot start handshake daemon";
         uninit(this);
         return ret;
     }
-    LOG(INFO) << "UbTransport: start handshake daemon done";
+    LOG_INFO << "UbTransport: start handshake daemon done";
 
     ret = metadata_->updateLocalSegmentDesc();
     if (ret) {
-        LOG(ERROR) << "UbTransport: cannot publish segments";
+        LOG_ERROR << "UbTransport: cannot publish segments";
         uninit(this);
         return ret;
     }
-    LOG(INFO) << "UbTransport: publish segments done";
+    LOG_INFO << "UbTransport: publish segments done";
 
     return 0;
 }
@@ -90,12 +91,12 @@ int UbTransport::registerLocalMemory(void* addr, size_t length,
     for (auto& context : context_list_) {
         int ret = context->registerMemoryRegion((uint64_t)addr, length);
         if (ret) {
-            LOG(ERROR) << "UbTransport: cannot register LocalMemory";
+            LOG_ERROR << "UbTransport: cannot register LocalMemory";
             return ret;
         }
         ret = context->buildLocalBufferDesc((uint64_t)addr, buffer_desc);
         if (ret) {
-            LOG(ERROR) << "UbTransport: build buffer description failed";
+            LOG_ERROR << "UbTransport: build buffer description failed";
             return ret;
         }
     }
@@ -145,7 +146,7 @@ int UbTransport::registerLocalMemoryBatch(
 
     for (size_t i = 0; i < buffer_list.size(); ++i) {
         if (results[i].get()) {
-            LOG(WARNING) << "UbTransport: Failed to register memory: addr "
+            LOG_WARNING << "UbTransport: Failed to register memory: addr "
                          << buffer_list[i].addr << " length "
                          << buffer_list[i].length;
         }
@@ -167,7 +168,7 @@ int UbTransport::unregisterLocalMemoryBatch(
 
     for (size_t i = 0; i < addr_list.size(); ++i) {
         if (results[i].get())
-            LOG(WARNING) << "UbTransport: Failed to unregister memory: addr "
+            LOG_WARNING << "UbTransport: Failed to unregister memory: addr "
                          << addr_list[i];
     }
 
@@ -178,7 +179,7 @@ Status UbTransport::submitTransfer(
     BatchID batch_id, const std::vector<TransferRequest>& entries) {
     auto& batch_desc = *((BatchDesc*)(batch_id));
     if (batch_desc.task_list.size() + entries.size() > batch_desc.batch_size) {
-        LOG(ERROR) << "UbTransport: Exceed the limitation of current batch's "
+        LOG_ERROR << "UbTransport: Exceed the limitation of current batch's "
                       "capacity";
         return Status::InvalidArgument(
             "UbTransport: Exceed the limitation of capacity, batch id: " +
@@ -234,7 +235,7 @@ Status UbTransport::submitTransferTask(
                 merge_final_slice ? request.length - offset : kBlockSize;
             slice->opcode = request.opcode;
             slice->trace_id = mooncake::logging::CurrentTraceId();
-            // LOG(INFO) << "target_offset : " << request.target_offset << ",
+            // LOG_INFO << "target_offset : " << request.target_offset << ",
             // offset : " << offset;
             slice->ub.dest_addr = request.target_offset + offset;
             slice->ub.retry_cnt = 0;
@@ -275,7 +276,7 @@ Status UbTransport::submitTransferTask(
                 auto source_addr = slice->source_addr;
                 for (auto& entry : slices_to_post)
                     for (auto s : entry.second) getSliceCache().deallocate(s);
-                LOG(ERROR)
+                LOG_ERROR
                     << "UbTransport: Address not registered by any device(s) "
                     << source_addr;
                 return Status::AddressNotRegistered(
@@ -286,7 +287,7 @@ Status UbTransport::submitTransferTask(
             // start to submit batch request task
             auto& context = context_list_[device_id];
             if (!context->active()) {
-                LOG(ERROR) << "Device " << device_id << " is not active";
+                LOG_ERROR << "Device " << device_id << " is not active";
                 return Status::InvalidArgument(
                     "Device " + std::to_string(device_id) + " is not active");
             }
@@ -401,7 +402,7 @@ int UbTransport::selectDevice(SegmentDesc* desc, uint64_t offset, size_t length,
                               std::string_view hint, int& buffer_id,
                               int& device_id, int retry_cnt) {
     if (desc == nullptr) {
-        LOG(ERROR) << "UbTransport Get Segment Desc failed";
+        LOG_ERROR << "UbTransport Get Segment Desc failed";
         return ERR_ADDRESS_NOT_REGISTERED;
     }
 
@@ -432,7 +433,7 @@ int UbTransport::selectDevice(SegmentDesc* desc, uint64_t offset, size_t length,
 int UbTransport::initializeUbResources(UbTransport* t) {
     auto ret = init(t);
     if (ret != 0) {
-        LOG(ERROR) << "Failed to init, ret = " << ret;
+        LOG_ERROR << "Failed to init, ret = " << ret;
         return -1;
     }
 
@@ -445,7 +446,7 @@ int UbTransport::initializeUbResources(UbTransport* t) {
     // If no devices from topology, use mock device
     if (hca_list.empty()) {
         hca_list.push_back("mock_urma_device");
-        LOG(INFO) << "Using mock_urma_device for testing";
+        LOG_INFO << "Using mock_urma_device for testing";
     }
 
     for (auto& device_name : hca_list) {
@@ -457,33 +458,33 @@ int UbTransport::initializeUbResources(UbTransport* t) {
             if (t->local_topology_) {
                 t->local_topology_->disableDevice(device_name);
             }
-            LOG(WARNING) << "Disable device " << device_name;
+            LOG_WARNING << "Disable device " << device_name;
         } else {
             t->context_list_.push_back(context);
-            LOG(INFO) << "device " << context->deviceName() << " add to list";
+            LOG_INFO << "device " << context->deviceName() << " add to list";
         }
     }
 
     if (t->context_list_.empty()) {
-        LOG(ERROR) << "UbTransport: No available RNIC";
+        LOG_ERROR << "UbTransport: No available RNIC";
         return ERR_DEVICE_NOT_FOUND;
     }
 
-    LOG(INFO) << "ub resources init success";
+    LOG_INFO << "ub resources init success";
     return 0;
 }
 
 int UbTransport::init(UbTransport* transport) {
     if (transport->endpoint_type_ == URMA_ENDPOINT) {
         if (!UrmaContext::init()) {
-            LOG(ERROR) << "UrmaContext init failed";
+            LOG_ERROR << "UrmaContext init failed";
             return -1;
         }
     } else if (transport->endpoint_type_ == OBMM_ENDPOINT) {
-        LOG(ERROR) << "ObmmContext not support now.";
+        LOG_ERROR << "ObmmContext not support now.";
         return -1;
     } else {
-        LOG(ERROR) << "invalid endpoint type : " << transport->endpoint_type_;
+        LOG_ERROR << "invalid endpoint type : " << transport->endpoint_type_;
         return -1;
     }
     return 0;
@@ -492,12 +493,12 @@ int UbTransport::init(UbTransport* transport) {
 void UbTransport::uninit(UbTransport* transport) {
     if (transport->endpoint_type_ == URMA_ENDPOINT) {
         if (!UrmaContext::uninit()) {
-            LOG(ERROR) << "UrmaContext uninit failed";
+            LOG_ERROR << "UrmaContext uninit failed";
         }
     } else if (transport->endpoint_type_ == OBMM_ENDPOINT) {
-        LOG(ERROR) << "ObmmContext not support now.";
+        LOG_ERROR << "ObmmContext not support now.";
     } else {
-        LOG(ERROR) << "invalid endpoint type : " << transport->endpoint_type_;
+        LOG_ERROR << "invalid endpoint type : " << transport->endpoint_type_;
     }
 }
 
@@ -507,15 +508,15 @@ std::shared_ptr<UbContext> UbTransport::buildContext(
         auto context =
             std::make_shared<UrmaContext>(*t, device_name, max_endpoints);
         if (!context) {
-            LOG(ERROR) << "UrmaContext build failed";
+            LOG_ERROR << "UrmaContext build failed";
             return nullptr;
         }
         return context;
     } else if (t->endpoint_type_ == OBMM_ENDPOINT) {
-        LOG(ERROR) << "ObmmContext not support now.";
+        LOG_ERROR << "ObmmContext not support now.";
         return nullptr;
     } else {
-        LOG(ERROR) << "invalid endpoint type : " << t->endpoint_type_;
+        LOG_ERROR << "invalid endpoint type : " << t->endpoint_type_;
         return nullptr;
     }
 }

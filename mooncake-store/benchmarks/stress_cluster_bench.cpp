@@ -21,6 +21,7 @@
 #include "glog/logging.h"
 #include "logger.h"
 #include "mooncake_logging.h"
+#include "log_macros.h"
 #include "real_client.h"
 
 #include <arpa/inet.h>
@@ -56,7 +57,9 @@ static void bindToSocket(int socket_id) {
     numa_free_cpumask(cpu_list);
     if (nr_cpus > 0) {
         if (sched_setaffinity(0, sizeof(cpu_set), &cpu_set) != 0) {
-            PLOG(WARNING) << "Failed to set CPU affinity for NUMA socket " << socket_id;
+            int saved_errno = errno;
+            CLOG_WARNING << "Failed to set CPU affinity for NUMA socket "
+                         << socket_id << ": " << std::strerror(saved_errno);
         }
     }
 }
@@ -78,7 +81,7 @@ static std::vector<std::string> DiscoverSegmentsFromMaster(
 
     int sockfd = socket(AF_INET, SOCK_STREAM, 0);
     if (sockfd < 0) {
-        LOG(ERROR) << "Failed to create socket for discovering segments";
+        CLOG_ERROR << "Failed to create socket for discovering segments";
         return segments;
     }
 
@@ -100,13 +103,13 @@ static std::vector<std::string> DiscoverSegmentsFromMaster(
     }
 
     if (inet_pton(AF_INET, host.c_str(), &addr.sin_addr) <= 0) {
-        LOG(ERROR) << "Invalid master host: " << host;
+        CLOG_ERROR << "Invalid master host: " << host;
         close(sockfd);
         return segments;
     }
 
     if (connect(sockfd, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
-        LOG(ERROR) << "Failed to connect to master admin at " << host << ":"
+        CLOG_ERROR << "Failed to connect to master admin at " << host << ":"
                    << master_admin_port;
         close(sockfd);
         return segments;
@@ -115,7 +118,7 @@ static std::vector<std::string> DiscoverSegmentsFromMaster(
     std::string request = "GET /get_all_segments HTTP/1.0\r\nHost: " +
                           host + "\r\nConnection: close\r\n\r\n";
     if (send(sockfd, request.c_str(), request.size(), 0) < 0) {
-        LOG(ERROR) << "Failed to send HTTP request to master";
+        CLOG_ERROR << "Failed to send HTTP request to master";
         close(sockfd);
         return segments;
     }
@@ -130,25 +133,25 @@ static std::vector<std::string> DiscoverSegmentsFromMaster(
 
     size_t header_end = response.find("\r\n\r\n");
     if (header_end == std::string::npos) {
-        LOG(ERROR) << "Invalid HTTP response from master";
+        CLOG_ERROR << "Invalid HTTP response from master";
         return segments;
     }
 
     std::string header = response.substr(0, header_end);
     size_t status_pos = header.find(' ');
     if (status_pos == std::string::npos) {
-        LOG(ERROR) << "Invalid HTTP response header from master";
+        CLOG_ERROR << "Invalid HTTP response header from master";
         return segments;
     }
     size_t status_code_start = status_pos + 1;
     size_t status_code_end = header.find(' ', status_code_start);
     if (status_code_end == std::string::npos) {
-        LOG(ERROR) << "Invalid HTTP status line from master";
+        CLOG_ERROR << "Invalid HTTP status line from master";
         return segments;
     }
     std::string status_code = header.substr(status_code_start, status_code_end - status_code_start);
     if (status_code != "200") {
-        LOG(ERROR) << "HTTP request failed with status " << status_code
+        CLOG_ERROR << "HTTP request failed with status " << status_code
                    << " from master at " << master_host << ":" << master_admin_port;
         return segments;
     }
@@ -390,16 +393,16 @@ class StressBenchmark {
             FLAGS_device_name, FLAGS_master_server, nullptr, "",
             FLAGS_enable_ssd_offload, FLAGS_ssd_offload_path);
         if (ret != 0) {
-            LOG(ERROR) << "RealClient setup_real failed, ret=" << ret;
+            CLOG_ERROR << "RealClient setup_real failed, ret=" << ret;
             return ret;
         }
-        LOG(INFO) << "RealClient setup succeeded"
+        CLOG_INFO << "RealClient setup succeeded"
                   << (FLAGS_enable_ssd_offload ? " (SSD offload enabled)" : "");
 
         buffer_size_ = FLAGS_batch_size * FLAGS_value_size;
         buffer_ = reinterpret_cast<char*>(numa_alloc_local(buffer_size_));
         if (!buffer_) {
-            LOG(ERROR) << "Failed to allocate buffer of " << buffer_size_
+            CLOG_ERROR << "Failed to allocate buffer of " << buffer_size_
                        << " bytes";
             return -1;
         }
@@ -407,16 +410,16 @@ class StressBenchmark {
 
         ret = client_->register_buffer(buffer_, buffer_size_);
         if (ret != 0) {
-            LOG(ERROR) << "register_buffer failed, ret=" << ret;
+            CLOG_ERROR << "register_buffer failed, ret=" << ret;
             return ret;
         }
-        LOG(INFO) << "Registered buffer of " << buffer_size_ / MB << " MB";
+        CLOG_INFO << "Registered buffer of " << buffer_size_ / MB << " MB";
         return 0;
     }
 
     int RunWriter() {
-        LOG(INFO) << "=== WRITER MODE ===";
-        LOG(INFO) << "Writing " << FLAGS_num_keys << " keys, each "
+        CLOG_INFO << "=== WRITER MODE ===";
+        CLOG_INFO << "Writing " << FLAGS_num_keys << " keys, each "
                   << FLAGS_value_size / MB << " MB";
 
         mooncake::ReplicateConfig config;
@@ -435,7 +438,7 @@ class StressBenchmark {
             auto t1 = Clock::now();
 
             if (ret != 0) {
-                LOG(ERROR) << "put_from failed for key=" << key
+                CLOG_ERROR << "put_from failed for key=" << key
                            << " ret=" << ret;
                 ++failed;
                 continue;
@@ -444,14 +447,14 @@ class StressBenchmark {
 
             if ((i + 1) % 10 == 0 || i == FLAGS_num_keys - 1) {
                 double elapsed_us = NanosToUs(ElapsedNanos(t0, t1));
-                LOG(INFO) << "  Written " << (i + 1) << "/" << FLAGS_num_keys
+                CLOG_INFO << "  Written " << (i + 1) << "/" << FLAGS_num_keys
                           << " last_latency=" << elapsed_us << " us";
             }
         }
 
-        LOG(INFO) << "Write complete: " << written << " succeeded, " << failed
+        CLOG_INFO << "Write complete: " << written << " succeeded, " << failed
                   << " failed";
-        LOG(INFO) << "Waiting " << FLAGS_wait_seconds
+        CLOG_INFO << "Waiting " << FLAGS_wait_seconds
                   << " seconds for reader to connect...";
         std::this_thread::sleep_for(std::chrono::seconds(FLAGS_wait_seconds));
 
@@ -459,9 +462,9 @@ class StressBenchmark {
     }
 
     int RunReader() {
-        LOG(INFO) << "=== READER MODE ===";
-        LOG(INFO) << "Scenario: " << FLAGS_scenario;
-        LOG(INFO) << "Reading " << FLAGS_num_keys << " keys with "
+        CLOG_INFO << "=== READER MODE ===";
+        CLOG_INFO << "Scenario: " << FLAGS_scenario;
+        CLOG_INFO << "Reading " << FLAGS_num_keys << " keys with "
                   << FLAGS_num_threads
                   << " threads, batch_size=" << FLAGS_batch_size;
 
@@ -470,7 +473,7 @@ class StressBenchmark {
 
         if (FLAGS_scenario == "remote_memory" ||
             FLAGS_scenario == "remote_disk") {
-            LOG(INFO) << "Waiting " << FLAGS_wait_seconds
+            CLOG_INFO << "Waiting " << FLAGS_wait_seconds
                       << " seconds for writer to finish prefill...";
             std::this_thread::sleep_for(
                 std::chrono::seconds(FLAGS_wait_seconds));
@@ -478,7 +481,7 @@ class StressBenchmark {
 
         int warmup_ret = DoWarmup();
         if (warmup_ret != 0) {
-            LOG(WARNING) << "Warmup had errors, continuing anyway";
+            CLOG_WARNING << "Warmup had errors, continuing anyway";
         }
         system("ubdiag clear");
 
@@ -508,9 +511,9 @@ class StressBenchmark {
         if (FLAGS_verify) {
             int v = VerifyData();
             if (v != 0) {
-                LOG(ERROR) << "Data verification FAILED";
+                CLOG_ERROR << "Data verification FAILED";
             } else {
-                LOG(INFO) << "Data verification PASSED";
+                CLOG_INFO << "Data verification PASSED";
             }
         }
 
@@ -518,7 +521,7 @@ class StressBenchmark {
     }
 
     int RunLocalMemory() {
-        LOG(INFO) << "=== LOCAL MEMORY BENCHMARK ===";
+        CLOG_INFO << "=== LOCAL MEMORY BENCHMARK ===";
 
         int buf_ret = AllocateThreadBuffers(FLAGS_num_threads);
         if (buf_ret != 0) return buf_ret;
@@ -527,27 +530,27 @@ class StressBenchmark {
         config.replica_num = FLAGS_replica_num;
         config.with_hard_pin = FLAGS_hard_pin;
 
-        LOG(INFO) << "Phase 1: Writing " << FLAGS_num_keys << " keys...";
+        CLOG_INFO << "Phase 1: Writing " << FLAGS_num_keys << " keys...";
         for (size_t i = 0; i < FLAGS_num_keys; ++i) {
             std::string key = MakeKey(i);
             FillBuffer(i);
             int ret = client_->put_from(key, buffer_, FLAGS_value_size, config);
             if (ret != 0) {
-                LOG(ERROR) << "put_from failed for key=" << key;
+                CLOG_ERROR << "put_from failed for key=" << key;
                 return ret;
             }
             if ((i + 1) % 50 == 0) {
-                LOG(INFO) << "  Written " << (i + 1) << "/" << FLAGS_num_keys;
+                CLOG_INFO << "  Written " << (i + 1) << "/" << FLAGS_num_keys;
             }
         }
-        LOG(INFO) << "Write phase complete";
+        CLOG_INFO << "Write phase complete";
 
         int warmup_ret = DoWarmup();
         if (warmup_ret != 0) {
-            LOG(WARNING) << "Warmup had errors, continuing anyway";
+            CLOG_WARNING << "Warmup had errors, continuing anyway";
         }
 
-        LOG(INFO) << "Phase 2: Concurrent reads with " << FLAGS_num_threads
+        CLOG_INFO << "Phase 2: Concurrent reads with " << FLAGS_num_threads
                   << " threads";
 
         BenchmarkStats stats;
@@ -573,16 +576,16 @@ class StressBenchmark {
 
         if (FLAGS_verify) {
             int v = VerifyData();
-            LOG_IF(INFO, v == 0) << "Data verification PASSED";
-            LOG_IF(ERROR, v != 0) << "Data verification FAILED";
+            if (v == 0) CLOG_INFO << "Data verification PASSED";
+            if (v != 0) CLOG_ERROR << "Data verification FAILED";
         }
 
         return 0;
     }
 
     int RunLocalDisk() {
-        LOG(INFO) << "=== LOCAL DISK BENCHMARK ===";
-        LOG(INFO) << "NOTE: Disk reads require Master with enable_offload=true "
+        CLOG_INFO << "=== LOCAL DISK BENCHMARK ===";
+        CLOG_INFO << "NOTE: Disk reads require Master with enable_offload=true "
                   << "and client with enable_ssd_offload=true";
 
         int buf_ret = AllocateThreadBuffers(FLAGS_num_threads);
@@ -592,32 +595,32 @@ class StressBenchmark {
         config.replica_num = FLAGS_replica_num;
         config.with_hard_pin = FLAGS_hard_pin;
 
-        LOG(INFO) << "Phase 1: Writing " << FLAGS_num_keys
+        CLOG_INFO << "Phase 1: Writing " << FLAGS_num_keys
                   << " keys (data may be offloaded to SSD)...";
         for (size_t i = 0; i < FLAGS_num_keys; ++i) {
             std::string key = MakeKey(i);
             FillBuffer(i);
             int ret = client_->put_from(key, buffer_, FLAGS_value_size, config);
             if (ret != 0) {
-                LOG(ERROR) << "put_from failed for key=" << key;
+                CLOG_ERROR << "put_from failed for key=" << key;
                 return ret;
             }
             if ((i + 1) % 50 == 0) {
-                LOG(INFO) << "  Written " << (i + 1) << "/" << FLAGS_num_keys;
+                CLOG_INFO << "  Written " << (i + 1) << "/" << FLAGS_num_keys;
             }
         }
-        LOG(INFO) << "Write phase complete";
+        CLOG_INFO << "Write phase complete";
 
-        LOG(INFO) << "Waiting " << FLAGS_wait_seconds
+        CLOG_INFO << "Waiting " << FLAGS_wait_seconds
                   << " seconds for offload/eviction to complete...";
         std::this_thread::sleep_for(std::chrono::seconds(FLAGS_wait_seconds));
 
         int warmup_ret = DoWarmup();
         if (warmup_ret != 0) {
-            LOG(WARNING) << "Warmup had errors, continuing anyway";
+            CLOG_WARNING << "Warmup had errors, continuing anyway";
         }
 
-        LOG(INFO) << "Phase 2: Concurrent disk reads with " << FLAGS_num_threads
+        CLOG_INFO << "Phase 2: Concurrent disk reads with " << FLAGS_num_threads
                   << " threads";
 
         BenchmarkStats stats;
@@ -643,8 +646,8 @@ class StressBenchmark {
 
         if (FLAGS_verify) {
             int v = VerifyData();
-            LOG_IF(INFO, v == 0) << "Data verification PASSED";
-            LOG_IF(ERROR, v != 0) << "Data verification FAILED";
+            if (v == 0) CLOG_INFO << "Data verification PASSED";
+            if (v != 0) CLOG_ERROR << "Data verification FAILED";
         }
 
         return 0;
@@ -682,11 +685,11 @@ class StressBenchmark {
         if (segments.empty()) {
             return -1;
         }
-        LOG(INFO) << "Discovered " << segments.size()
+        CLOG_INFO << "Discovered " << segments.size()
                   << " segments from master";
 
-        LOG(INFO) << "=== SEGMENT WRITE MODE ===";
-        LOG(INFO) << "Writing to " << segments.size() << " segments, "
+        CLOG_INFO << "=== SEGMENT WRITE MODE ===";
+        CLOG_INFO << "Writing to " << segments.size() << " segments, "
                   << FLAGS_num_keys << " keys per segment (interleaved), each "
                   << FLAGS_value_size / MB << " MB";
 
@@ -713,7 +716,7 @@ class StressBenchmark {
                 auto t1 = Clock::now();
 
                 if (ret != 0) {
-                    LOG(ERROR) << "put_from failed for key=" << key
+                    CLOG_ERROR << "put_from failed for key=" << key
                                << " segment=" << segment << " ret=" << ret;
                     ++seg_failed[s];
                     continue;
@@ -722,7 +725,7 @@ class StressBenchmark {
             }
 
             if ((i + 1) % 10 == 0 || i == FLAGS_num_keys - 1) {
-                LOG(INFO) << "  Written " << (i + 1) << "/" << FLAGS_num_keys
+                CLOG_INFO << "  Written " << (i + 1) << "/" << FLAGS_num_keys
                           << " keys to all " << segments.size() << " segments";
             }
         }
@@ -730,15 +733,15 @@ class StressBenchmark {
         for (size_t s = 0; s < segments.size(); ++s) {
             total_written += seg_written[s];
             total_failed += seg_failed[s];
-            LOG(INFO) << "Segment [" << s << "] " << segments[s]
+            CLOG_INFO << "Segment [" << s << "] " << segments[s]
                       << " complete: " << seg_written[s] << " succeeded, "
                       << seg_failed[s] << " failed";
         }
 
-        LOG(INFO) << "All segments write complete: " << total_written
+        CLOG_INFO << "All segments write complete: " << total_written
                   << " succeeded, " << total_failed << " failed";
 
-        LOG(INFO) << "Waiting " << FLAGS_wait_seconds
+        CLOG_INFO << "Waiting " << FLAGS_wait_seconds
                   << " seconds for reader to connect...";
         std::this_thread::sleep_for(std::chrono::seconds(FLAGS_wait_seconds));
 
@@ -751,7 +754,7 @@ class StressBenchmark {
         if (segments.empty()) {
             return -1;
         }
-        LOG(INFO) << "Discovered " << segments.size()
+        CLOG_INFO << "Discovered " << segments.size()
                   << " segments from master";
 
         size_t read_segment_nums = FLAGS_read_segment_nums;
@@ -762,17 +765,17 @@ class StressBenchmark {
         std::vector<std::string> read_segments(
             segments.begin(), segments.begin() + read_segment_nums);
 
-        LOG(INFO) << "=== SEGMENT READ MODE ===";
-        LOG(INFO) << "Reading from " << read_segment_nums << " segments ("
+        CLOG_INFO << "=== SEGMENT READ MODE ===";
+        CLOG_INFO << "Reading from " << read_segment_nums << " segments ("
                   << read_segment_nums << " nodes)";
         for (size_t s = 0; s < read_segments.size(); ++s) {
-            LOG(INFO) << "  Segment [" << s << "]: " << read_segments[s];
+            CLOG_INFO << "  Segment [" << s << "]: " << read_segments[s];
         }
-        LOG(INFO) << "Keys per segment: " << FLAGS_num_keys;
-        LOG(INFO) << "Duration: "
+        CLOG_INFO << "Keys per segment: " << FLAGS_num_keys;
+        CLOG_INFO << "Duration: "
                   << (FLAGS_duration > 0 ? std::to_string(FLAGS_duration) + "s"
                                          : "single pass");
-        LOG(INFO) << "Stats interval: " << FLAGS_statis_interval << "s";
+        CLOG_INFO << "Stats interval: " << FLAGS_statis_interval << "s";
 
         int buf_ret = AllocateThreadBuffers(FLAGS_num_threads);
         if (buf_ret != 0) return buf_ret;
@@ -784,21 +787,21 @@ class StressBenchmark {
                     MakeSegmentKey(read_segments[s], i));
             }
         }
-        LOG(INFO) << "Total keys to read: " << all_keys.size();
+        CLOG_INFO << "Total keys to read: " << all_keys.size();
 
         size_t warmup_end =
             std::min(static_cast<size_t>(FLAGS_warmup_keys), all_keys.size());
         if (warmup_end > 0) {
-            LOG(INFO) << "Warmup: reading " << warmup_end << " keys...";
+            CLOG_INFO << "Warmup: reading " << warmup_end << " keys...";
             for (size_t i = 0; i < warmup_end; ++i) {
                 int64_t ret =
                     client_->get_into(all_keys[i], buffer_, FLAGS_value_size);
                 if (ret < 0) {
-                    LOG(WARNING) << "Warmup get_into failed for key="
+                    CLOG_WARNING << "Warmup get_into failed for key="
                                  << all_keys[i] << " ret=" << ret;
                 }
             }
-            LOG(INFO) << "Warmup complete";
+            CLOG_INFO << "Warmup complete";
         }
 
         if (FLAGS_duration == 0) {
@@ -810,7 +813,7 @@ class StressBenchmark {
     int RunSegmentReadSinglePass(
         const std::vector<std::string>& read_segments,
         const std::vector<std::string>& all_keys) {
-        LOG(INFO) << "Single-pass read with " << FLAGS_num_threads
+        CLOG_INFO << "Single-pass read with " << FLAGS_num_threads
                   << " threads";
 
         BenchmarkStats stats;
@@ -882,7 +885,7 @@ class StressBenchmark {
     int RunSegmentReadDuration(
         const std::vector<std::string>& read_segments,
         const std::vector<std::string>& all_keys) {
-        LOG(INFO) << "Duration-based continuous read with " << FLAGS_num_threads
+        CLOG_INFO << "Duration-based continuous read with " << FLAGS_num_threads
                   << " threads for " << FLAGS_duration << "s, stats every "
                   << FLAGS_statis_interval << "s";
 
@@ -1136,7 +1139,7 @@ class StressBenchmark {
     }
 
     int RunListSegments() {
-        LOG(INFO) << "Discovering segments from master at "
+        CLOG_INFO << "Discovering segments from master at "
                   << FLAGS_master_server << ":" << FLAGS_master_admin_port;
 
         auto segments = DiscoverSegmentsFromMaster(
@@ -1144,7 +1147,7 @@ class StressBenchmark {
             static_cast<int>(FLAGS_master_admin_port));
 
         if (segments.empty()) {
-            LOG(ERROR) << "No segments discovered from master. "
+            CLOG_ERROR << "No segments discovered from master. "
                        << "Check master connectivity at "
                        << FLAGS_master_server << ":" << FLAGS_master_admin_port;
             return -1;
@@ -1189,7 +1192,7 @@ class StressBenchmark {
                 return RunReader();
             }
         } else {
-            LOG(ERROR) << "Unknown scenario: " << FLAGS_scenario;
+            CLOG_ERROR << "Unknown scenario: " << FLAGS_scenario;
             return -1;
         }
     }
@@ -1219,7 +1222,7 @@ class StressBenchmark {
             pattern = (pattern ^ (pattern >> 27)) * 0x94D049BB133111EBULL;
             uint64_t expected = pattern ^ (pattern >> 31);
             if (ptr[w] != expected) {
-                LOG(ERROR) << "Checksum mismatch at word " << w
+                CLOG_ERROR << "Checksum mismatch at word " << w
                            << " for seed=" << seed << " expected=" << std::hex
                            << expected << " got=" << ptr[w] << std::dec;
                 return false;
@@ -1230,7 +1233,7 @@ class StressBenchmark {
 
     int DoWarmup() {
         if (FLAGS_warmup_keys == 0) return 0;
-        LOG(INFO) << "Warmup: reading " << FLAGS_warmup_keys << " keys...";
+        CLOG_INFO << "Warmup: reading " << FLAGS_warmup_keys << " keys...";
 
         size_t warmup_end = std::min(static_cast<size_t>(FLAGS_warmup_keys),
                                      static_cast<size_t>(FLAGS_num_keys));
@@ -1238,11 +1241,11 @@ class StressBenchmark {
             std::string key = MakeKey(i);
             int64_t ret = client_->get_into(key, buffer_, FLAGS_value_size);
             if (ret < 0) {
-                LOG(WARNING) << "Warmup get_into failed for key=" << key
+                CLOG_WARNING << "Warmup get_into failed for key=" << key
                              << " ret=" << ret;
             }
         }
-        LOG(INFO) << "Warmup complete";
+        CLOG_INFO << "Warmup complete";
         return 0;
     }
 
@@ -1276,8 +1279,12 @@ class StressBenchmark {
 
                 if (ret < 0) {
                     ++failed;
-                    LOG_EVERY_N(ERROR, 100)
-                        << "get_into failed key=" << key << " ret=" << ret;
+                    static std::atomic<uint64_t> get_fail_occ{0};
+                    if (get_fail_occ.fetch_add(1, std::memory_order_relaxed) %
+                            100 ==
+                        0)
+                        CLOG_ERROR << "get_into failed key=" << key
+                                   << " ret=" << ret;
                 } else {
                     bytes += static_cast<size_t>(ret);
                 }
@@ -1356,20 +1363,20 @@ class StressBenchmark {
             return segments;
         }
 
-        LOG(INFO) << context << ", auto-discovering from master at "
+        CLOG_INFO << context << ", auto-discovering from master at "
                   << FLAGS_master_server << ":" << FLAGS_master_admin_port;
         segments = DiscoverSegmentsFromMaster(
             FLAGS_master_server,
             static_cast<int>(FLAGS_master_admin_port));
         if (segments.empty()) {
-            LOG(ERROR) << "No segments discovered from master. "
+            CLOG_ERROR << "No segments discovered from master. "
                        << "Check master connectivity.";
         }
         return segments;
     }
 
     int VerifyData() {
-        LOG(INFO) << "Verifying data integrity for " << FLAGS_num_keys
+        CLOG_INFO << "Verifying data integrity for " << FLAGS_num_keys
                   << " keys...";
         int errors = 0;
 
@@ -1377,17 +1384,17 @@ class StressBenchmark {
             std::string key = MakeKey(i);
             int64_t ret = client_->get_into(key, buffer_, FLAGS_value_size);
             if (ret < 0) {
-                LOG(ERROR) << "Verify: get_into failed for key=" << key;
+                CLOG_ERROR << "Verify: get_into failed for key=" << key;
                 ++errors;
                 continue;
             }
             if (!CheckBuffer(i, buffer_, static_cast<size_t>(ret))) {
-                LOG(ERROR) << "Verify: data mismatch for key=" << key;
+                CLOG_ERROR << "Verify: data mismatch for key=" << key;
                 ++errors;
             }
         }
 
-        LOG(INFO) << "Verification complete: " << errors << " errors out of "
+        CLOG_INFO << "Verification complete: " << errors << " errors out of "
                   << FLAGS_num_keys << " keys";
         return errors > 0 ? -1 : 0;
     }
@@ -1413,7 +1420,7 @@ class StressBenchmark {
             thread_buffers_[t].ptr =
                 reinterpret_cast<char*>(numa_alloc_onnode(per_buf_size, node));
             if (!thread_buffers_[t].ptr) {
-                LOG(ERROR) << "Failed to allocate buffer for thread " << t
+                CLOG_ERROR << "Failed to allocate buffer for thread " << t
                            << " on NUMA node " << node;
                 return -1;
             }
@@ -1421,12 +1428,12 @@ class StressBenchmark {
             int ret =
                 client_->register_buffer(thread_buffers_[t].ptr, per_buf_size);
             if (ret != 0) {
-                LOG(ERROR) << "register_buffer failed for thread " << t
+                CLOG_ERROR << "register_buffer failed for thread " << t
                            << " on NUMA node " << node;
                 return ret;
             }
         }
-        LOG(INFO) << "Allocated " << num_threads << " thread buffers, each "
+        CLOG_INFO << "Allocated " << num_threads << " thread buffers, each "
                   << per_buf_size / MB << " MB (NUMA-aware, " << NR_SOCKETS
                   << " sockets)";
         return 0;
@@ -1445,29 +1452,29 @@ int main(int argc, char* argv[]) {
     // Initialize the spdlog async logger that backs LOG_* macros.
     mooncake::Logger::Instance().Init(mooncake::LogConfigFromEnv());
 
-    LOG(INFO) << "Mooncake Stress Cluster Benchmark";
-    LOG(INFO) << "  Scenario:       " << FLAGS_scenario;
-    LOG(INFO) << "  Protocol:       " << FLAGS_protocol;
-    LOG(INFO) << "  Value size:     " << FLAGS_value_size / MB << " MB";
-    LOG(INFO) << "  Num keys:       " << FLAGS_num_keys;
-    LOG(INFO) << "  Batch size:     " << FLAGS_batch_size;
-    LOG(INFO) << "  Num threads:    " << FLAGS_num_threads;
-    LOG(INFO) << "  Hard pin:       " << (FLAGS_hard_pin ? "yes" : "no");
-    LOG(INFO) << "  SSD offload:    "
+    CLOG_INFO << "Mooncake Stress Cluster Benchmark";
+    CLOG_INFO << "  Scenario:       " << FLAGS_scenario;
+    CLOG_INFO << "  Protocol:       " << FLAGS_protocol;
+    CLOG_INFO << "  Value size:     " << FLAGS_value_size / MB << " MB";
+    CLOG_INFO << "  Num keys:       " << FLAGS_num_keys;
+    CLOG_INFO << "  Batch size:     " << FLAGS_batch_size;
+    CLOG_INFO << "  Num threads:    " << FLAGS_num_threads;
+    CLOG_INFO << "  Hard pin:       " << (FLAGS_hard_pin ? "yes" : "no");
+    CLOG_INFO << "  SSD offload:    "
               << (FLAGS_enable_ssd_offload ? "yes" : "no");
     if (!FLAGS_segments.empty()) {
-        LOG(INFO) << "  Segments:       " << FLAGS_segments;
+        CLOG_INFO << "  Segments:       " << FLAGS_segments;
     } else {
-        LOG(INFO) << "  Segments:       auto-discover from master";
+        CLOG_INFO << "  Segments:       auto-discover from master";
     }
-    LOG(INFO) << "  Master admin:   " << FLAGS_master_admin_port;
-    LOG(INFO) << "  Read seg nums:  " << FLAGS_read_segment_nums;
-    LOG(INFO) << "  Duration:       " << FLAGS_duration << "s";
-    LOG(INFO) << "  Stats interval: " << FLAGS_statis_interval << "s";
+    CLOG_INFO << "  Master admin:   " << FLAGS_master_admin_port;
+    CLOG_INFO << "  Read seg nums:  " << FLAGS_read_segment_nums;
+    CLOG_INFO << "  Duration:       " << FLAGS_duration << "s";
+    CLOG_INFO << "  Stats interval: " << FLAGS_statis_interval << "s";
 
     size_t total_data = FLAGS_num_keys * FLAGS_value_size;
     if (total_data > FLAGS_global_segment_size * 9.5 / 10) {
-        LOG(WARNING) << "Total data (" << total_data / MB << " MB) may exceed "
+        CLOG_WARNING << "Total data (" << total_data / MB << " MB) may exceed "
                      << "95% of segment (" << FLAGS_global_segment_size / MB
                      << " MB). Master eviction may delete objects. "
                      << "Consider increasing --global_segment_size or "
@@ -1476,11 +1483,14 @@ int main(int argc, char* argv[]) {
 
     StressBenchmark bench;
     int ret = bench.Setup();
-    if (ret != 0) {
-        LOG(ERROR) << "Benchmark setup failed";
-        return ret;
+    if (ret == 0) {
+        ret = bench.Run();
+    } else {
+        CLOG_ERROR << "Benchmark setup failed";
     }
 
-    ret = bench.Run();
+    // Explicit shutdown while spdlog's thread pool is still alive — avoids the
+    // "async flush: thread pool doesn't exist anymore" abort at static teardown.
+    mooncake::Logger::Instance().Shutdown();
     return ret;
 }

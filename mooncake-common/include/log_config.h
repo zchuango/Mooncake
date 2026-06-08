@@ -35,7 +35,7 @@ struct LogConfig {
     std::string level = "INFO";
 
     /** Log message pattern (spdlog format) */
-    std::string pattern = "%Y-%m-%d %H:%M:%S.%6f | %^%L%$ | %s:%# | %v";
+    std::string pattern = "%Y-%m-%d %H:%M:%S.%6f | pid=%P tid=%t | %^%L%$ | %s:%# | %v";
 
     /** Log file base name (produces name.log, name.log.1, ...) */
     std::string fileName = "app";

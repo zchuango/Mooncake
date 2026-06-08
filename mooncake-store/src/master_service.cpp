@@ -458,6 +458,27 @@ std::optional<uint32_t> MasterService::GetNoFHeartbeatFailureCountForTesting(
     return it->second.consecutive_failures;
 }
 
+namespace {
+// Client host IP for logging, taken from a segment endpoint already in hand
+// (address part of te_endpoint, port stripped). Lock-free on purpose: resolving
+// via MasterService::QueryIp would re-enter segment_mutex_ and self-deadlock
+// when called from a site that already holds segment access.
+std::string EndpointHostIp(const std::string& te_endpoint) {
+    if (te_endpoint.empty()) return "unknown";
+    size_t colon = te_endpoint.find(':');
+    return colon == std::string::npos ? te_endpoint
+                                      : te_endpoint.substr(0, colon);
+}
+template <typename SegT>
+std::string SegmentHostIp(const SegT& seg) {
+    return EndpointHostIp(seg.te_endpoint);
+}
+template <typename SegT>
+std::string FirstSegmentHostIp(const std::vector<SegT>& segs) {
+    return segs.empty() ? "unknown" : EndpointHostIp(segs.front().te_endpoint);
+}
+}  // namespace
+
 auto MasterService::MountSegment(const Segment& segment, const UUID& client_id)
     -> tl::expected<void, ErrorCode> {
     std::shared_lock<std::shared_mutex> shared_lock(snapshot_mutex_);
@@ -485,7 +506,7 @@ auto MasterService::MountSegment(const Segment& segment, const UUID& client_id)
         }
     }
 
-    LOG_INFO << "client_id=" << client_id
+    LOG_INFO << "host=" << SegmentHostIp(segment)
               << ", action=mount_segment, segment_name=" << segment.name;
 
     auto err = segment_access.MountSegment(segment, client_id);
@@ -502,14 +523,15 @@ auto MasterService::MountNoFSegment(const NoFSegment& segment,
                                     const UUID& client_id)
     -> tl::expected<void, ErrorCode> {
 #ifndef USE_NOF
-    LOG_ERROR << "client_id=" << client_id << ", segment_name=" << segment.name
+    LOG_ERROR << "host=" << SegmentHostIp(segment)
+               << ", segment_name=" << segment.name
                << ", error=nof_pool_disabled";
     return tl::make_unexpected(ErrorCode::UNAVAILABLE_IN_CURRENT_MODE);
 #else
     ScopedNoFSegmentAccess nof_segment_access =
         nof_segment_manager_.getNoFSegmentAccess();
 
-    LOG(INFO) << "NoF segment mount: " << "client_id=" << client_id
+    LOG(INFO) << "NoF segment mount: " << "host=" << SegmentHostIp(segment)
               << ", action=mount_segment, segment_name=" << segment.name;
 
     auto err = nof_segment_access.MountSegment(segment, client_id);
@@ -529,7 +551,7 @@ auto MasterService::ReMountSegment(const std::vector<Segment>& segments,
     std::shared_lock<std::shared_mutex> shared_lock(snapshot_mutex_);
     std::unique_lock<std::shared_mutex> lock(client_mutex_);
     if (ok_client_.contains(client_id)) {
-        LOG_WARNING << "client_id=" << client_id
+        LOG_WARNING << "host=" << FirstSegmentHostIp(segments)
                      << ", warn=client_already_remounted";
         // Return OK because this is an idempotent operation
         return {};
@@ -552,7 +574,7 @@ auto MasterService::ReMountSegment(const std::vector<Segment>& segments,
     pod_client_id.first = client_id.first;
     pod_client_id.second = client_id.second;
     if (!client_ping_queue_.push(pod_client_id)) {
-        LOG_ERROR << "client_id=" << client_id
+        LOG_ERROR << "host=" << FirstSegmentHostIp(segments)
                    << ", error=client_ping_queue_full";
         return tl::make_unexpected(ErrorCode::INTERNAL_ERROR);
     }
@@ -573,7 +595,7 @@ auto MasterService::ReMountNoFSegment(const std::vector<NoFSegment>& segments,
                                       const UUID& client_id)
     -> tl::expected<void, ErrorCode> {
 #ifndef USE_NOF
-    LOG_ERROR << "client_id=" << client_id
+    LOG_ERROR << "host=" << FirstSegmentHostIp(segments)
                << ", segments_count=" << segments.size()
                << ", error=nof_pool_disabled";
     return tl::make_unexpected(ErrorCode::UNAVAILABLE_IN_CURRENT_MODE);
