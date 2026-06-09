@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include "config.h"
+#include "log_macros.h"
 
 #include <cstring>
 #include <cstdio>
@@ -35,7 +36,7 @@ void loadGlobalConfig(GlobalConfig& config) {
             config.num_jfc_per_ctx = val;
             config.num_jfce_per_ctx = val;
         } else
-            LOG(WARNING)
+            LOG_WARNING
                 << "Ignore value from environment variable MC_NUM_CQ_PER_CTX";
     }
 
@@ -46,7 +47,7 @@ void loadGlobalConfig(GlobalConfig& config) {
         if (val > 0 && val < 256)
             config.num_comp_channels_per_ctx = val;
         else
-            LOG(WARNING) << "Ignore value from environment variable "
+            LOG_WARNING << "Ignore value from environment variable "
                             "MC_NUM_COMP_CHANNELS_PER_CTX";
     }
 
@@ -56,7 +57,7 @@ void loadGlobalConfig(GlobalConfig& config) {
         if (val >= 0 && val < 256)
             config.port = uint8_t(val);
         else
-            LOG(WARNING) << "Ignore value from environment variable MC_IB_PORT";
+            LOG_WARNING << "Ignore value from environment variable MC_IB_PORT";
     }
 
     const char* gid_index_env = std::getenv("MC_GID_INDEX");
@@ -67,7 +68,7 @@ void loadGlobalConfig(GlobalConfig& config) {
         if (val >= 0 && val < 256)
             config.gid_index = val;
         else
-            LOG(WARNING)
+            LOG_WARNING
                 << "Ignore value from environment variable MC_GID_INDEX";
     }
 
@@ -78,13 +79,13 @@ void loadGlobalConfig(GlobalConfig& config) {
             if (val >= 0 && val <= UINT16_MAX) {
                 config.pkey_index = static_cast<uint16_t>(val);
             } else {
-                LOG(WARNING)
+                LOG_WARNING
                     << "Ignore value from environment variable MC_PKEY_INDEX, "
                     << "value " << pkey_index_env
                     << " out of range (should be 0-65535)";
             }
         } catch (const std::exception& e) {
-            LOG(WARNING) << "Invalid MC_PKEY_INDEX environment value: "
+            LOG_WARNING << "Invalid MC_PKEY_INDEX environment value: "
                          << pkey_index_env << ". Error: " << e.what();
         }
     }
@@ -95,7 +96,7 @@ void loadGlobalConfig(GlobalConfig& config) {
         if (val > 0 && val <= UINT16_MAX)
             config.max_cqe = val;
         else
-            LOG(WARNING)
+            LOG_WARNING
                 << "Ignore value from environment variable MC_MAX_CQE_PER_CTX";
     }
 
@@ -105,7 +106,7 @@ void loadGlobalConfig(GlobalConfig& config) {
         if (val > 0 && val <= UINT16_MAX)
             config.max_ep_per_ctx = val;
         else
-            LOG(WARNING)
+            LOG_WARNING
                 << "Ignore value from environment variable MC_MAX_EP_PER_CTX";
     }
 
@@ -115,7 +116,7 @@ void loadGlobalConfig(GlobalConfig& config) {
         if (val > 0 && val < 256)
             config.num_qp_per_ep = val;
         else
-            LOG(WARNING)
+            LOG_WARNING
                 << "Ignore value from environment variable MC_NUM_QP_PER_EP";
     }
 
@@ -125,7 +126,7 @@ void loadGlobalConfig(GlobalConfig& config) {
         if (val > 0 && val <= UINT16_MAX)
             config.max_sge = val;
         else
-            LOG(WARNING) << "Ignore value from environment variable MC_MAX_SGE";
+            LOG_WARNING << "Ignore value from environment variable MC_MAX_SGE";
     }
 
     const char* max_wr_env = std::getenv("MC_MAX_WR");
@@ -134,7 +135,7 @@ void loadGlobalConfig(GlobalConfig& config) {
         if (val > 0 && val <= UINT16_MAX)
             config.max_wr = val;
         else
-            LOG(WARNING) << "Ignore value from environment variable MC_MAX_WR";
+            LOG_WARNING << "Ignore value from environment variable MC_MAX_WR";
     }
 
     const char* max_inline_env = std::getenv("MC_MAX_INLINE");
@@ -143,7 +144,7 @@ void loadGlobalConfig(GlobalConfig& config) {
         if (val <= UINT16_MAX)
             config.max_inline = val;
         else
-            LOG(WARNING)
+            LOG_WARNING
                 << "Ignore value from environment variable MC_MAX_INLINE";
     }
 
@@ -159,7 +160,7 @@ void loadGlobalConfig(GlobalConfig& config) {
         else if (val == 4096)
             config.mtu_length = IBV_MTU_4096;
         else {
-            LOG(ERROR) << "Ignore value from environment variable MC_MTU, it "
+            LOG_ERROR << "Ignore value from environment variable MC_MTU, it "
                           "should be 512|1024|2048|4096";
             exit(EXIT_FAILURE);
         }
@@ -171,7 +172,7 @@ void loadGlobalConfig(GlobalConfig& config) {
         if (val > 0 && val < 65536)
             config.handshake_port = val;
         else
-            LOG(WARNING)
+            LOG_WARNING
                 << "Ignore value from environment variable MC_HANDSHAKE_PORT";
     }
 
@@ -181,7 +182,7 @@ void loadGlobalConfig(GlobalConfig& config) {
         if (val > 0 && val <= 8)
             config.workers_per_ctx = val;
         else
-            LOG(WARNING)
+            LOG_WARNING
                 << "Ignore value from environment variable MC_WORKERS_PER_CTX";
     }
 
@@ -191,7 +192,7 @@ void loadGlobalConfig(GlobalConfig& config) {
         if (val > 0)
             config.slice_size = val;
         else
-            LOG(WARNING)
+            LOG_WARNING
                 << "Ignore value from environment variable MC_SLICE_SIZE";
     }
 
@@ -200,9 +201,9 @@ void loadGlobalConfig(GlobalConfig& config) {
         size_t val = atoll(min_reg_size_env);
         if (val > 0) {
             config.eic_max_block_size = val;
-            LOG(INFO) << "Barex set MC_MIN_REG_SIZE=" << val;
+            LOG_INFO << "Barex set MC_MIN_REG_SIZE=" << val;
         } else
-            LOG(WARNING)
+            LOG_WARNING
                 << "Ignore value from environment variable MC_MIN_REG_SIZE";
     }
 
@@ -212,7 +213,7 @@ void loadGlobalConfig(GlobalConfig& config) {
         if (val > 0) {
             config.max_mr_size = val;
         } else {
-            LOG(WARNING)
+            LOG_WARNING
                 << "Ignore value from environment variable MC_MAX_MR_SIZE";
         }
     }
@@ -223,7 +224,7 @@ void loadGlobalConfig(GlobalConfig& config) {
         if (val > 0 && val < 128)
             config.retry_cnt = val;
         else
-            LOG(WARNING)
+            LOG_WARNING
                 << "Ignore value from environment variable MC_RETRY_CNT";
     }
 
@@ -239,7 +240,7 @@ void loadGlobalConfig(GlobalConfig& config) {
         if (val > 0) {
             config.handshake_listen_backlog = val;
         } else {
-            LOG(WARNING) << "Ignore value from environment variable "
+            LOG_WARNING << "Ignore value from environment variable "
                             "MC_HANDSHAKE_LISTEN_BACKLOG";
         }
     }
@@ -268,7 +269,7 @@ void loadGlobalConfig(GlobalConfig& config) {
         if (val > 0 && val < 65536)
             config.slice_timeout = val;
         else
-            LOG(WARNING)
+            LOG_WARNING
                 << "Ignore value from environment variable MC_SLICE_TIMEOUT";
     }
 
@@ -278,11 +279,11 @@ void loadGlobalConfig(GlobalConfig& config) {
             google::InitGoogleLogging("mooncake-transfer-engine");
         }
         if (opendir(log_dir_path) == NULL) {
-            LOG(WARNING)
+            LOG_WARNING
                 << "Path [" << log_dir_path
                 << "] is not a valid directory path. Still logging to stderr.";
         } else if (access(log_dir_path, W_OK) != 0) {
-            LOG(WARNING)
+            LOG_WARNING
                 << "Path [" << log_dir_path
                 << "] is not a permitted directory path for the current user. \
                 Still logging to stderr.";
@@ -323,7 +324,7 @@ void loadGlobalConfig(GlobalConfig& config) {
         if (val > 0 && val < config.slice_size)
             config.fragment_limit = config.slice_size / val;
         else {
-            LOG(WARNING) << "Ignore value from environment variable "
+            LOG_WARNING << "Ignore value from environment variable "
                             "MC_FRAGMENT_RATIO and set it to 4 as default";
             config.fragment_limit = config.slice_size / 4;
         }
@@ -340,7 +341,7 @@ void loadGlobalConfig(GlobalConfig& config) {
         if (val >= -1 && val <= 1) {
             config.parallel_reg_mr = val;
         } else {
-            LOG(WARNING) << "Ignore value from environment variable "
+            LOG_WARNING << "Ignore value from environment variable "
                             "MC_ENABLE_PARALLEL_REG_MR";
         }
     }
@@ -352,7 +353,7 @@ void loadGlobalConfig(GlobalConfig& config) {
         } else if (strcmp(endpoint_store_type_env, "SIEVE") == 0) {
             config.endpoint_store_type = EndpointStoreType::SIEVE;
         } else {
-            LOG(WARNING) << "Ignore value from environment variable "
+            LOG_WARNING << "Ignore value from environment variable "
                             "MC_ENDPOINT_STORE_TYPE, it should be FIFO|SIEVE";
         }
     }
@@ -364,13 +365,13 @@ void loadGlobalConfig(GlobalConfig& config) {
             if (val >= 0 && val <= 255) {
                 config.ib_traffic_class = val;
             } else {
-                LOG(WARNING)
+                LOG_WARNING
                     << "Ignore value from environment variable MC_IB_TC, "
                     << "value " << traffic_class_env
                     << " out of range (should be 0-255)";
             }
         } catch (const std::exception& e) {
-            LOG(WARNING) << "Invalid MC_IB_TC environment value: "
+            LOG_WARNING << "Invalid MC_IB_TC environment value: "
                          << traffic_class_env << ". Error: " << e.what();
         }
     }
@@ -382,7 +383,7 @@ void loadGlobalConfig(GlobalConfig& config) {
         if (val >= 0 && val <= 2)
             config.ib_pci_relaxed_ordering_mode = val;
         else
-            LOG(WARNING) << "Ignore value from environment variable "
+            LOG_WARNING << "Ignore value from environment variable "
                             "MC_IB_PCI_RELAXED_ORDERING, it should be 0|1|2";
     }
 
@@ -401,14 +402,14 @@ void loadGlobalConfig(GlobalConfig& config) {
             try {
                 int val = std::stoi(item);
                 if (val < 0 || val > 65535) {
-                    LOG(WARNING)
+                    LOG_WARNING
                         << "MC_MLX5_QP_UDP_SPORTS entry out of range: " << item;
                     ok = false;
                     break;
                 }
                 ports.push_back(static_cast<uint16_t>(val));
             } catch (const std::exception& e) {
-                LOG(WARNING) << "Invalid MC_MLX5_QP_UDP_SPORTS entry: " << item
+                LOG_WARNING << "Invalid MC_MLX5_QP_UDP_SPORTS entry: " << item
                              << ". Error: " << e.what();
                 ok = false;
                 break;
@@ -417,7 +418,7 @@ void loadGlobalConfig(GlobalConfig& config) {
         if (ok && !ports.empty()) {
             config.mlx5_qp_udp_sports = std::move(ports);
         } else if (!ok) {
-            LOG(WARNING) << "Ignore MC_MLX5_QP_UDP_SPORTS entirely due to "
+            LOG_WARNING << "Ignore MC_MLX5_QP_UDP_SPORTS entirely due to "
                             "parse errors";
         }
     }
@@ -432,7 +433,7 @@ void loadGlobalConfig(GlobalConfig& config) {
         if (val == "RM" || val == "RC" || val == "UM")
             config.urma_trans_mode = val;
         else
-            LOG(WARNING) << "Ignore value from environment variable "
+            LOG_WARNING << "Ignore value from environment variable "
                             "MC_URMA_TRANS_MODE, it should be RM|RC|UM";
     }
 
@@ -441,9 +442,9 @@ void loadGlobalConfig(GlobalConfig& config) {
         std::string val(urma_bonding_multipath_enable);
         if (val == "true" || val == "1" || val == "on"){
             config.urma_bonding_multipath = true;
-            LOG(WARNING) << "MC_URMA_BONDING_MULTIPATH_ENABLE is " << val;
+            LOG_WARNING << "MC_URMA_BONDING_MULTIPATH_ENABLE is " << val;
         } else
-            LOG(WARNING) << "Ignore value from environment variable "
+            LOG_WARNING << "Ignore value from environment variable "
                             "MC_URMA_BONDING_MULTIPATH_ENABLE, it should be true|1|on";
     }
 
@@ -461,7 +462,7 @@ void loadGlobalConfig(GlobalConfig& config) {
             else if (val == "0" || val == "false")
                 config.mlx5_qp_lag_port_balance = false;
             else
-                LOG(WARNING) << "Ignore MC_MLX5_QP_LAG_PORT_BALANCE: expected "
+                LOG_WARNING << "Ignore MC_MLX5_QP_LAG_PORT_BALANCE: expected "
                                 "0/1/true/false, got: "
                              << val;
         }
@@ -500,37 +501,37 @@ void updateGlobalConfig(ibv_device_attr& device_attr) {
 
 void dumpGlobalConfig() {
     auto& config = globalConfig();
-    LOG(INFO) << "=== GlobalConfig ===";
-    LOG(INFO) << "num_cq_per_ctx = " << config.num_cq_per_ctx;
-    LOG(INFO) << "num_comp_channels_per_ctx = "
+    LOG_INFO << "=== GlobalConfig ===";
+    LOG_INFO << "num_cq_per_ctx = " << config.num_cq_per_ctx;
+    LOG_INFO << "num_comp_channels_per_ctx = "
               << config.num_comp_channels_per_ctx;
-    LOG(INFO) << "port = " << config.port;
-    LOG(INFO) << "gid_index = " << config.gid_index;
-    LOG(INFO) << "pkey_index = " << config.pkey_index;
-    LOG(INFO) << "max_mr_size = " << config.max_mr_size;
-    LOG(INFO) << "max_cqe = " << config.max_cqe;
-    LOG(INFO) << "max_ep_per_ctx = " << config.max_ep_per_ctx;
-    LOG(INFO) << "num_qp_per_ep = " << config.num_qp_per_ep;
-    LOG(INFO) << "max_sge = " << config.max_sge;
-    LOG(INFO) << "max_wr = " << config.max_wr;
-    LOG(INFO) << "max_inline = " << config.max_inline;
-    LOG(INFO) << "mtu_length = " << mtuLengthToString(config.mtu_length);
-    LOG(INFO) << "parallel_reg_mr = " << config.parallel_reg_mr;
-    LOG(INFO) << "ib_traffic_class = " << config.ib_traffic_class;
+    LOG_INFO << "port = " << config.port;
+    LOG_INFO << "gid_index = " << config.gid_index;
+    LOG_INFO << "pkey_index = " << config.pkey_index;
+    LOG_INFO << "max_mr_size = " << config.max_mr_size;
+    LOG_INFO << "max_cqe = " << config.max_cqe;
+    LOG_INFO << "max_ep_per_ctx = " << config.max_ep_per_ctx;
+    LOG_INFO << "num_qp_per_ep = " << config.num_qp_per_ep;
+    LOG_INFO << "max_sge = " << config.max_sge;
+    LOG_INFO << "max_wr = " << config.max_wr;
+    LOG_INFO << "max_inline = " << config.max_inline;
+    LOG_INFO << "mtu_length = " << mtuLengthToString(config.mtu_length);
+    LOG_INFO << "parallel_reg_mr = " << config.parallel_reg_mr;
+    LOG_INFO << "ib_traffic_class = " << config.ib_traffic_class;
     {
         std::ostringstream oss;
         for (size_t i = 0; i < config.mlx5_qp_udp_sports.size(); ++i) {
             if (i) oss << ",";
             oss << config.mlx5_qp_udp_sports[i];
         }
-        LOG(INFO) << "mlx5_qp_udp_sports = ["
+        LOG_INFO << "mlx5_qp_udp_sports = ["
                   << (config.mlx5_qp_udp_sports.empty() ? "<unset>" : oss.str())
                   << "]";
     }
-    LOG(INFO) << "mlx5_qp_lag_port_balance = "
+    LOG_INFO << "mlx5_qp_lag_port_balance = "
               << (config.mlx5_qp_lag_port_balance ? "true" : "false");
-    LOG(INFO) << "urma_trans_mode = " << config.urma_trans_mode;
-    LOG(INFO) << "urma_bonding_balance = " << (config.urma_bonding_balance ? "true" : "false");
+    LOG_INFO << "urma_trans_mode = " << config.urma_trans_mode;
+    LOG_INFO << "urma_bonding_balance = " << (config.urma_bonding_balance ? "true" : "false");
 }
 
 GlobalConfig& globalConfig() {
@@ -556,7 +557,7 @@ std::pair<int, int> ValidatePortRange(int min_port, int max_port,
 
     if (!is_valid_port(min_port) || !is_valid_port(max_port) ||
         min_port > max_port) {
-        LOG(WARNING) << "Invalid port range [" << min_port << ", " << max_port
+        LOG_WARNING << "Invalid port range [" << min_port << ", " << max_port
                      << "], falling back to default [" << default_min << ", "
                      << default_max << "]";
         return {default_min, default_max};
