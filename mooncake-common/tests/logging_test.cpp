@@ -91,10 +91,12 @@ TEST(LogConfigEnv, DisabledForcesOff) {
     EXPECT_EQ(LogConfigFromEnv().level, "OFF");
 }
 
-TEST(LogConfigEnv, DefaultDisabledWhenUnset) {
+TEST(LogConfigEnv, DefaultEnabledWhenUnset) {
     setenv_test("MC_LOG_ENABLE", nullptr);
-    // MC_LOG_ENABLE defaults to off → level OFF (legacy behavior preserved).
-    EXPECT_EQ(LogConfigFromEnv().level, "OFF");
+    setenv_test("MC_LOG_LEVEL", nullptr);
+    // MC_LOG_ENABLE now defaults to on → level is the configured default (INFO),
+    // not forced to OFF.
+    EXPECT_EQ(LogConfigFromEnv().level, "INFO");
 }
 
 // ===========================================================================

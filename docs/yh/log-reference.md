@@ -561,17 +561,28 @@ PerfPoint 定义在 `mooncake-integration/store/mooncake_perf_points.def`。
 
 ## 8. 日志配置
 
-Mooncake 使用 glog 作为日志库，通过环境变量控制日志级别、输出位置和开关。
+Mooncake 现以 **spdlog 异步日志** 为主日志后端（`LOG_*` / `CLOG_*` / `DLOG_*` 宏），
+少量尚未迁移或第三方（ylt/coro_rpc）代码仍走 glog/easylog。日志通过下列环境变量控制。
 
 ### 8.1 环境变量
 
 | 变量 | 默认值 | 说明 |
 |------|-------|------|
-| `MC_LOG_LEVEL` | `INFO` | 日志输出级别 |
-| `MC_LOG_DIR` | 空（stderr） | 日志文件输出目录 |
-| `MC_LOG_ENABLE` | 禁用 | 日志总开关 |
+| `MC_LOG_ENABLE` | **`on`（默认开启）** | 日志总开关。`off`/`0`/`false`/`no`（不区分大小写）将级别置为 `OFF`，丢弃所有 spdlog 日志；其余值或未设置均为开启 |
+| `MC_LOG_LEVEL` | `INFO` | spdlog 输出级别：`TRACE`/`DEBUG`/`INFO`/`WARNING`/`ERROR`/`CRITICAL`/`FATAL`/`OFF` |
+| `MC_LOG_DIR` | `/var/log/mooncake` | spdlog 滚动日志文件目录（始终写文件）；同时用作 Transfer Engine 中残留 glog 的 `FLAGS_log_dir`。目录需可创建/可写，否则日志初始化失败 |
+| `MC_LOG_MAX_SIZE` | `100`（MB） | 单个日志文件滚动上限 |
+| `MC_LOG_BUFFER_SECS` | `3`（秒） | 后台周期性 flush 间隔 |
+| `MC_LOG_DETAIL_ENABLE` | `off` | `DLOG_*` 详细日志开关，`on`/`1`/`true`/`yes` 开启（仍受总开关和级别约束） |
+| `MC_YLT_LOG_LEVEL` | `WARN` | ylt/easylog（coro_rpc）最低输出级别 |
 
-代码来源：`mooncake-transfer-engine/src/config.cpp`（MC_LOG_LEVEL）、`mooncake-common/src/mooncake_logging.cpp`（MC_LOG_ENABLE）
+> 其余非环境变量的固定默认：滚动文件保留数 `maxFiles=5`、异步队列 `asyncQueueSize=65536`、
+> 异步线程 `asyncThreads=2`、文件基名 `fileName=app`（生成 `app.log`、`app.log.1` …）。
+>
+> `CLOG_*`（如 master 启动横幅、metric 汇总）**不受 `MC_LOG_ENABLE` 控制，始终同时输出到终端和日志文件**。
+
+代码来源：`mooncake-common/src/logger.cpp`（`LogConfigFromEnv` / `LogEnabledFromEnv` / `DetailLogEnabledFromEnv`）、
+`mooncake-common/include/default_config.h`（`MC_YLT_LOG_LEVEL`）、`mooncake-transfer-engine/src/config.cpp`（残留 glog 的 `FLAGS_log_dir` / `FLAGS_minloglevel`）
 
 ### 8.2 设置日志级别 — `MC_LOG_LEVEL`
 
@@ -603,10 +614,12 @@ import mooncake
 
 | 情况 | 行为 |
 |------|------|
-| 未设置或为空 | 日志输出到 stderr（终端） |
-| 目录不存在 | 输出 WARNING，回退到 stderr |
-| 目录不可写 | 输出 WARNING，回退到 stderr |
-| 目录存在且可写 | 日志写入该目录下的文件 |
+| 未设置 | 使用默认目录 `/var/log/mooncake`，spdlog 写入该目录下的滚动文件 |
+| 设置为某目录 | spdlog 在该目录创建/写入 `app.log`（不存在会尝试 `create_directories`） |
+| 目录无法创建/不可写 | spdlog 日志初始化失败（`Logger::Init` 返回 false），日志不落盘 |
+
+> 说明：spdlog 始终写文件；`CLOG_*` 还会额外输出到终端。残留 glog（Transfer Engine）则在
+> `MC_LOG_DIR` 未设置时回退到 stderr。
 
 **操作方法：**
 
@@ -622,35 +635,40 @@ chmod 755 /var/log/mooncake
 
 ### 8.4 设置日志总开关 — `MC_LOG_ENABLE`
 
-控制 Mooncake 日志输出开关。未显式设置时默认关闭；显式启用后，`MC_LOG`/`MC_VLOG` 按此开关输出，Transfer Engine 初始化时也会按此开关设置 glog 的最低输出级别。
+控制 spdlog 日志总开关。**未设置时默认开启**；关闭时把级别置为 `OFF`，spdlog 丢弃全部
+`LOG_*` / `DLOG_*` 日志。
 
 | 值 | 效果 |
 |----|------|
-| 未设置 | 默认禁用 |
-| `off` / `0` / `false` / `no` | 关闭日志（不区分大小写） |
-| 其他值 | 启用 |
+| 未设置 | **默认开启** |
+| `off` / `0` / `false` / `no` | 关闭日志（不区分大小写，级别置 `OFF`） |
+| 其他值（如 `on`/`1`/`true`） | 开启 |
 
 **注意：**
-- FATAL 级别日志不受此开关影响，始终输出
-- 此开关与 `MC_LOG_LEVEL` 独立：两者都允许时日志才输出
-- 仅使用原生 `LOG()` 且未经过 Transfer Engine 配置初始化的进程，仍可能受 glog 自身 flag 控制
+- `LOG_FATAL` 始终输出并随后 abort，不受此开关影响
+- `CLOG_*`（master 启动横幅、metric 汇总等）**不受此开关影响**，始终输出到终端 + 文件
+- 此开关与 `MC_LOG_LEVEL` 独立：开关开启且级别允许时才输出
+- 残留 glog 的 `LOG()`（如 Transfer Engine 部分路径）受 glog 自身 flag/`MC_LOG_DIR` 控制
 
 **操作方法：**
 
 ```bash
-# 启用日志
-export MC_LOG_ENABLE=on
+# 默认即开启，通常无需设置；如需临时关闭：
+export MC_LOG_ENABLE=off
 ./mooncake_master
 ```
 
 ### 8.5 常用配置场景
 
+日志默认开启，多数场景只需调级别/目录：
+
 | 场景 | 配置 |
 |------|------|
-| 生产环境 | `export MC_LOG_ENABLE=on && export MC_LOG_LEVEL=WARNING && export MC_LOG_DIR=/var/log/mooncake` |
-| 调试排查 | `export MC_LOG_ENABLE=on && export MC_LOG_LEVEL=INFO`（输出到 stderr，除非设置 `MC_LOG_DIR`） |
-| 性能测试（减少日志） | `export MC_LOG_ENABLE=on && export MC_LOG_LEVEL=ERROR` |
-| 启用日志输出 | `export MC_LOG_ENABLE=on` |
+| 生产环境 | `export MC_LOG_LEVEL=WARNING && export MC_LOG_DIR=/var/log/mooncake` |
+| 调试排查 | `export MC_LOG_LEVEL=INFO`（写入 `MC_LOG_DIR`，默认 `/var/log/mooncake`） |
+| 详细 breakdown | `export MC_LOG_LEVEL=INFO && export MC_LOG_DETAIL_ENABLE=on` |
+| 性能测试（减少日志） | `export MC_LOG_LEVEL=ERROR` |
+| 完全关闭日志 | `export MC_LOG_ENABLE=off` |
 
 ### 8.6 高频 breakdown 日志门控
 

@@ -251,20 +251,20 @@ LogConfig LogConfigFromEnv() {
     if (const char *m = std::getenv("MC_LOG_MAX_SIZE")) config.maxSizeMB = std::atoi(m);
     if (const char *b = std::getenv("MC_LOG_BUFFER_SECS")) config.flushIntervalSecs = std::atoi(b);
     else config.flushIntervalSecs = 3;
-    if (!LogEnabledFromEnv()) config.level = "OFF";        // 总开关：默认关闭
+    if (!LogEnabledFromEnv()) config.level = "OFF";        // 总开关：默认开启
     return config;
 }
 ```
 
 | 环境变量 | 映射字段 | 默认 | 说明 |
 |---|---|---|---|
-| `MC_LOG_ENABLE` | 总开关 | **off** | 非 on/1/true 时把 level 设为 `OFF`，spdlog 丢弃全部日志 |
+| `MC_LOG_ENABLE` | 总开关 | **on** | 仅当显式为 off/0/false/no 时把 level 设为 `OFF`，spdlog 丢弃全部日志；其余值或未设置均开启 |
 | `MC_LOG_DIR` | `logDir` | `/var/log/mooncake` | 日志目录 |
 | `MC_LOG_LEVEL` | `level` | `INFO` | `TRACE/DEBUG/INFO/WARNING/ERROR/OFF` |
 | `MC_LOG_MAX_SIZE` | `maxSizeMB` | 100 | 单文件滚动阈值(MB) |
 | `MC_LOG_BUFFER_SECS` | `flushIntervalSecs` | 3 | 后台周期刷盘间隔(秒) |
 
-> 注意：`MC_LOG_ENABLE` **默认关闭**，是从旧 glog 路径保留下来的行为；生产/测试需显式 `MC_LOG_ENABLE=on`。
+> 注意：`MC_LOG_ENABLE` **默认开启**；如需完全关闭日志，显式设置 `MC_LOG_ENABLE=off`。
 
 ---
 

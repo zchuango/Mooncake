@@ -211,13 +211,13 @@ std::string UpperString(const char *value)
     return text;
 }
 
-// MC_LOG_ENABLE semantics preserved from the legacy glog path: default OFF;
-// only an explicit truthy value turns logging on.
+// MC_LOG_ENABLE total switch: default ON when unset/empty; only an explicit
+// falsy value (off/0/false/no) turns logging off.
 bool LogEnabledFromEnv()
 {
     const char *value = std::getenv("MC_LOG_ENABLE");
     if (value == nullptr || *value == '\0') {
-        return false;
+        return true;
     }
     std::string lowered(value);
     std::transform(lowered.begin(), lowered.end(), lowered.begin(),
