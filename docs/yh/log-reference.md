@@ -576,13 +576,38 @@ Mooncake 现以 **spdlog 异步日志** 为主日志后端（`LOG_*` / `CLOG_*` 
 | `MC_LOG_DETAIL_ENABLE` | `off` | `DLOG_*` 详细日志开关，`on`/`1`/`true`/`yes` 开启（仍受总开关和级别约束） |
 | `MC_YLT_LOG_LEVEL` | `WARN` | ylt/easylog（coro_rpc）最低输出级别 |
 
-> 其余非环境变量的固定默认：滚动文件保留数 `maxFiles=5`、异步队列 `asyncQueueSize=65536`、
-> 异步线程 `asyncThreads=2`、文件基名 `fileName=app`（生成 `app.log`、`app.log.1` …）。
->
-> `CLOG_*`（如 master 启动横幅、metric 汇总）**不受 `MC_LOG_ENABLE` 控制，始终同时输出到终端和日志文件**。
-
 代码来源：`mooncake-common/src/logger.cpp`（`LogConfigFromEnv` / `LogEnabledFromEnv` / `DetailLogEnabledFromEnv`）、
 `mooncake-common/include/default_config.h`（`MC_YLT_LOG_LEVEL`）、`mooncake-transfer-engine/src/config.cpp`（残留 glog 的 `FLAGS_log_dir` / `FLAGS_minloglevel`）
+
+#### 8.1.1 其他配置参数（`LogConfig`，代码内固定，不经环境变量）
+
+下列字段定义在 `mooncake-common/include/log_config.h` 的 `struct LogConfig` 中，由代码设定，
+**没有对应的环境变量**（如需修改要改代码或在调用 `Logger::Init` 前自行构造 `LogConfig`）：
+
+| 字段 | 默认值 | 说明 |
+|------|--------|------|
+| `pattern` | `%Y-%m-%d %H:%M:%S.%6f \| pid=%P tid=%t \| %^%L%$ \| %s:%# \| %v` | 文件 logger 的 spdlog 格式串（见下） |
+| `fileName` | `app` | 日志文件基名，生成 `app.log`、`app.log.1` … |
+| `maxFiles` | `5` | 滚动保留的历史文件数 |
+| `asyncQueueSize` | `65536` | 异步日志队列容量（条） |
+| `asyncThreads` | `2` | 异步 worker 线程数 |
+| `rateLimit` | `0` | 每 trace 每秒最大日志条数，`0` = 不限流 |
+
+`pattern` 各字段含义（spdlog 格式标志）：
+
+| 片段 | 含义 |
+|------|------|
+| `%Y-%m-%d %H:%M:%S.%6f` | 日期 + 时间（微秒，**本地时区**） |
+| `pid=%P` / `tid=%t` | 进程 ID / 线程 ID |
+| `%^%L%$` | 级别短名（`I`/`W`/`E`…），终端按级别着色 |
+| `%s:%#` | 源文件名 : 行号 |
+| `%v` | 日志正文 |
+
+**其他固定运行行为（同样非环境变量）：**
+- 异步队列溢出策略：`overrun_oldest`（队列满时丢弃最旧日志，不阻塞业务线程）
+- 文件 logger 时间戳使用**本地时区**（`pattern_time_type::local`）
+- `CLOG_*` 走独立的同步 console logger：固定 `level=info`、固定 pattern（与上表相同），
+  sink = 滚动文件 + `stderr`（彩色），**不受 `MC_LOG_ENABLE` 控制，始终同时输出到终端和文件**
 
 ### 8.2 设置日志级别 — `MC_LOG_LEVEL`
 

@@ -266,6 +266,27 @@ LogConfig LogConfigFromEnv() {
 
 > 注意：`MC_LOG_ENABLE` **默认开启**；如需完全关闭日志，显式设置 `MC_LOG_ENABLE=off`。
 
+#### 其他配置参数（`LogConfig`，代码内固定，无环境变量）
+
+`struct LogConfig`（`mooncake-common/include/log_config.h`）中下列字段由代码设定，**不经环境变量**，
+如需修改需改代码或在 `Logger::Init` 前自行构造 `LogConfig`：
+
+| 字段 | 默认 | 说明 |
+|---|---|---|
+| `pattern` | `%Y-%m-%d %H:%M:%S.%6f \| pid=%P tid=%t \| %^%L%$ \| %s:%# \| %v` | 文件 logger 格式串 |
+| `fileName` | `app` | 文件基名 → `app.log`、`app.log.1` … |
+| `maxFiles` | `5` | 滚动保留历史文件数 |
+| `asyncQueueSize` | `65536` | 异步队列容量(条) |
+| `asyncThreads` | `2` | 异步 worker 线程数 |
+| `rateLimit` | `0` | 每 trace 每秒最大日志条数，`0`=不限流 |
+
+`pattern` 字段：`%Y-%m-%d %H:%M:%S.%6f`=本地时区时间(微秒)、`%P`/`%t`=进程/线程 ID、
+`%^%L%$`=着色级别短名、`%s:%#`=文件:行号、`%v`=正文。
+
+固定运行行为：异步溢出策略 `overrun_oldest`（满则丢最旧、不阻塞）；时间戳用本地时区
+（`pattern_time_type::local`）；`CLOG_*` 走独立同步 console logger（固定 `level=info`、
+sink=滚动文件+`stderr` 彩色，**不受 `MC_LOG_ENABLE` 控制**）。
+
 ---
 
 ### 2.8 限流与 trace 采样（预留能力，默认关闭）
