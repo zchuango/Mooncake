@@ -1,6 +1,7 @@
 #include "mooncake_logging.h"
 
 #include <atomic>
+#include <cerrno>
 #include <chrono>
 #include <cstdint>
 

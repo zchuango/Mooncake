@@ -3009,9 +3009,6 @@ ErrorCode Client::TransferData(const Replica::Descriptor& replica_descriptor,
                                std::vector<Slice>& slices,
                                TransferRequest::OpCode op_code) {
     bool is_write = (op_code == TransferRequest::WRITE);
-    static std::atomic<bool> first_transfer_data_logged{false};
-    const bool first_transfer_data = !first_transfer_data_logged.exchange(
-        true, std::memory_order_relaxed);
     UbDiag::PerfPoint pt_full(is_write ? PerfKey::PUT_SINGLE_TRANSFER_FULL : PerfKey::GET_SINGLE_TRANSFER_FULL, UbDiag::PerfLevel::MODULE);
     pt_full.Start();
     if (!transfer_submitter_) {
@@ -3020,7 +3017,6 @@ ErrorCode Client::TransferData(const Replica::Descriptor& replica_descriptor,
         return ErrorCode::INVALID_PARAMS;
     }
 
-    auto t0_transfer = std::chrono::steady_clock::now();
     UbDiag::PerfPoint pt_submit(is_write ? PerfKey::PUT_SINGLE_TRANSFER_SUBMIT
                                          : PerfKey::GET_SINGLE_TRANSFER_SUBMIT,
                                 UbDiag::PerfLevel::DEBUG);
