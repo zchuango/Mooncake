@@ -3008,6 +3008,9 @@ void Client::PutToLocalFile(const std::string& key,
 ErrorCode Client::TransferData(const Replica::Descriptor& replica_descriptor,
                                std::vector<Slice>& slices,
                                TransferRequest::OpCode op_code) {
+    const auto t0_transfer = std::chrono::steady_clock::now();
+    static std::atomic<bool> first_transfer_data_flag{true};
+    const bool first_transfer_data = first_transfer_data_flag.exchange(false);
     bool is_write = (op_code == TransferRequest::WRITE);
     UbDiag::PerfPoint pt_full(is_write ? PerfKey::PUT_SINGLE_TRANSFER_FULL : PerfKey::GET_SINGLE_TRANSFER_FULL, UbDiag::PerfLevel::MODULE);
     pt_full.Start();

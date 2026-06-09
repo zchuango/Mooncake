@@ -3,6 +3,7 @@
 #include <glog/logging.h>
 
 #include <algorithm>
+#include <atomic>
 #include <cctype>
 #include <chrono>
 #include <cerrno>
@@ -908,8 +909,12 @@ TransferFuture::TransferFuture(std::shared_ptr<OperationState> state)
 bool TransferFuture::isReady() const { return state_->is_completed(); }
 
 ErrorCode TransferFuture::wait() {
+    const auto t0 = std::chrono::steady_clock::now();
     [[maybe_unused]] auto trace = RestoreTraceIfMissing(state_->trace_id());
-    if (!isReady()) {
+    const bool ready_before_wait = isReady();
+    static std::atomic<bool> first_wait_flag{true};
+    const bool first_wait = first_wait_flag.exchange(false);
+    if (!ready_before_wait) {
         state_->wait_for_completion();
     }
     ErrorCode result = state_->get_result();
@@ -1054,6 +1059,7 @@ std::optional<TransferFuture> TransferSubmitter::submit_batch(
         }
         auto& handle = mem_desc.buffer_descriptor;
         uint64_t offset = 0;
+        const auto t_open_start = std::chrono::steady_clock::now();
         SegmentHandle seg = engine_.openSegment(handle.transport_endpoint_);
         const auto open_segment_us =
             std::chrono::duration_cast<std::chrono::microseconds>(
@@ -1099,6 +1105,7 @@ TransferSubmitter::submit_batch_get_offload_object(
     std::optional<TransferFuture> future;
     std::vector<TransferRequest> requests;
     // Open the segment once 鈥?all keys share the same transfer_engine_addr.
+    const auto t_open_start = std::chrono::steady_clock::now();
     SegmentHandle seg = engine_.openSegment(transfer_engine_addr);
     const auto open_segment_us =
         std::chrono::duration_cast<std::chrono::microseconds>(
@@ -1185,6 +1192,10 @@ std::optional<TransferFuture> TransferSubmitter::submitMemcpyOperation(
 
 std::optional<TransferFuture> TransferSubmitter::submitTransfer(
     std::vector<TransferRequest>& requests) {
+    const auto t0 = std::chrono::steady_clock::now();
+    static std::atomic<bool> first_transfer_flag{true};
+    const bool first_transfer = first_transfer_flag.exchange(false);
+
     // Allocate batch ID
     const size_t batch_size = requests.size();
     BatchID batch_id = engine_.allocateBatchID(batch_size);
@@ -1192,6 +1203,7 @@ std::optional<TransferFuture> TransferSubmitter::submitTransfer(
         LOG_ERROR << "Failed to allocate batch ID";
         return std::nullopt;
     }
+    const auto t_alloc = std::chrono::steady_clock::now();
 
     // Submit transfer
     Status s = engine_.submitTransfer(batch_id, requests);
@@ -1241,6 +1253,7 @@ std::optional<TransferFuture> TransferSubmitter::submitTransferEngineOperation(
                    << handle.buffer_address_;
         return std::nullopt;
     }
+    const auto t_open_start = std::chrono::steady_clock::now();
     SegmentHandle seg = engine_.openSegment(handle.transport_endpoint_);
     const auto open_segment_us =
         std::chrono::duration_cast<std::chrono::microseconds>(
