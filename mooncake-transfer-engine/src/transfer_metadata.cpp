@@ -1182,12 +1182,12 @@ int TransferMetadata::rePublishRpcMetaEntry(const std::string &server_name) {
         }
     }
 
-    LOG(INFO) << "Re-publishing RPC meta entry for " << server_name;
+    LOG_INFO << "Re-publishing RPC meta entry for " << server_name;
     Json::Value rpcMetaJSON;
     rpcMetaJSON["ip_or_host_name"] = local_rpc_meta_.ip_or_host_name;
     rpcMetaJSON["rpc_port"] = static_cast<Json::UInt>(local_rpc_meta_.rpc_port);
     if (!storage_plugin_->set(full_key, rpcMetaJSON)) {
-        LOG(ERROR) << "Failed to re-publish RPC meta entry for " << server_name;
+        LOG_ERROR << "Failed to re-publish RPC meta entry for " << server_name;
         return ERR_METADATA;
     }
     return 0;

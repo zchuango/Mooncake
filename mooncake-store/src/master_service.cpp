@@ -775,7 +775,7 @@ void MasterService::ClearInvalidHandles(
 }
 
 void MasterService::TaskCleanupThreadFunc() {
-    LOG(INFO) << "Task cleanup thread started";
+    CLOG_INFO << "Task cleanup thread started";
     while (task_cleanup_running_) {
         // Wait for the next cleanup interval, but allow fast shutdown.
         {

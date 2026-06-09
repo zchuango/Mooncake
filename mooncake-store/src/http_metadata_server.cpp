@@ -7,6 +7,8 @@
 #include <mutex>
 #include <string>
 
+#include "log_macros.h"
+
 namespace mooncake {
 
 HttpMetadataServer::HttpMetadataServer(uint16_t port, const std::string& host)
@@ -106,7 +108,7 @@ bool HttpMetadataServer::start() {
 
     server_->async_start();
     running_ = true;
-    LOG(INFO) << "HTTP metadata server started on " << host_ << ":" << port_;
+    CLOG_INFO << "HTTP metadata server started on " << host_ << ":" << port_;
     return true;
 }
 

@@ -2700,13 +2700,12 @@ std::shared_ptr<BufferHandle> RealClient::get_buffer_internal(
     const auto &replica = *best_replica;
     uint64_t total_length = calculate_total_size(replica);
 
-    // Set replica_type for breakdown log
+    // Set replica_type for the get_breakdown log below (which already prints
+    // type[...]); no standalone replica_selected line.
     if (replica.is_memory_replica()) {
         const auto& endpoint = replica.get_memory_descriptor().buffer_descriptor.transport_endpoint_;
         bool is_local = local_endpoints.count(endpoint) > 0;
         replica_type = is_local ? "memory_local" : "memory_remote";
-        LOG_INFO << "replica_selected key[" << key << "] type[" << replica_type
-                  << "] endpoint[" << endpoint << "] size[" << total_length << "]";
     } else if (replica.is_local_disk_replica()) {
         const auto& ld_desc = replica.get_local_disk_descriptor();
         bool is_local_holder = (ld_desc.client_id == client_->getClientId());
@@ -3049,6 +3048,9 @@ RealClient::batch_get_buffer_internal(
     std::vector<KeyOp> valid_ops;
     std::vector<DiskKeyOp> disk_ops;
     valid_ops.reserve(keys.size());
+    // Accumulates "<key>=<replica_type> " per key for a single aggregated
+    // breakdown line emitted after the loop (issue #2/#3/#5).
+    std::string replica_types_log;
 
     auto local_endpoints = client_->GetLocalEndpoints();
     for (size_t i = 0; i < keys.size(); ++i) {
@@ -3085,6 +3087,31 @@ RealClient::batch_get_buffer_internal(
         uint64_t total_size = calculate_total_size(replica);
         if (total_size == 0) {
             continue;
+        }
+
+        // Per-key replica type (issue #2/#3/#5). Accumulate into one string and
+        // emit a single aggregated line after the loop (one format + one async
+        // enqueue instead of N). Gated by breakdown_log so it costs nothing when
+        // INFO logging is off.
+        if (breakdown_log) {
+            std::string rtype;
+            if (replica.is_memory_replica()) {
+                const auto &ep = replica.get_memory_descriptor()
+                                     .buffer_descriptor.transport_endpoint_;
+                rtype = local_endpoints.count(ep) > 0 ? "memory_local"
+                                                      : "memory_remote";
+            } else if (replica.is_local_disk_replica()) {
+                const auto &ld = replica.get_local_disk_descriptor();
+                rtype = (ld.client_id == client_->getClientId())
+                            ? "local_disk_local"
+                            : "local_disk_remote";
+            } else {
+                rtype = "disk";
+            }
+            replica_types_log += key;
+            replica_types_log += '=';
+            replica_types_log += rtype;
+            replica_types_log += ' ';
         }
 
         auto &allocator = client_buffer_allocator ? client_buffer_allocator
@@ -3248,6 +3275,8 @@ RealClient::batch_get_buffer_internal(
                   << "] batch_get_ops[" << valid_ops.size()
                   << "] ssd_offload_ops[" << disk_ops.size() << "] success["
                   << success_count << "]";
+        LOG_INFO << "batch_get_buffer_replica_types num_keys[" << keys.size()
+                  << "] [" << replica_types_log << "]";
     }
 
     return final_results;
@@ -4775,6 +4804,9 @@ RealClient::batch_get_into_internal(const std::vector<std::string> &keys,
     std::unordered_map<std::string, ValidKeyInfo> valid_local_disk_operations;
     std::vector<DiskKeyInfo> disk_operations;
     valid_operations.reserve(num_keys);
+    // Accumulates "<key>=<replica_type> " per key for a single aggregated
+    // breakdown line emitted after the loop (issue #2/#3/#5).
+    std::string replica_types_log;
 
     auto local_endpoints = client_->GetLocalEndpoints();
     for (size_t i = 0; i < num_keys; ++i) {
@@ -4818,6 +4850,31 @@ RealClient::batch_get_into_internal(const std::vector<std::string> &keys,
         // Calculate required buffer size
         const auto replica = *best_replica;
         uint64_t total_size = calculate_total_size(replica);
+
+        // Per-key replica type (issue #2/#3/#5). Accumulate into one string and
+        // emit a single aggregated line after the loop (one format + one async
+        // enqueue instead of N). Gated by breakdown_log so it costs nothing when
+        // INFO logging is off.
+        if (breakdown_log) {
+            std::string rtype;
+            if (replica.is_memory_replica()) {
+                const auto &ep = replica.get_memory_descriptor()
+                                     .buffer_descriptor.transport_endpoint_;
+                rtype = local_endpoints.count(ep) > 0 ? "memory_local"
+                                                      : "memory_remote";
+            } else if (replica.is_local_disk_replica()) {
+                const auto &ld = replica.get_local_disk_descriptor();
+                rtype = (ld.client_id == client_->getClientId())
+                            ? "local_disk_local"
+                            : "local_disk_remote";
+            } else {
+                rtype = "disk";
+            }
+            replica_types_log += key;
+            replica_types_log += '=';
+            replica_types_log += rtype;
+            replica_types_log += ' ';
+        }
 
         // Validate buffer capacity
         if (sizes[i] < total_size) {
@@ -4869,6 +4926,11 @@ RealClient::batch_get_into_internal(const std::vector<std::string> &keys,
 
     auto t_prep = start_time;
     if (breakdown_log) t_prep = std::chrono::steady_clock::now();
+
+    if (breakdown_log) {
+        LOG_INFO << "batch_get_into_replica_types num_keys[" << num_keys
+                 << "] [" << replica_types_log << "]";
+    }
 
     // Early return if no valid operations
     if (valid_operations.empty() && valid_local_disk_operations.empty() &&
