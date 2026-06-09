@@ -3014,9 +3014,9 @@ RealClient::batch_get_buffer_internal(
         return final_results;
     }
 
-    // One dice roll per request (MC_HIFREQ_LOG_SAMPLE_RATE, default 0.1) gates
-    // both the breakdown timing capture and its emission below.
-    const bool breakdown_log = mooncake::logging::ShouldSampleHiFreqLog();
+    // The fine-grained timestamps below only feed the INFO breakdown log, so
+    // skip the steady_clock::now() calls entirely when INFO logging is off.
+    const bool breakdown_log = mooncake::ShouldLog(spdlog::level::info);
     auto t0 = breakdown_log ? std::chrono::steady_clock::now()
                             : std::chrono::steady_clock::time_point{};
     auto t0_wall = breakdown_log ? std::chrono::system_clock::now()
@@ -3635,9 +3635,9 @@ tl::expected<int64_t, ErrorCode> RealClient::execute_ranged_read(
 tl::expected<int64_t, ErrorCode> RealClient::get_into_range_internal(
     const std::string &key, void *buffer, size_t dst_offset, size_t src_offset,
     size_t size, bool size_is_buffer_capacity) {
-    // One dice roll per request (MC_HIFREQ_LOG_SAMPLE_RATE, default 0.1) gates
-    // both the breakdown timing capture and its emission below.
-    const bool breakdown_log = mooncake::logging::ShouldSampleHiFreqLog();
+    // The fine-grained timestamps below only feed the INFO breakdown log, so
+    // skip the steady_clock::now() calls entirely when INFO logging is off.
+    const bool breakdown_log = mooncake::ShouldLog(spdlog::level::info);
     auto t0 = breakdown_log ? std::chrono::steady_clock::now()
                             : std::chrono::steady_clock::time_point{};
     auto t0_wall = breakdown_log ? std::chrono::system_clock::now()
@@ -4717,9 +4717,9 @@ std::vector<tl::expected<int64_t, ErrorCode>>
 RealClient::batch_get_into_internal(const std::vector<std::string> &keys,
                                     const std::vector<void *> &buffers,
                                     const std::vector<size_t> &sizes) {
-    // One dice roll per request (MC_HIFREQ_LOG_SAMPLE_RATE, default 0.1) gates
-    // both the breakdown timing capture and its emission below.
-    const bool breakdown_log = mooncake::logging::ShouldSampleHiFreqLog();
+    // The fine-grained timestamps below only feed the INFO breakdown log, so
+    // skip the steady_clock::now() calls entirely when INFO logging is off.
+    const bool breakdown_log = mooncake::ShouldLog(spdlog::level::info);
     auto start_time = breakdown_log ? std::chrono::steady_clock::now()
                                     : std::chrono::steady_clock::time_point{};
     auto t0_wall = breakdown_log ? std::chrono::system_clock::now()

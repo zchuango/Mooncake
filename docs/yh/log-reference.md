@@ -570,9 +570,8 @@ Mooncake 使用 glog 作为日志库，通过环境变量控制日志级别、�
 | `MC_LOG_LEVEL` | `INFO` | 日志输出级别 |
 | `MC_LOG_DIR` | 空（stderr） | 日志文件输出目录 |
 | `MC_LOG_ENABLE` | 禁用 | 日志总开关 |
-| `MC_HIFREQ_LOG_SAMPLE_RATE` | `0.1` | 高频 breakdown 日志采样率，详见 §8.6 |
 
-代码来源：`mooncake-transfer-engine/src/config.cpp`（MC_LOG_LEVEL）、`mooncake-common/src/mooncake_logging.cpp`（MC_LOG_ENABLE、MC_HIFREQ_LOG_SAMPLE_RATE）
+代码来源：`mooncake-transfer-engine/src/config.cpp`（MC_LOG_LEVEL）、`mooncake-common/src/mooncake_logging.cpp`（MC_LOG_ENABLE）
 
 ### 8.2 设置日志级别 — `MC_LOG_LEVEL`
 
@@ -653,33 +652,17 @@ export MC_LOG_ENABLE=on
 | 性能测试（减少日志） | `export MC_LOG_ENABLE=on && export MC_LOG_LEVEL=ERROR` |
 | 启用日志输出 | `export MC_LOG_ENABLE=on` |
 
-### 8.6 高频 breakdown 日志采样 — `MC_HIFREQ_LOG_SAMPLE_RATE`
+### 8.6 高频 breakdown 日志门控
 
 `get_buffer` / `batch_get_buffer` / `get_into` / `batch_get_into` 四条链路精简后，每个请求只剩一条
-`*_breakdown` 汇总日志（原生 `LOG(INFO)`）。由于 get 类操作调用极频繁，这条"每请求一条"的日志本身即为高频
-日志，可用本变量按概率采样。
-
-| 取值 | 效果 |
-|------|------|
-| `1.0` | 每个请求都输出其 breakdown（100%） |
-| `0.1`（默认） | 每个请求 10% 概率输出 breakdown |
-| `0` | 完全不输出 breakdown（全部静默） |
-| 非法/越界 | 非数值回退 `0.1`；`<0` 截断为 `0`；`>1` 截断为 `1` |
+`*_breakdown` 汇总日志（`LOG(INFO)`）。其可见性由 `MC_LOG_LEVEL` 统一控制。
 
 **实现要点：**
-- 每个请求只掷一次骰子（`mooncake::logging::ShouldSampleHiFreqLog()`，线程本地无锁 RNG）；命中才**既输出
+- 每个请求先用 `mooncake::ShouldLog(spdlog::level::info)` 判断 INFO 是否启用；命中才**既输出
   日志又记录其 steady/system clock 计时**，未命中则跳过计时与输出，开销接近零。
-- 仅作用于 breakdown 这一条文本日志。**UbDiag `PerfPoint` 打点始终记录，不受采样影响**；`ERROR`/`WARNING`
+- 仅作用于 breakdown 这一条文本日志。**UbDiag `PerfPoint` 打点始终记录，不受影响**；`ERROR`/`WARNING`
   也照常每次输出。
-- breakdown 是原生 `LOG(INFO)`，可见性由本变量控制，**与 `MC_LOG_ENABLE` 无关**。
-- 解析与缓存：`mooncake-common/src/mooncake_logging.cpp::ParseHiFreqLogSampleRate`（进程内只解析一次）。
-
-```bash
-# 全量输出 breakdown（排查/对账时用）
-export MC_HIFREQ_LOG_SAMPLE_RATE=1.0
-# 默认 10% 采样，无需设置；完全关闭：
-export MC_HIFREQ_LOG_SAMPLE_RATE=0
-```
+- 将 `MC_LOG_LEVEL` 设为 `WARNING` 或更高即可关闭 breakdown 输出。
 
 ---
 
