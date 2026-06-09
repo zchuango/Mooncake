@@ -3274,9 +3274,7 @@ RealClient::batch_get_buffer_internal(
                   << "] read_us[" << read_us << "] total_us[" << total_us
                   << "] batch_get_ops[" << valid_ops.size()
                   << "] ssd_offload_ops[" << disk_ops.size() << "] success["
-                  << success_count << "]";
-        LOG_INFO << "batch_get_buffer_replica_types num_keys[" << keys.size()
-                  << "] [" << replica_types_log << "]";
+                  << success_count << "] replicas[" << replica_types_log << "]";
     }
 
     return final_results;
@@ -4927,11 +4925,6 @@ RealClient::batch_get_into_internal(const std::vector<std::string> &keys,
     auto t_prep = start_time;
     if (breakdown_log) t_prep = std::chrono::steady_clock::now();
 
-    if (breakdown_log) {
-        LOG_INFO << "batch_get_into_replica_types num_keys[" << num_keys
-                 << "] [" << replica_types_log << "]";
-    }
-
     // Early return if no valid operations
     if (valid_operations.empty() && valid_local_disk_operations.empty() &&
         disk_operations.empty()) {
@@ -4952,7 +4945,8 @@ RealClient::batch_get_into_internal(const std::vector<std::string> &keys,
                       << "] start_time[" << FormatWallClock(t0_wall)
                       << "] query_us[" << query_us << "] prep_us[" << prep_us
                       << "] read_us[0] total_us[" << total_us
-                      << "] mem_ops[0] disk_ops[0] ssd_offload_ops[0] success[0]";
+                      << "] mem_ops[0] disk_ops[0] ssd_offload_ops[0] success[0]"
+                      << " replicas[" << replica_types_log << "]";
         }
         return results;
     }
@@ -5161,7 +5155,7 @@ RealClient::batch_get_into_internal(const std::vector<std::string> &keys,
                   << "] mem_ops[" << valid_operations.size() << "] disk_ops["
                   << disk_operations.size() << "] ssd_offload_ops["
                   << offload_object_count << "] success[" << success_count
-                  << "]";
+                  << "] replicas[" << replica_types_log << "]";
     }
 
     return results;
