@@ -29,6 +29,7 @@
 #include <cctype>
 #include <chrono>
 #include <cstdlib>
+#include <vector>
 
 namespace mooncake {
 
@@ -59,19 +60,6 @@ public:
     {
         spdlog::drop_all();
 
-        // Always-on console logger (stderr): independent of the file sink and
-        // the MC_LOG_ENABLE kill switch, synchronous to dodge async-teardown
-        // hazards. Recreated on each Init.
-        {
-            auto consoleSink =
-                std::make_shared<spdlog::sinks::stderr_color_sink_mt>();
-            g_console_logger = std::make_shared<spdlog::logger>(
-                "mooncake_console", consoleSink);
-            g_console_logger->set_level(spdlog::level::info);
-            g_console_logger->set_pattern(
-                "%Y-%m-%d %H:%M:%S.%6f | pid=%P tid=%t | %^%L%$ | %s:%# | %v");
-        }
-
         // Create log directory if not exists
         std::error_code ec;
         std::filesystem::create_directories(config.logDir, ec);
@@ -89,6 +77,15 @@ public:
             config.logDir + "/" + config.fileName + ".log",
             config.maxSizeMB * 1024 * 1024,
             config.maxFiles);
+
+        auto consoleSink =
+            std::make_shared<spdlog::sinks::stderr_color_sink_mt>();
+        std::vector<spdlog::sink_ptr> clogSinks{fileSink, consoleSink};
+        g_console_logger = std::make_shared<spdlog::logger>(
+            "mooncake_console", clogSinks.begin(), clogSinks.end());
+        g_console_logger->set_level(spdlog::level::info);
+        g_console_logger->set_pattern(
+            "%Y-%m-%d %H:%M:%S.%6f | pid=%P tid=%t | %^%L%$ | %s:%# | %v");
 
         // Create async logger
         logger_ = std::make_shared<spdlog::async_logger>(
@@ -115,9 +112,10 @@ public:
         // Configure rate limiter
         RateLimiter::Instance().SetRate(config.rateLimit);
 
-        // Initialization status — always to the terminal via the console logger.
+        // Initialization status is always emitted to both terminal and file.
         CLOG_INFO << "mooncake logging initialized | file_dir=" << config.logDir
-                  << " | level=" << config.level << " | console=on";
+                  << " | level=" << config.level << " | console=on"
+                  << " | file=on";
 
         initialized_ = true;
         return true;

@@ -138,6 +138,18 @@ TEST(LoggingOutput, LevelGateDropsDebugWhenInfo) {
     EXPECT_NE(content.find("error_should_pass"), std::string::npos);
 }
 
+TEST(LoggingOutput, ClogWritesFileEvenWhenDefaultLoggerIsOff) {
+    std::string path = init_logger_to("/tmp/mooncake_ut_clog", "OFF");
+    CLOG_INFO << "clog_file_marker";
+    LOG_INFO << "regular_info_should_be_dropped";
+    Logger::Instance().Shutdown();
+
+    std::string content = read_file(path);
+    EXPECT_NE(content.find("clog_file_marker"), std::string::npos);
+    EXPECT_EQ(content.find("regular_info_should_be_dropped"),
+              std::string::npos);
+}
+
 TEST(LoggingOutput, DetailLogDisabledByDefault) {
     setenv_test("MC_LOG_DETAIL_ENABLE", nullptr);
     std::string path = init_logger_to("/tmp/mooncake_ut_dlog_off", "INFO");

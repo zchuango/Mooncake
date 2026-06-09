@@ -45,9 +45,9 @@ namespace mooncake {
 
 bool DetailLogEnabledFromEnv();
 
-// Returns the always-on stderr console logger (created by Logger::Init), or
-// nullptr before init. Backs the CLOG_* macros, whose output must always reach
-// the terminal regardless of MC_LOG_ENABLE / MC_LOG_DIR.
+// Returns the always-on CLOG logger (created by Logger::Init), or nullptr
+// before init. Backs the CLOG_* macros, whose output must always reach both
+// the terminal and the log file regardless of MC_LOG_ENABLE.
 spdlog::logger *ConsoleLogger();
 
 // Build the "trace_id[<id>] " prefix on the calling thread. Mirrors the legacy
@@ -339,10 +339,10 @@ public:
     MC_LOG_EVERY_N_IMPL(level, n, MC_LOG_EVERY_N_NAME(__LINE__))
 
 // ---------------------------------------------------------------------------
-// CLOG_*: always-on console (stderr) logging, INDEPENDENT of the file logger.
-// Routes to the dedicated console logger (mooncake::ConsoleLogger()) which is
+// CLOG_*: always-on stderr + file logging, independent of the default logger.
+// Routes to the dedicated CLOG logger (mooncake::ConsoleLogger()) which is
 // NOT gated by MC_LOG_ENABLE / MC_LOG_DIR — used for init banners and benchmark
-// output that must always reach the terminal. No trace-id prefix (clean lines).
+// output that must always reach the terminal and file. No trace-id prefix.
 // ---------------------------------------------------------------------------
 #define CLOG_AT(level)                                                      \
     mooncake::LogVoidify() &                                                \
