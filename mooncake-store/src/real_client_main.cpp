@@ -3,7 +3,6 @@
 #include <cstdlib>
 #include <filesystem>
 #include <ylt/coro_rpc/coro_rpc_server.hpp>
-#include <spdlog/spdlog.h>
 
 #include "client_service.h"
 #include "config.h"

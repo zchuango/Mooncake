@@ -53,7 +53,7 @@ struct GlobalConfig {
     int retry_cnt = 9;
     int handshake_listen_backlog = 128;
     bool metacache = true;
-    int log_level = 2;  // spdlog::level::info
+    int log_level = 2;  // info
     bool trace = false;
     int64_t slice_timeout = -1;
     uint16_t rpc_min_port = 15000;

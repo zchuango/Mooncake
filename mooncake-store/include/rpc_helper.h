@@ -90,7 +90,7 @@ auto execute_rpc(std::string_view rpc_name, std::optional<PerfKey> perf_key,
             std::chrono::steady_clock::now() - t0)
             .count();
     if (static_cast<uint64_t>(elapsed_us) > kMasterSlowLogThresholdUs) {
-        MC_LOG(WARNING) << rpc_name << "_slow elapsed_us[" << elapsed_us
+        LOG(WARNING) << rpc_name << "_slow elapsed_us[" << elapsed_us
                         << "] rc[" << rc << "]";
     }
 

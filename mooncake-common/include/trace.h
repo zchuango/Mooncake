@@ -22,13 +22,9 @@
 #include <cstdint>
 #include <string>
 
-namespace spdlog {
-namespace level {
-enum level_enum : int;
-}  // namespace level
-}  // namespace spdlog
-
 namespace mooncake {
+
+enum class LogLevel;
 
 /**
  * @brief Simplified trace context for request tracking.
@@ -137,7 +133,7 @@ namespace mooncake::logging {
 
 uint64_t NewTraceId();
 uint64_t CurrentTraceId();
-bool ShouldLog(spdlog::level::level_enum level);
+bool ShouldLog(LogLevel level);
 void ApplyMooncakeLogEnableToGlog();
 
 class ScopedTraceId {

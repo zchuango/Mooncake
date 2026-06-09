@@ -1,10 +1,14 @@
 
 #include <gtest/gtest.h>
 #include "log_macros.h"
+#include "logger.h"
 
+#include <algorithm>
 #include <chrono>
 #include <cstdlib>
 #include <cstring>
+#include <filesystem>
+#include <fstream>
 #include <memory>
 #include <optional>
 #include <string>
@@ -23,6 +27,8 @@ namespace testing {
 enum class HandshakeMode { P2P, Metadata };
 
 namespace {
+
+std::filesystem::path g_log_file_path;
 
 class EnvGuard {
    public:
@@ -47,36 +53,49 @@ class EnvGuard {
 
 class VLogGuard {
    public:
-    explicit VLogGuard(int new_v) : old_v_(FLAGS_v) { FLAGS_v = new_v; }
-    ~VLogGuard() { FLAGS_v = old_v_; }
+    explicit VLogGuard(int new_v) : old_v_(GetLogVerbosity()) {
+        SetLogVerbosity(new_v);
+    }
+    ~VLogGuard() { SetLogVerbosity(old_v_); }
 
    private:
     int old_v_;
 };
 
-class StrategyCaptureSink : public google::LogSink {
+class StrategyCaptureSink {
    public:
-    void send(google::LogSeverity severity, const char* full_filename,
-              const char* base_filename, int line, const struct ::tm* tm_time,
-              const char* message, size_t message_len) override {
-        (void)severity;
-        (void)full_filename;
-        (void)base_filename;
-        (void)line;
-        (void)tm_time;
-
-        std::string msg(message, message_len);
-        constexpr char kPrefix[] = "Using transfer strategy: ";
-        size_t pos = msg.find(kPrefix);
-        if (pos == std::string::npos) {
-            return;
+    StrategyCaptureSink() {
+        Logger::Instance().Flush();
+        std::error_code ec;
+        offset_ = std::filesystem::file_size(g_log_file_path, ec);
+        if (ec) {
+            offset_ = 0;
         }
-
-        captured_strategy_ = msg.substr(pos + std::strlen(kPrefix));
-        TrimInPlace(captured_strategy_);
     }
 
-    const std::string& strategy() const { return captured_strategy_; }
+    std::string strategy() {
+        Logger::Instance().Flush();
+        std::ifstream file(g_log_file_path);
+        if (!file) {
+            return "";
+        }
+        file.seekg(static_cast<std::streamoff>(offset_));
+        std::string content((std::istreambuf_iterator<char>(file)),
+                            std::istreambuf_iterator<char>());
+        if (content.empty()) {
+            return "";
+        }
+
+        constexpr char kPrefix[] = "Using transfer strategy: ";
+        size_t pos = content.rfind(kPrefix);
+        if (pos == std::string::npos) {
+            return "";
+        }
+
+        auto captured_strategy = content.substr(pos + std::strlen(kPrefix));
+        TrimInPlace(captured_strategy);
+        return captured_strategy;
+    }
 
    private:
     static void TrimInPlace(std::string& value) {
@@ -89,7 +108,7 @@ class StrategyCaptureSink : public google::LogSink {
         value = value.substr(begin, end - begin + 1);
     }
 
-    std::string captured_strategy_;
+    uintmax_t offset_ = 0;
 };
 
 struct ClientRuntime {
@@ -157,11 +176,21 @@ const char* HandshakeModeName(HandshakeMode mode) {
 class TcpLocalMemcpyAutoEnableTest : public ::testing::Test {
    protected:
     static void SetUpTestSuite() {
-        google::InitGoogleLogging("TcpLocalMemcpyAutoEnableTest");
-        FLAGS_logtostderr = 1;
+        LogConfig log_config;
+        log_config.logDir =
+            (std::filesystem::temp_directory_path() /
+             "mooncake_tcp_local_memcpy_test")
+                .string();
+        log_config.fileName = "client_tcp_local_memcpy_test";
+        log_config.level = "INFO";
+        std::filesystem::remove_all(log_config.logDir);
+        std::filesystem::create_directories(log_config.logDir);
+        g_log_file_path = std::filesystem::path(log_config.logDir) /
+                          (log_config.fileName + ".log");
+        Logger::Instance().Init(log_config);
     }
 
-    static void TearDownTestSuite() { google::ShutdownGoogleLogging(); }
+    static void TearDownTestSuite() { Logger::Instance().Shutdown(); }
 
     void SetUp() override {
         memcpy_guard_ = std::make_unique<EnvGuard>("MC_STORE_MEMCPY");
@@ -304,7 +333,6 @@ TEST_F(TcpLocalMemcpyAutoEnableTest, P2PLocalReplicaUsesLocalMemcpy) {
     LogReplicaDiagnostics("[P2P]", prepared.replica);
 
     StrategyCaptureSink sink;
-    google::AddLogSink(&sink);
 
     std::vector<char> out(prepared.payload.size(), '\0');
     std::vector<Slice> read_slices;
@@ -312,8 +340,6 @@ TEST_F(TcpLocalMemcpyAutoEnableTest, P2PLocalReplicaUsesLocalMemcpy) {
 
     auto get =
         runtime_.client->Get(prepared.key, prepared.query_result, read_slices);
-
-    google::RemoveLogSink(&sink);
 
     ASSERT_TRUE(get.has_value()) << "Get failed: " << toString(get.error());
     ASSERT_EQ(std::memcmp(out.data(), prepared.payload.data(), out.size()), 0);
@@ -340,7 +366,6 @@ TEST_F(TcpLocalMemcpyAutoEnableTest, MetadataLocalReplicaUsesLocalMemcpy) {
         runtime_.client->IsReplicaOnLocalMemory(prepared.replica);
 
     StrategyCaptureSink sink;
-    google::AddLogSink(&sink);
 
     std::vector<char> out(prepared.payload.size(), '\0');
     std::vector<Slice> read_slices;
@@ -348,8 +373,6 @@ TEST_F(TcpLocalMemcpyAutoEnableTest, MetadataLocalReplicaUsesLocalMemcpy) {
 
     auto get =
         runtime_.client->Get(prepared.key, prepared.query_result, read_slices);
-
-    google::RemoveLogSink(&sink);
 
     ASSERT_TRUE(get.has_value()) << "Get failed: " << toString(get.error());
     ASSERT_EQ(std::memcmp(out.data(), prepared.payload.data(), out.size()), 0);
@@ -376,7 +399,6 @@ TEST_F(TcpLocalMemcpyAutoEnableTest,
     ASSERT_FALSE(runtime_.client->IsReplicaOnLocalMemory(prepared.replica));
 
     StrategyCaptureSink sink;
-    google::AddLogSink(&sink);
 
     std::vector<char> out(prepared.payload.size(), '\0');
     std::vector<Slice> read_slices;
@@ -384,8 +406,6 @@ TEST_F(TcpLocalMemcpyAutoEnableTest,
 
     auto get =
         runtime_.client->Get(prepared.key, prepared.query_result, read_slices);
-
-    google::RemoveLogSink(&sink);
 
     ASSERT_TRUE(get.has_value()) << "Get failed: " << toString(get.error());
     ASSERT_EQ(std::memcmp(out.data(), prepared.payload.data(), out.size()), 0);
@@ -413,7 +433,6 @@ TEST_F(TcpLocalMemcpyAutoEnableTest,
     ASSERT_FALSE(runtime_.client->IsReplicaOnLocalMemory(prepared.replica));
 
     StrategyCaptureSink sink;
-    google::AddLogSink(&sink);
 
     std::vector<char> out(prepared.payload.size(), '\0');
     std::vector<Slice> read_slices;
@@ -421,8 +440,6 @@ TEST_F(TcpLocalMemcpyAutoEnableTest,
 
     auto get =
         runtime_.client->Get(prepared.key, prepared.query_result, read_slices);
-
-    google::RemoveLogSink(&sink);
 
     ASSERT_TRUE(get.has_value()) << "Get failed: " << toString(get.error());
     ASSERT_EQ(std::memcmp(out.data(), prepared.payload.data(), out.size()), 0);
@@ -477,15 +494,12 @@ TEST_P(HotCacheRedirectStrategyTest, CacheHitUsesLocalMemcpy) {
         std::chrono::steady_clock::now() + std::chrono::seconds(60));
 
     StrategyCaptureSink sink;
-    google::AddLogSink(&sink);
 
     std::vector<char> out(payload.size(), '\0');
     std::vector<Slice> read_slices;
     read_slices.emplace_back(Slice{out.data(), out.size()});
 
     auto get = runtime_.client->Get(key, query_result, read_slices);
-
-    google::RemoveLogSink(&sink);
 
     ASSERT_TRUE(get.has_value()) << "Get failed: " << toString(get.error());
     ASSERT_EQ(std::memcmp(out.data(), payload.data(), out.size()), 0);

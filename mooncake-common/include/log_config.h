@@ -25,7 +25,8 @@ namespace mooncake {
  * @brief Log configuration structure.
  *
  * All settings have reasonable defaults; initialization can be done with zero args.
- * Environment variable override: MOONCAKE_LOG_DIR, MOONCAKE_LOG_LEVEL, MOONCAKE_LOG_FILE.
+ * Environment variable override: MC_LOG_DIR, MC_LOG_LEVEL, MC_LOG_FILE,
+ * MC_VLOG_LEVEL.
  */
 struct LogConfig {
     /** Log output directory */
@@ -57,6 +58,9 @@ struct LogConfig {
 
     /** Rate limit: max logs per second per trace (0 = unlimited) */
     int32_t rateLimit = 0;
+
+    /** Verbose log level for VLOG(n), glog-compatible semantics */
+    int32_t verbosity = 0;
 };
 
 }  // namespace mooncake

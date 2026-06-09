@@ -15,11 +15,13 @@
  */
 
 #include "logger.h"
+#include "log_macros.h"
 #include "rate_limiter.h"
 
 #include <spdlog/spdlog.h>
 #include <spdlog/async.h>
 #include <spdlog/sinks/rotating_file_sink.h>
+#include <cstdlib>
 #include <stdexcept>
 #include <map>
 #include <filesystem>
@@ -77,6 +79,12 @@ public:
         // Configure rate limiter
         RateLimiter::Instance().SetRate(config.rateLimit);
 
+        int verbosity = config.verbosity;
+        if (const char *env = std::getenv("MC_VLOG_LEVEL")) {
+            verbosity = std::atoi(env);
+        }
+        SetLogVerbosity(verbosity);
+
         initialized_ = true;
         return true;
     }
@@ -90,9 +98,11 @@ public:
         initialized_ = false;
     }
 
-    std::shared_ptr<spdlog::logger> GetLogger()
+    void Flush()
     {
-        return logger_;
+        if (logger_) {
+            logger_->flush();
+        }
     }
 
     void SetLevel(const std::string &levelStr)
@@ -140,9 +150,9 @@ void Logger::Shutdown()
     pImpl_->Shutdown();
 }
 
-std::shared_ptr<spdlog::logger> Logger::GetSpdlogger()
+void Logger::Flush()
 {
-    return pImpl_->GetLogger();
+    pImpl_->Flush();
 }
 
 void Logger::SetLevel(const std::string &level)

@@ -233,7 +233,7 @@ bool MasterAdminServer::Start() {
 
     auto ec = http_server_.async_start();
     if (ec.hasResult()) {
-        MC_LOG(ERROR) << "Failed to start master admin server on port "
+        LOG(ERROR) << "Failed to start master admin server on port "
                    << http_port_;
         return false;
     }
@@ -264,7 +264,7 @@ bool MasterAdminServer::Start() {
                         << ", view_version="
                         << snapshot.leader_view->view_version;
                 }
-                MC_LOG(INFO) << log_stream.str();
+                LOG(INFO) << log_stream.str();
                 std::this_thread::sleep_for(
                     std::chrono::seconds(kMetricReportIntervalSeconds));
             }
@@ -741,7 +741,7 @@ void MasterAdminServer::InitHttpServer() {
 
             body += "}}";
             if (results.size() != keys.size()) {
-                MC_LOG(WARNING)
+                LOG(WARNING)
                     << "BatchGetReplicaList size mismatch: keys=" << keys.size()
                     << " results=" << results.size();
             }
@@ -778,7 +778,7 @@ std::vector<tl::expected<bool, ErrorCode>> WrappedMasterService::BatchExistKey(
         if (!result[i].has_value()) {
             failure_count++;
             auto error = result[i].error();
-            MC_LOG(ERROR) << "BatchExistKey failed for key[" << i << "] '"
+            LOG(ERROR) << "BatchExistKey failed for key[" << i << "] '"
                        << keys[i] << "': " << toString(error);
         }
     }
@@ -817,7 +817,7 @@ WrappedMasterService::BatchQueryIp(const std::vector<UUID>& client_ids) {
             const auto& client_id = client_ids[i];
             if (result.value().find(client_id) == result.value().end()) {
                 failure_count++;
-                MC_LOG(INFO) << "BatchQueryIp failed for client_id[" << i << "] '"
+                LOG(INFO) << "BatchQueryIp failed for client_id[" << i << "] '"
                         << client_id << "': not found in results";
             }
         }
@@ -855,7 +855,7 @@ WrappedMasterService::BatchReplicaClear(
     size_t failure_count = 0;
     if (!result.has_value()) {
         failure_count = total_keys;
-        MC_LOG(WARNING) << "BatchReplicaClear failed: "
+        LOG(WARNING) << "BatchReplicaClear failed: "
                      << toString(result.error());
     } else {
         const size_t cleared_count = result.value().size();
@@ -943,10 +943,10 @@ WrappedMasterService::BatchGetReplicaList(
             auto error = results[i].error();
             if (error == ErrorCode::OBJECT_NOT_FOUND ||
                 error == ErrorCode::REPLICA_IS_NOT_READY) {
-                MC_LOG(INFO) << "BatchGetReplicaList failed for key[" << i << "] '"
+                LOG(INFO) << "BatchGetReplicaList failed for key[" << i << "] '"
                         << keys[i] << "': " << toString(error);
             } else {
-                MC_LOG(ERROR) << "BatchGetReplicaList failed for key[" << i
+                LOG(ERROR) << "BatchGetReplicaList failed for key[" << i
                            << "] '" << keys[i] << "': " << toString(error);
             }
         }
@@ -1047,13 +1047,13 @@ WrappedMasterService::BatchPutStart(const UUID& client_id,
     results.reserve(keys.size());
 
     if (keys.size() != slice_lengths.size()) {
-        MC_LOG(ERROR) << "BatchPutStart: keys.size()=" << keys.size()
+        LOG(ERROR) << "BatchPutStart: keys.size()=" << keys.size()
                    << " != slice_lengths.size()=" << slice_lengths.size();
         results.assign(keys.size(),
                        tl::make_unexpected(ErrorCode::INVALID_PARAMS));
     } else if (config.group_ids.has_value() &&
                config.group_ids->size() != keys.size()) {
-        MC_LOG(ERROR) << "BatchPutStart: group_ids.size()="
+        LOG(ERROR) << "BatchPutStart: group_ids.size()="
                    << config.group_ids->size()
                    << " != keys.size()=" << keys.size();
         results.assign(keys.size(),
@@ -1096,19 +1096,19 @@ WrappedMasterService::BatchPutStart(const UUID& client_id,
             failure_count++;
             auto error = results[i].error();
             if (error == ErrorCode::OBJECT_ALREADY_EXISTS) {
-                MC_LOG(INFO) << "BatchPutStart failed for key[" << i << "] '"
+                LOG(INFO) << "BatchPutStart failed for key[" << i << "] '"
                         << keys[i] << "': " << toString(error);
             } else if (error == ErrorCode::NO_AVAILABLE_HANDLE) {
                 no_available_handle_count++;
             } else {
-                MC_LOG(ERROR) << "BatchPutStart failed for key[" << i << "] '"
+                LOG(ERROR) << "BatchPutStart failed for key[" << i << "] '"
                            << keys[i] << "': " << toString(error);
             }
         }
     }
 
     if (no_available_handle_count > 0) {
-        MC_LOG(WARNING) << "BatchPutStart failed for " << no_available_handle_count
+        LOG(WARNING) << "BatchPutStart failed for " << no_available_handle_count
                      << " keys" << PUT_NO_SPACE_HELPER_STR;
     }
 
@@ -1156,7 +1156,7 @@ std::vector<tl::expected<void, ErrorCode>> WrappedMasterService::BatchPutEnd(
         if (!results[i].has_value()) {
             failure_count++;
             auto error = results[i].error();
-            MC_LOG(ERROR) << "BatchPutEnd failed for key[" << i << "] '" << keys[i]
+            LOG(ERROR) << "BatchPutEnd failed for key[" << i << "] '" << keys[i]
                        << "': " << toString(error);
         }
     }
@@ -1200,7 +1200,7 @@ std::vector<tl::expected<void, ErrorCode>> WrappedMasterService::BatchPutRevoke(
         if (!results[i].has_value()) {
             failure_count++;
             auto error = results[i].error();
-            MC_LOG(ERROR) << "BatchPutRevoke failed for key[" << i << "] '"
+            LOG(ERROR) << "BatchPutRevoke failed for key[" << i << "] '"
                        << keys[i] << "': " << toString(error);
         }
     }
@@ -1283,7 +1283,7 @@ WrappedMasterService::BatchUpsertStart(
         if (!results[i].has_value()) {
             failure_count++;
             auto error = results[i].error();
-            MC_LOG(ERROR) << "BatchUpsertStart failed for key[" << i << "] '"
+            LOG(ERROR) << "BatchUpsertStart failed for key[" << i << "] '"
                        << keys[i] << "': " << toString(error);
         }
     }
@@ -1316,7 +1316,7 @@ std::vector<tl::expected<void, ErrorCode>> WrappedMasterService::BatchUpsertEnd(
         if (!results[i].has_value()) {
             failure_count++;
             auto error = results[i].error();
-            MC_LOG(ERROR) << "BatchUpsertEnd failed for key[" << i << "] '"
+            LOG(ERROR) << "BatchUpsertEnd failed for key[" << i << "] '"
                        << keys[i] << "': " << toString(error);
         }
     }
@@ -1350,7 +1350,7 @@ WrappedMasterService::BatchUpsertRevoke(const UUID& client_id,
         if (!results[i].has_value()) {
             failure_count++;
             auto error = results[i].error();
-            MC_LOG(ERROR) << "BatchUpsertRevoke failed for key[" << i << "] '"
+            LOG(ERROR) << "BatchUpsertRevoke failed for key[" << i << "] '"
                        << keys[i] << "': " << toString(error);
         }
     }
@@ -1680,7 +1680,7 @@ WrappedMasterService::BatchEvictDiskReplica(
     for (size_t i = 0; i < results.size(); ++i) {
         if (!results[i].has_value()) {
             failure_count++;
-            MC_LOG(WARNING) << "BatchEvictDiskReplica failed for key[" << i
+            LOG(WARNING) << "BatchEvictDiskReplica failed for key[" << i
                          << "] '" << keys[i]
                          << "': " << toString(results[i].error());
         }

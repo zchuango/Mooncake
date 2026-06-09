@@ -251,21 +251,21 @@ void loadGlobalConfig(GlobalConfig& config) {
     std::string spdlog_level = "INFO";
     if (log_level) {
         if (strcmp(log_level, "TRACE") == 0) {
-            config.log_level = 2;  // spdlog::level::info
+            config.log_level = 2;  // info
             spdlog_level = "INFO";
             config.trace = true;
         }
         if (strcmp(log_level, "INFO") == 0) {
-            config.log_level = 2;  // spdlog::level::info
+            config.log_level = 2;  // info
             spdlog_level = "INFO";
         } else if (strcmp(log_level, "WARNING") == 0) {
-            config.log_level = 3;  // spdlog::level::warn
+            config.log_level = 3;  // warning
             spdlog_level = "WARNING";
         } else if (strcmp(log_level, "ERROR") == 0) {
-            config.log_level = 4;  // spdlog::level::err
+            config.log_level = 4;  // error
             spdlog_level = "ERROR";
         } else if (strcmp(log_level, "DEBUG") == 0) {
-            config.log_level = 1;  // spdlog::level::debug
+            config.log_level = 1;  // debug
             spdlog_level = "DEBUG";
         }
     }

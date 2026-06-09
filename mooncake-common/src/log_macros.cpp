@@ -1,5 +1,7 @@
 #include "log_macros.h"
 
+#include <algorithm>
+#include <atomic>
 #include <chrono>
 
 #include <spdlog/spdlog.h>
@@ -10,6 +12,8 @@
 namespace mooncake {
 
 namespace {
+
+std::atomic<int> g_log_verbosity{0};
 
 spdlog::level::level_enum ToSpdlogLevel(LogLevel level)
 {
@@ -103,6 +107,21 @@ bool ShouldLog(LogLevel level)
     }
 
     return true;
+}
+
+bool ShouldVLog(int level)
+{
+    return level <= g_log_verbosity.load(std::memory_order_relaxed);
+}
+
+int GetLogVerbosity()
+{
+    return g_log_verbosity.load(std::memory_order_relaxed);
+}
+
+void SetLogVerbosity(int verbosity)
+{
+    g_log_verbosity.store(std::max(0, verbosity), std::memory_order_relaxed);
 }
 
 LogStream MakeLogStream(LogLevel level, const char *file, int line, bool fatal,

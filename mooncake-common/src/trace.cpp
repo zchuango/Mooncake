@@ -23,8 +23,6 @@
 #include <cstring>
 #include <unistd.h>
 
-#include <spdlog/common.h>
-
 namespace mooncake {
 
 // Thread-local storage for trace context
@@ -106,21 +104,9 @@ uint64_t CurrentTraceId()
     }
 }
 
-bool ShouldLog(spdlog::level::level_enum level)
+bool ShouldLog(LogLevel level)
 {
-    switch (level) {
-        case spdlog::level::debug:
-            return mooncake::ShouldLog(LogLevel::kDebug);
-        case spdlog::level::warn:
-            return mooncake::ShouldLog(LogLevel::kWarning);
-        case spdlog::level::err:
-            return mooncake::ShouldLog(LogLevel::kError);
-        case spdlog::level::critical:
-            return mooncake::ShouldLog(LogLevel::kFatal);
-        case spdlog::level::info:
-        default:
-            return mooncake::ShouldLog(LogLevel::kInfo);
-    }
+    return mooncake::ShouldLog(level);
 }
 
 void ApplyMooncakeLogEnableToGlog()

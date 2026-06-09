@@ -93,7 +93,7 @@ struct TransferHandshakeUtil {
         Json::Value jettyNums(Json::arrayValue);
         for (const auto &jetty : desc.jetty_num) jettyNums.append(jetty);
         root["jetty_num"] = jettyNums;
-        MC_LOG(INFO) << "Encode: local_nic_path is " << desc.local_nic_path
+        LOG(INFO) << "Encode: local_nic_path is " << desc.local_nic_path
                      << " peer_nic_path is " << desc.peer_nic_path
                      << " jetty_num size is " << desc.jetty_num.size();
         pt.End(0);
@@ -136,7 +136,7 @@ struct TransferHandshakeUtil {
         for (const auto &jetty : root["jetty_num"]) {
             desc.jetty_num.push_back(jetty.asUInt());
         }
-        MC_LOG(INFO) << "Decode: remote_nic_path is " << desc.local_nic_path
+        LOG(INFO) << "Decode: remote_nic_path is " << desc.local_nic_path
                      << " peer_nic_path is " << desc.peer_nic_path
                      << " jetty_num size is " << desc.jetty_num.size();
         pt.End(0);

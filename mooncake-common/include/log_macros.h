@@ -72,10 +72,20 @@ private:
     int saved_errno_ = 0;
 };
 
+class LogStreamVoidify {
+public:
+    void operator&(std::ostream &)
+    {
+    }
+};
+
 /**
  * @brief Check if log should be admitted based on rate limiting and trace sampling.
  */
 bool ShouldLog(LogLevel level);
+bool ShouldVLog(int level);
+int GetLogVerbosity();
+void SetLogVerbosity(int verbosity);
 
 LogStream MakeLogStream(LogLevel level, const char *file, int line,
                         bool fatal = false, int saved_errno = 0);
@@ -90,11 +100,24 @@ LogStream MakeLogStream(LogLevel level, const char *file, int line,
 #define MOONCAKE_SPDLOG_LEVEL_ERR mooncake::LogLevel::kError
 #define MOONCAKE_SPDLOG_LEVEL_FATAL mooncake::LogLevel::kFatal
 
+#define MOONCAKE_LOG_IS_FATAL_DEBUG false
+#define MOONCAKE_LOG_IS_FATAL_INFO false
+#define MOONCAKE_LOG_IS_FATAL_WARNING false
+#define MOONCAKE_LOG_IS_FATAL_WARN false
+#define MOONCAKE_LOG_IS_FATAL_ERROR false
+#define MOONCAKE_LOG_IS_FATAL_ERR false
+#define MOONCAKE_LOG_IS_FATAL_FATAL true
+
+#define MOONCAKE_LOG_STREAM_IF(level, fatal, saved_errno, condition)       \
+    (!(condition) || (!mooncake::ShouldLog(level) && !(fatal)))            \
+        ? (void)0                                                          \
+        : mooncake::LogStreamVoidify() &                                   \
+              mooncake::MakeLogStream(level, __FILE__, __LINE__, fatal,    \
+                                      saved_errno)                         \
+                  .Stream()
+
 #define MOONCAKE_LOG_STREAM(level, fatal, saved_errno)                     \
-    if (!mooncake::ShouldLog(level) && !(fatal)) {                         \
-    } else                                                                 \
-        mooncake::MakeLogStream(level, __FILE__, __LINE__, fatal,          \
-                                saved_errno).Stream()
+    MOONCAKE_LOG_STREAM_IF(level, fatal, saved_errno, true)
 
 // User-facing log macros
 #define LOG_DEBUG MOONCAKE_LOG_STREAM(mooncake::LogLevel::kDebug, false, 0)
@@ -104,13 +127,6 @@ LogStream MakeLogStream(LogLevel level, const char *file, int line,
 #define LOG_ERROR MOONCAKE_LOG_STREAM(mooncake::LogLevel::kError, false, 0)
 #define LOG_FATAL MOONCAKE_LOG_STREAM(mooncake::LogLevel::kFatal, true, 0)
 
-#define MC_LOG_DEBUG LOG_DEBUG
-#define MC_LOG_INFO LOG_INFO
-#define MC_LOG_WARNING LOG_WARNING
-#define MC_LOG_WARN LOG_WARNING
-#define MC_LOG_ERROR LOG_ERROR
-#define MC_LOG_FATAL LOG_FATAL
-
 #define PLOG_DEBUG MOONCAKE_LOG_STREAM(mooncake::LogLevel::kDebug, false, errno)
 #define PLOG_INFO MOONCAKE_LOG_STREAM(mooncake::LogLevel::kInfo, false, errno)
 #define PLOG_WARNING MOONCAKE_LOG_STREAM(mooncake::LogLevel::kWarning, false, errno)
@@ -118,28 +134,29 @@ LogStream MakeLogStream(LogLevel level, const char *file, int line,
 #define PLOG_ERROR MOONCAKE_LOG_STREAM(mooncake::LogLevel::kError, false, errno)
 #define PLOG_FATAL MOONCAKE_LOG_STREAM(mooncake::LogLevel::kFatal, true, errno)
 
-#define LOG(severity) LOG_##severity
-#define PLOG(severity) PLOG_##severity
-#define MC_LOG(severity) LOG(severity)
-#define MC_PLOG(severity) PLOG(severity)
-#define VLOG(level) LOG(INFO)
-#define MC_VLOG(level) VLOG(level)
+#define LOG(severity)                                                      \
+    MOONCAKE_LOG_STREAM(MOONCAKE_SPDLOG_LEVEL_##severity,                  \
+                        MOONCAKE_LOG_IS_FATAL_##severity, 0)
+#define PLOG(severity)                                                     \
+    MOONCAKE_LOG_STREAM(MOONCAKE_SPDLOG_LEVEL_##severity,                  \
+                        MOONCAKE_LOG_IS_FATAL_##severity, errno)
+#define VLOG(level)                                                        \
+    MOONCAKE_LOG_STREAM_IF(mooncake::LogLevel::kInfo, false, 0,            \
+                           mooncake::ShouldVLog(level))
 
 // Conditional logging
 #define LOG_IF(severity, condition)                                        \
-    if (!(condition)) {                                                    \
-    } else                                                                 \
-        LOG(severity)
+    MOONCAKE_LOG_STREAM_IF(MOONCAKE_SPDLOG_LEVEL_##severity,               \
+                           MOONCAKE_LOG_IS_FATAL_##severity, 0, condition)
 
 #define PLOG_IF(severity, condition)                                       \
-    if (!(condition)) {                                                    \
-    } else                                                                 \
-        PLOG(severity)
+    MOONCAKE_LOG_STREAM_IF(MOONCAKE_SPDLOG_LEVEL_##severity,               \
+                           MOONCAKE_LOG_IS_FATAL_##severity, errno,        \
+                           condition)
 
-#define MC_LOG_IF(severity, condition) LOG_IF(severity, condition)
-#define MC_PLOG_IF(severity, condition) PLOG_IF(severity, condition)
-#define VLOG_IF(level, condition) LOG_IF(INFO, condition)
-#define MC_VLOG_IF(level, condition) VLOG_IF(level, condition)
+#define VLOG_IF(level, condition)                                          \
+    MOONCAKE_LOG_STREAM_IF(mooncake::LogLevel::kInfo, false, 0,            \
+                           (condition) && mooncake::ShouldVLog(level))
 
 #define MOONCAKE_CONCAT_INNER(x, y) x##y
 #define MOONCAKE_CONCAT(x, y) MOONCAKE_CONCAT_INNER(x, y)
@@ -147,11 +164,10 @@ LogStream MakeLogStream(LogLevel level, const char *file, int line,
 #define LOG_EVERY_N(severity, n)                                           \
     static std::atomic<uint64_t> MOONCAKE_CONCAT(_mooncake_log_every_n_,    \
                                                  __LINE__){0};             \
-    if ((MOONCAKE_CONCAT(_mooncake_log_every_n_, __LINE__)                 \
-             .fetch_add(1, std::memory_order_relaxed) %                    \
-         static_cast<uint64_t>(n)) != 0) {                                 \
-    } else                                                                 \
-        LOG(severity)
+    LOG_IF(severity,                                                       \
+           (MOONCAKE_CONCAT(_mooncake_log_every_n_, __LINE__)              \
+                .fetch_add(1, std::memory_order_relaxed) %                 \
+            static_cast<uint64_t>(n)) == 0)
 
 // CHECK macro - logs and aborts if condition is false
 #define CHECK(condition)                                                   \

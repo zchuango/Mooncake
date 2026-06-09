@@ -9,7 +9,6 @@
 #include <string>
 
 #include <gtest/gtest.h>
-#include <spdlog/logger.h>
 
 namespace mooncake {
 namespace {
@@ -43,7 +42,7 @@ TEST(LoggingSpdlogFile, WritesFile)
 
     Logger::Instance().Init(TestConfig(dir));
     LOG(INFO) << "spdlog_marker_abc";
-    Logger::Instance().GetSpdlogger()->flush();
+    Logger::Instance().Flush();
     Logger::Instance().Shutdown();
 
     auto content = ReadFile(dir / "logging_test.log");
@@ -59,16 +58,34 @@ TEST(LoggingMacros, CompatibilityMacrosCompileAndLog)
     Logger::Instance().Init(TestConfig(dir));
     LOG(INFO) << "log_info_marker";
     LOG(WARNING) << "log_warning_marker";
-    MC_LOG(INFO) << "mc_log_info_marker";
     PLOG(ERROR) << "plog_error_marker";
-    Logger::Instance().GetSpdlogger()->flush();
+    Logger::Instance().Flush();
     Logger::Instance().Shutdown();
 
     auto content = ReadFile(dir / "logging_test.log");
     EXPECT_NE(content.find("log_info_marker"), std::string::npos);
     EXPECT_NE(content.find("log_warning_marker"), std::string::npos);
-    EXPECT_NE(content.find("mc_log_info_marker"), std::string::npos);
     EXPECT_NE(content.find("plog_error_marker"), std::string::npos);
+}
+
+TEST(LoggingMacros, VLogRespectsVerbosity)
+{
+    auto dir = std::filesystem::temp_directory_path() / "mooncake_ut_vlog";
+    std::filesystem::remove_all(dir);
+    std::filesystem::create_directories(dir);
+
+    auto config = TestConfig(dir);
+    config.verbosity = 1;
+
+    Logger::Instance().Init(config);
+    VLOG(1) << "vlog_level_1_marker";
+    VLOG(2) << "vlog_level_2_marker";
+    Logger::Instance().Flush();
+    Logger::Instance().Shutdown();
+
+    auto content = ReadFile(dir / "logging_test.log");
+    EXPECT_NE(content.find("vlog_level_1_marker"), std::string::npos);
+    EXPECT_EQ(content.find("vlog_level_2_marker"), std::string::npos);
 }
 
 TEST(LoggingTrace, ThreadLocalTrace)
