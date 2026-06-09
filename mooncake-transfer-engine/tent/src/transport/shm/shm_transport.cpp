@@ -154,7 +154,7 @@ Status ShmTransport::addMemoryBuffer(BufferDesc &desc,
     desc.shm_path = options.shm_path;
     desc.transports.push_back(TransportType::SHM);
     // desc.shm_offset = options.shm_offset;
-    LOG_INFO << "Registered shared memory: " << (void *)desc.addr << "--"
+    LOG(INFO) << "Registered shared memory: " << (void *)desc.addr << "--"
               << (void *)(desc.addr + desc.length);
     return Status::OK();
 }
@@ -217,12 +217,12 @@ void *ShmTransport::createSharedMemory(const std::string &path, size_t size) {
         shm_fd = open(full_path.c_str(), O_CREAT | O_RDWR, 0644);
     }
     if (shm_fd == -1) {
-        PLOG_ERROR << "Failed to open shared memory file";
+        PLOG(ERROR) << "Failed to open shared memory file";
         return nullptr;
     }
 
     if (ftruncate64(shm_fd, size) == -1) {
-        PLOG_ERROR << "Failed to truncate shared memory file";
+        PLOG(ERROR) << "Failed to truncate shared memory file";
         close(shm_fd);
         return nullptr;
     }
@@ -230,7 +230,7 @@ void *ShmTransport::createSharedMemory(const std::string &path, size_t size) {
     void *mapped_addr =
         mmap(nullptr, size, PROT_READ | PROT_WRITE, MAP_SHARED, shm_fd, 0);
     if (mapped_addr == MAP_FAILED) {
-        PLOG_ERROR << "Failed to map shared memory file";
+        PLOG(ERROR) << "Failed to map shared memory file";
         close(shm_fd);
         return nullptr;
     }
@@ -299,9 +299,9 @@ Status ShmTransport::relocateSharedMemoryAddress(uint64_t &dest_addr,
                 return Status::InternalError(
                     "Failed to map shared memory " LOC_MARK);
             }
-            LOG_INFO << "Original shared memory: " << (void *)buffer->addr
+            LOG(INFO) << "Original shared memory: " << (void *)buffer->addr
                       << "--" << (void *)(buffer->addr + buffer->length);
-            LOG_INFO << "Remapped shared memory: " << (void *)shm_addr << "--"
+            LOG(INFO) << "Remapped shared memory: " << (void *)shm_addr << "--"
                       << (void *)((uintptr_t)shm_addr + buffer->length);
             OpenedShmEntry shm_entry;
             shm_entry.shm_fd = shm_fd;

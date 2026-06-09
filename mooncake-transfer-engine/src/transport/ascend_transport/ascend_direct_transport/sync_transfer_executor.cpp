@@ -49,7 +49,7 @@ TransferExecutorBase::ExecuteResult SyncTransferExecutor::execute(
     adxl::TransferOp operation,
     const std::vector<Transport::Slice*>& slice_list) {
     if (local_engine_idx >= adxl_engines_.size()) {
-        LOG_ERROR << "Invalid local_engine_idx: " << local_engine_idx;
+        LOG(ERROR) << "Invalid local_engine_idx: " << local_engine_idx;
         return {.ret = -1, .status = adxl::FAILED, .retryable = false};
     }
 

@@ -87,7 +87,7 @@ class SegmentClient {
 
         auto unmount_result = master_client_.UnmountSegment(segment_.id);
         if (!unmount_result.has_value()) {
-            LOG_ERROR << "Failed to unmount segment " << segment_.name;
+            LOG(ERROR) << "Failed to unmount segment " << segment_.name;
         }
     }
 
@@ -390,7 +390,7 @@ int main(int argc, char** argv) {
         }
     });
 
-    LOG_INFO << "Mounting " << FLAGS_num_segments << " segments...";
+    LOG(INFO) << "Mounting " << FLAGS_num_segments << " segments...";
     for (size_t i = 0; i < FLAGS_num_segments; i++) {
         auto segment_client = std::make_unique<SegmentClient>(
             "segment_client_" + std::to_string(i), FLAGS_master_server,
@@ -400,11 +400,11 @@ int main(int argc, char** argv) {
             segment_clients.push_back(std::move(segment_client));
         }
     }
-    LOG_INFO << "Segments mounted";
+    LOG(INFO) << "Segments mounted";
 
     // Prefill segments if requested
     if (FLAGS_prefill_ratio > 0.0) {
-        LOG_INFO << "Prefilling segments to " << (FLAGS_prefill_ratio * 100)
+        LOG(INFO) << "Prefilling segments to " << (FLAGS_prefill_ratio * 100)
                   << "% capacity...";
 
         // Calculate total capacity and target fill size
@@ -414,14 +414,14 @@ int main(int argc, char** argv) {
         uint64_t bytes_per_object = FLAGS_value_size;
         uint64_t target_objects = target_bytes / bytes_per_object;
 
-        LOG_INFO << "Target: " << target_objects << " objects ("
+        LOG(INFO) << "Target: " << target_objects << " objects ("
                   << (target_bytes / GiB) << " GiB)";
 
         // Create a temporary client for prefilling
         mooncake::MasterClient prefill_client(mooncake::generate_uuid());
         auto ec = prefill_client.Connect(FLAGS_master_server);
         if (ec != mooncake::ErrorCode::OK) {
-            LOG_ERROR << "Failed to connect prefill client";
+            LOG(ERROR) << "Failed to connect prefill client";
             return 1;
         }
 
@@ -464,16 +464,16 @@ int main(int argc, char** argv) {
             if (filled_objects % 10000 == 0) {
                 double progress =
                     (double)filled_objects / target_objects * 100.0;
-                LOG_INFO << "Prefill progress: " << filled_objects << "/"
+                LOG(INFO) << "Prefill progress: " << filled_objects << "/"
                           << target_objects << " (" << std::fixed
                           << std::setprecision(1) << progress << "%)";
             }
         }
 
-        LOG_INFO << "Prefill completed: " << filled_objects << " objects";
+        LOG(INFO) << "Prefill completed: " << filled_objects << " objects";
     }
 
-    LOG_INFO << "Starting " << FLAGS_num_clients << " bench clients with "
+    LOG(INFO) << "Starting " << FLAGS_num_clients << " bench clients with "
               << FLAGS_num_threads << " threads for each...";
     for (size_t i = 0; i < FLAGS_num_clients; i++) {
         bench_clients.emplace_back(
@@ -491,36 +491,36 @@ int main(int argc, char** argv) {
                                  FLAGS_num_keys);
     }
     barrier->arrive_and_wait();
-    LOG_INFO << "Clients started";
+    LOG(INFO) << "Clients started";
 
     uint64_t last_completed = 0;
     for (size_t i = 0; i < FLAGS_duration; i++) {
         std::this_thread::sleep_for(std::chrono::seconds(1));
         auto curr_completed = gCompletedOperations.load();
-        LOG_INFO << "Completed operations: "
+        LOG(INFO) << "Completed operations: "
                   << curr_completed - last_completed;
         last_completed = curr_completed;
     }
 
     auto num_completed_operations = gCompletedOperations.load();
 
-    LOG_INFO << "Stopping bench clients...";
+    LOG(INFO) << "Stopping bench clients...";
     for (auto& bench_client : bench_clients) {
         bench_client->StopBench();
     }
-    LOG_INFO << "Clients stopped";
+    LOG(INFO) << "Clients stopped";
 
-    LOG_INFO << "Stopping ping thread...";
+    LOG(INFO) << "Stopping ping thread...";
     if (ping_thread.joinable()) {
         ping_thread.request_stop();
         ping_thread.join();
     }
-    LOG_INFO << "Ping thread stopped";
+    LOG(INFO) << "Ping thread stopped";
 
-    LOG_INFO << "Disconnecting from master...";
+    LOG(INFO) << "Disconnecting from master...";
     bench_clients.clear();
     segment_clients.clear();
-    LOG_INFO << "Disconnected from master";
+    LOG(INFO) << "Disconnected from master";
 
     std::cout << "Operations per second: " << std::fixed << std::setprecision(2)
               << num_completed_operations / (double)FLAGS_duration << "\n"; 

@@ -44,7 +44,7 @@ class ScopedVLogTimer {
         if (active_) {
             std::ostringstream oss;
             static_cast<void>((oss << ... << std::forward<Args>(args)));
-            LOG_DEBUG << function_name_ << " request: " << oss.str();
+            LOG(DEBUG) << function_name_ << " request: " << oss.str();
         }
     }
 
@@ -61,7 +61,7 @@ class ScopedVLogTimer {
             std::ostringstream oss;
             (oss << ... << std::forward<Args>(args));
 
-            LOG_DEBUG << function_name_ << " response: " << oss.str()
+            LOG(DEBUG) << function_name_ << " response: " << oss.str()
                          << ", latency=" << latency.count() << "us";
             logged_response_ = true;
         }
@@ -88,7 +88,7 @@ class ScopedVLogTimer {
 
             std::ostringstream oss;
             oss << expected_to_str(expected);
-            LOG_DEBUG << function_name_ << " response: " << oss.str()
+            LOG(DEBUG) << function_name_ << " response: " << oss.str()
                          << ", latency=" << latency.count() << "us";
             logged_response_ = true;
         }
@@ -106,7 +106,7 @@ class ScopedVLogTimer {
             std::string json;
             struct_json::to_json(obj, json);
 
-            LOG_DEBUG << function_name_ << " response: " << json
+            LOG(DEBUG) << function_name_ << " response: " << json
                          << ", latency=" << latency.count() << "us";
             logged_response_ = true;
         }
@@ -119,7 +119,7 @@ class ScopedVLogTimer {
             auto latency =
                 std::chrono::duration_cast<std::chrono::microseconds>(
                     end_time - start_time_);
-            LOG_DEBUG << function_name_
+            LOG(DEBUG) << function_name_
                          << " finished, latency=" << latency.count() << "us";
         }
     }

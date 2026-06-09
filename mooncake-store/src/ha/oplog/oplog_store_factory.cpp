@@ -22,13 +22,13 @@ std::unique_ptr<OpLogStore> OpLogStoreFactory::Create(
             auto store = std::make_unique<EtcdOpLogStore>(
                 cluster_id, batch_update, batch_write);
             if (store->Init() != ErrorCode::OK) {
-                LOG_ERROR << "OpLogStoreFactory: failed to init EtcdOpLogStore"
+                LOG(ERROR) << "OpLogStoreFactory: failed to init EtcdOpLogStore"
                            << ", cluster_id=" << cluster_id;
                 return nullptr;
             }
             return store;
 #else
-            LOG_ERROR << "OpLogStoreFactory: ETCD support not compiled in";
+            LOG(ERROR) << "OpLogStoreFactory: ETCD support not compiled in";
             return nullptr;
 #endif
         }
@@ -38,7 +38,7 @@ std::unique_ptr<OpLogStore> OpLogStoreFactory::Create(
                 cluster_id, oplog_root_dir, enable_batch_write,
                 poll_interval_ms);
             if (store->Init() != ErrorCode::OK) {
-                LOG_ERROR
+                LOG(ERROR)
                     << "OpLogStoreFactory: failed to init LocalFsOpLogStore"
                     << ", cluster_id=" << cluster_id
                     << ", root_dir=" << oplog_root_dir;
@@ -47,7 +47,7 @@ std::unique_ptr<OpLogStore> OpLogStoreFactory::Create(
             return store;
         }
         default:
-            LOG_ERROR << "OpLogStoreFactory: unknown store type";
+            LOG(ERROR) << "OpLogStoreFactory: unknown store type";
             return nullptr;
     }
 }

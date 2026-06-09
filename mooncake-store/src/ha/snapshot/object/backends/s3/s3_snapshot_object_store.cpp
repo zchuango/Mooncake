@@ -49,7 +49,7 @@ S3SnapshotObjectStore::~S3SnapshotObjectStore() = default;
 
 S3SnapshotObjectStore::S3SnapshotObjectStore()
     : impl_(std::make_unique<Impl>()) {
-    LOG_INFO << "S3SnapshotObjectStore initialized";
+    LOG(INFO) << "S3SnapshotObjectStore initialized";
 }
 
 tl::expected<void, std::string> S3SnapshotObjectStore::UploadBuffer(

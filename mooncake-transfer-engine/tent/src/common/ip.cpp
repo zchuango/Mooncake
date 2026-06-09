@@ -108,7 +108,7 @@ std::pair<std::string, uint16_t> parseHostNameWithPort(const std::string &url,
         std::string port_str = url.substr(port_pos + 1);
         int val = std::atoi(port_str.c_str());
         if (val <= 0 || val > 65535) {
-            LOG_WARNING << "Illegal port number in " << url
+            LOG(WARNING) << "Illegal port number in " << url
                          << ". Use default port " << port << " instead";
         } else {
             port = static_cast<uint16_t>(val);
@@ -123,7 +123,7 @@ std::pair<std::string, uint16_t> parseHostNameWithPort(const std::string &url,
     auto port_str = url.substr(pos + 1);
     int val = std::atoi(port_str.c_str());
     if (val <= 0 || val > 65535)
-        LOG_WARNING << "Illegal port number in " << url
+        LOG(WARNING) << "Illegal port number in " << url
                      << ". Use default port " << port << " instead";
     else
         port = (uint16_t)val;

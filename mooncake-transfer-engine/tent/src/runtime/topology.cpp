@@ -73,18 +73,18 @@ std::string Topology::toString() const {
 }
 
 void Topology::print() const {
-    LOG_INFO << "NIC: ";
+    LOG(INFO) << "NIC: ";
     int id = 0;
     for (auto& entry : nic_list_) {
-        LOG_INFO << "[" << id << "] " << entry.name << " (type " << entry.type
+        LOG(INFO) << "[" << id << "] " << entry.name << " (type " << entry.type
                   << ") " << entry.pci_bus_id << " on NUMA " << entry.numa_node;
         id++;
     }
 
-    LOG_INFO << "MEMORY: ";
+    LOG(INFO) << "MEMORY: ";
     id = 0;
     for (auto& entry : mem_list_) {
-        LOG_INFO << "[" << id << "] " << entry.name << " (type " << entry.type
+        LOG(INFO) << "[" << id << "] " << entry.name << " (type " << entry.type
                   << ") " << entry.pci_bus_id << " on NUMA " << entry.numa_node;
         for (size_t rank = 0; rank < DevicePriorityRanks; rank++) {
             std::stringstream ss;
@@ -93,7 +93,7 @@ void Topology::print() const {
             for (auto& id : entry.device_list[rank]) {
                 ss << nic_list_[id].name << " ";
             }
-            LOG_INFO << ss.str();
+            LOG(INFO) << ss.str();
         }
         id++;
     }

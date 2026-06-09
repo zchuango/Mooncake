@@ -243,7 +243,7 @@ StateTransitionResult StandbyStateMachine::ProcessEvent(StandbyEvent event) {
         current_state_.store(result.new_state, std::memory_order_release);
         state_enter_time_ = record.timestamp;
 
-        LOG_INFO << "Standby state transition: "
+        LOG(INFO) << "Standby state transition: "
                   << StandbyStateToString(old_state) << " -> "
                   << StandbyStateToString(result.new_state)
                   << " (event: " << StandbyEventToString(event) << ")";
@@ -252,7 +252,7 @@ StateTransitionResult StandbyStateMachine::ProcessEvent(StandbyEvent event) {
         // the lock to avoid deadlock (callbacks may re-enter ProcessEvent).
         callbacks_copy = callbacks_;
     } else if (!result.allowed) {
-        LOG_INFO << "Standby state transition rejected: " << result.reason;
+        LOG(INFO) << "Standby state transition rejected: " << result.reason;
     }
 
     // Notify callbacks outside the lock to avoid deadlock when callbacks

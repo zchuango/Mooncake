@@ -89,7 +89,7 @@ std::string_view Status::CodeToString(Status::Code code) {
         case Code::kNotSupportedTransport:
             return "NotSupportedTransport";
         default:
-            LOG_ERROR << "Unknown code: " << static_cast<uint16_t>(code);
+            LOG(ERROR) << "Unknown code: " << static_cast<uint16_t>(code);
             return "UnknownCode";
     }
 }

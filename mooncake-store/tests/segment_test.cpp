@@ -116,7 +116,7 @@ class SegmentTest : public ::testing::Test {
         size_t total_num = segment_manager.client_local_disk_segment_.size();
         ASSERT_EQ(total_num, segments.size());
         for (size_t i = 0; i < client_ids.size(); i++) {
-            LOG_INFO << "Mounted local disk segment " << client_ids[i];
+            LOG(INFO) << "Mounted local disk segment " << client_ids[i];
             auto client_it =
                 segment_manager.client_local_disk_segment_.find(client_ids[i]);
             ASSERT_NE(client_it,

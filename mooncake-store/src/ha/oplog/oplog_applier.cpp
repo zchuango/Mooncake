@@ -21,10 +21,10 @@ OpLogApplier::OpLogApplier(MetadataStore* metadata_store,
       oplog_store_(oplog_store),
       expected_sequence_id_(1) {
     if (metadata_store_ == nullptr) {
-        LOG_FATAL << "OpLogApplier: metadata_store cannot be null";
+        LOG(FATAL) << "OpLogApplier: metadata_store cannot be null";
     }
     if (!NormalizeAndValidateClusterId(cluster_id_)) {
-        LOG_FATAL << "Invalid cluster_id for OpLogApplier: '" << cluster_id_
+        LOG(FATAL) << "Invalid cluster_id for OpLogApplier: '" << cluster_id_
                    << "'. Allowed chars: [A-Za-z0-9_.-], max_len=128.";
     }
 }
@@ -33,7 +33,7 @@ bool OpLogApplier::ApplyOpLogEntry(const OpLogEntry& entry) {
     // Basic DoS protection: validate key/payload sizes before parsing/applying.
     std::string size_reason;
     if (!OpLogManager::ValidateEntrySize(entry, &size_reason)) {
-        LOG_ERROR << "OpLogApplier: entry size rejected, sequence_id="
+        LOG(ERROR) << "OpLogApplier: entry size rejected, sequence_id="
                    << entry.sequence_id << ", key=" << entry.object_key
                    << ", reason=" << size_reason;
         return false;
@@ -41,7 +41,7 @@ bool OpLogApplier::ApplyOpLogEntry(const OpLogEntry& entry) {
 
     // Verify checksum to detect data corruption or tampering.
     if (!OpLogManager::VerifyChecksum(entry)) {
-        LOG_ERROR
+        LOG(ERROR)
             << "OpLogApplier: checksum mismatch, sequence_id="
             << entry.sequence_id << ", key=" << entry.object_key
             << ". Possible data corruption or tampering. Discarding entry.";
@@ -85,14 +85,14 @@ bool OpLogApplier::ApplyOpLogEntry(const OpLogEntry& entry) {
             if (entry.op_type == OpType::PUT_END) {
                 HAMetricManager::instance().inc_oplog_dropped_put_end();
             }
-            LOG_INFO << "OpLogApplier: discard late skipped entry, op_type="
+            LOG(INFO) << "OpLogApplier: discard late skipped entry, op_type="
                     << static_cast<int>(entry.op_type)
                     << ", sequence_id=" << entry.sequence_id
                     << ", key=" << entry.object_key;
             return true;
         }
 
-        LOG_INFO << "OpLogApplier: skip already-applied entry, sequence_id="
+        LOG(INFO) << "OpLogApplier: skip already-applied entry, sequence_id="
                 << entry.sequence_id << ", expected=" << expected
                 << ", key=" << entry.object_key;
         return true;  // consumed (no-op)
@@ -103,7 +103,7 @@ bool OpLogApplier::ApplyOpLogEntry(const OpLogEntry& entry) {
 
         if (pending_entries_.size() >=
             static_cast<size_t>(kMaxPendingEntries)) {
-            LOG_ERROR << "OpLogApplier: too many pending entries ("
+            LOG(ERROR) << "OpLogApplier: too many pending entries ("
                        << pending_entries_.size()
                        << "), discarding entry sequence_id="
                        << entry.sequence_id << ", key=" << entry.object_key;
@@ -111,7 +111,7 @@ bool OpLogApplier::ApplyOpLogEntry(const OpLogEntry& entry) {
         }
 
         pending_entries_[entry.sequence_id] = entry;
-        LOG_INFO << "OpLogApplier: future entry buffered, sequence_id="
+        LOG(INFO) << "OpLogApplier: future entry buffered, sequence_id="
                 << entry.sequence_id << ", expected=" << expected
                 << ", key=" << entry.object_key
                 << ", pending_entries=" << pending_entries_.size();
@@ -130,7 +130,7 @@ bool OpLogApplier::ApplyOpLogEntry(const OpLogEntry& entry) {
             ApplyRemove(entry);
             break;
         default:
-            LOG_ERROR << "OpLogApplier: unsupported op_type="
+            LOG(ERROR) << "OpLogApplier: unsupported op_type="
                        << static_cast<int>(entry.op_type)
                        << ", sequence_id=" << entry.sequence_id
                        << ", key=" << entry.object_key;
@@ -167,7 +167,7 @@ uint64_t OpLogApplier::GetExpectedSequenceId() const {
 
 void OpLogApplier::Recover(uint64_t last_applied_sequence_id) {
     expected_sequence_id_.store(last_applied_sequence_id + 1);
-    LOG_INFO << "OpLogApplier: recovered from sequence_id="
+    LOG(INFO) << "OpLogApplier: recovered from sequence_id="
               << last_applied_sequence_id << ", expected_sequence_id set to="
               << expected_sequence_id_.load();
 }
@@ -195,7 +195,7 @@ size_t OpLogApplier::ProcessPendingEntries() {
             auto it = missing_sequence_ids_.find(missing_seq);
             if (it == missing_sequence_ids_.end()) {
                 missing_sequence_ids_[missing_seq] = now;
-                LOG_INFO << "OpLogApplier: scheduling wait for missing "
+                LOG(INFO) << "OpLogApplier: scheduling wait for missing "
                            "sequence_id="
                         << missing_seq << ", will request after "
                         << kMissingEntryRequestSeconds << " seconds";
@@ -214,7 +214,7 @@ size_t OpLogApplier::ProcessPendingEntries() {
                 expected_sequence_id_.store(missing_seq + 1);
                 skipped_count++;
                 HAMetricManager::instance().inc_oplog_skipped_entries();
-                LOG_WARNING
+                LOG(WARNING)
                     << "OpLogApplier: skipped missing entry seq=" << missing_seq
                     << " after " << waited.count() << "s timeout";
                 continue;  // may skip multiple consecutive gaps
@@ -277,7 +277,7 @@ size_t OpLogApplier::ProcessPendingEntries() {
                 ApplyRemove(entry_copy);
                 break;
             default:
-                LOG_ERROR
+                LOG(ERROR)
                     << "OpLogApplier: unsupported op_type in pending entry";
                 break;
         }
@@ -301,7 +301,7 @@ size_t OpLogApplier::ProcessPendingEntries() {
             auto age = std::chrono::duration_cast<std::chrono::seconds>(
                 now - it->second);
             if (age.count() > 60) {
-                LOG_WARNING
+                LOG(WARNING)
                     << "OpLogApplier: giving up on missing sequence_id="
                     << it->first << " after " << age.count() << " seconds";
                 it = missing_sequence_ids_.erase(it);
@@ -324,14 +324,14 @@ size_t OpLogApplier::ProcessPendingEntries() {
     }
 
     if (skipped_count > 0) {
-        LOG_WARNING << "OpLogApplier: skipped " << skipped_count
+        LOG(WARNING) << "OpLogApplier: skipped " << skipped_count
                      << " missing sequence_id(s) after timeout, "
                         "expected_sequence_id now="
                      << expected_sequence_id_.load();
     }
 
     if (processed_count > 0) {
-        LOG_INFO << "OpLogApplier: processed " << processed_count
+        LOG(INFO) << "OpLogApplier: processed " << processed_count
                   << " pending entries, expected_sequence_id now="
                   << expected_sequence_id_.load();
     }
@@ -382,7 +382,7 @@ OpLogApplier::GapResolveResult OpLogApplier::TryResolveGapsOnceForPromotion(
         if (err != ErrorCode::OK) {
             // Log failed gap for monitoring, but don't clear it so it can be
             // retried later.
-            LOG_WARNING << "Promotion gap resolve: failed to fetch seq=" << seq
+            LOG(WARNING) << "Promotion gap resolve: failed to fetch seq=" << seq
                          << ", err=" << static_cast<int>(err);
             continue;
         }
@@ -431,13 +431,13 @@ void OpLogApplier::ApplyPutEnd(const OpLogEntry& entry) {
 
     if (entry.payload.empty()) {
         // No payload - create empty metadata (legacy compatibility)
-        LOG_WARNING << "OpLogApplier: PUT_END without payload, key="
+        LOG(WARNING) << "OpLogApplier: PUT_END without payload, key="
                      << entry.object_key
                      << ", sequence_id=" << entry.sequence_id;
         StandbyObjectMetadata empty_metadata;
         empty_metadata.last_sequence_id = entry.sequence_id;
         if (!metadata_store_->PutMetadata(entry.object_key, empty_metadata)) {
-            LOG_ERROR << "OpLogApplier: failed to PutMetadata key="
+            LOG(ERROR) << "OpLogApplier: failed to PutMetadata key="
                        << entry.object_key
                        << ", sequence_id=" << entry.sequence_id;
         }
@@ -448,7 +448,7 @@ void OpLogApplier::ApplyPutEnd(const OpLogEntry& entry) {
     MetadataPayload payload;
     auto result = struct_pack::deserialize_to(payload, entry.payload);
     if (result != struct_pack::errc::ok) {
-        LOG_ERROR << "OpLogApplier: failed to deserialize payload for key="
+        LOG(ERROR) << "OpLogApplier: failed to deserialize payload for key="
                    << entry.object_key << ", sequence_id=" << entry.sequence_id
                    << ", payload_size=" << entry.payload.size()
                    << ", error_code=" << static_cast<int>(result);
@@ -464,10 +464,10 @@ void OpLogApplier::ApplyPutEnd(const OpLogEntry& entry) {
         payload.ToStandbyMetadata(entry.sequence_id);
 
     if (!metadata_store_->PutMetadata(entry.object_key, metadata)) {
-        LOG_ERROR << "OpLogApplier: failed to PutMetadata key="
+        LOG(ERROR) << "OpLogApplier: failed to PutMetadata key="
                    << entry.object_key << ", sequence_id=" << entry.sequence_id;
     } else {
-        LOG_INFO << "OpLogApplier: applied PUT_END, key=" << entry.object_key
+        LOG(INFO) << "OpLogApplier: applied PUT_END, key=" << entry.object_key
                 << ", sequence_id=" << entry.sequence_id
                 << ", replicas=" << metadata.replicas.size()
                 << ", size=" << metadata.size;
@@ -480,24 +480,24 @@ void OpLogApplier::ApplyPutRevoke(const OpLogEntry& entry) {
     // Current implementation removes the entire key; if we later support
     // partial replica revocation this logic will need to be refined.
     if (!metadata_store_->Remove(entry.object_key)) {
-        LOG_WARNING << "OpLogApplier: failed to Remove key="
+        LOG(WARNING) << "OpLogApplier: failed to Remove key="
                      << entry.object_key
                      << " in PUT_REVOKE, sequence_id=" << entry.sequence_id
                      << " (key may not exist)";
     } else {
-        LOG_INFO << "OpLogApplier: applied PUT_REVOKE, key=" << entry.object_key
+        LOG(INFO) << "OpLogApplier: applied PUT_REVOKE, key=" << entry.object_key
                 << ", sequence_id=" << entry.sequence_id;
     }
 }
 
 void OpLogApplier::ApplyRemove(const OpLogEntry& entry) {
     if (!metadata_store_->Remove(entry.object_key)) {
-        LOG_WARNING << "OpLogApplier: failed to Remove key="
+        LOG(WARNING) << "OpLogApplier: failed to Remove key="
                      << entry.object_key
                      << ", sequence_id=" << entry.sequence_id
                      << " (key may not exist)";
     } else {
-        LOG_INFO << "OpLogApplier: applied REMOVE, key=" << entry.object_key
+        LOG(INFO) << "OpLogApplier: applied REMOVE, key=" << entry.object_key
                 << ", sequence_id=" << entry.sequence_id;
     }
 }
@@ -506,7 +506,7 @@ bool OpLogApplier::RequestMissingOpLog(uint64_t missing_seq_id) {
     HAMetricManager::instance().inc_oplog_gap_resolve_attempts();
 
     if (oplog_store_ == nullptr) {
-        LOG_WARNING
+        LOG(WARNING)
             << "OpLogApplier: cannot request missing OpLog, no store set";
         return false;
     }
@@ -514,13 +514,13 @@ bool OpLogApplier::RequestMissingOpLog(uint64_t missing_seq_id) {
     OpLogEntry entry;
     ErrorCode err = oplog_store_->ReadOpLog(missing_seq_id, entry);
     if (err == ErrorCode::OPLOG_ENTRY_NOT_FOUND) {
-        LOG_INFO << "OpLogApplier: missing OpLog entry not found in store, "
+        LOG(INFO) << "OpLogApplier: missing OpLog entry not found in store, "
                      "sequence_id="
                   << missing_seq_id;
         return false;
     }
     if (err != ErrorCode::OK) {
-        LOG_ERROR << "OpLogApplier: failed to read missing OpLog from store, "
+        LOG(ERROR) << "OpLogApplier: failed to read missing OpLog from store, "
                       "sequence_id="
                    << missing_seq_id << ", error=" << static_cast<int>(err);
         return false;
@@ -528,7 +528,7 @@ bool OpLogApplier::RequestMissingOpLog(uint64_t missing_seq_id) {
 
     std::string size_reason;
     if (!OpLogManager::ValidateEntrySize(entry, &size_reason)) {
-        LOG_ERROR << "OpLogApplier: missing entry size rejected, sequence_id="
+        LOG(ERROR) << "OpLogApplier: missing entry size rejected, sequence_id="
                    << missing_seq_id << ", key=" << entry.object_key
                    << ", reason=" << size_reason;
         return false;
@@ -536,7 +536,7 @@ bool OpLogApplier::RequestMissingOpLog(uint64_t missing_seq_id) {
 
     // Verify checksum before adding to pending entries.
     if (!OpLogManager::VerifyChecksum(entry)) {
-        LOG_ERROR << "OpLogApplier: checksum mismatch for retrieved missing "
+        LOG(ERROR) << "OpLogApplier: checksum mismatch for retrieved missing "
                       "entry, sequence_id="
                    << missing_seq_id << ", key=" << entry.object_key
                    << ". Possible data corruption. Discarding entry.";
@@ -545,7 +545,7 @@ bool OpLogApplier::RequestMissingOpLog(uint64_t missing_seq_id) {
     }
 
     // Successfully retrieved the missing OpLog entry
-    LOG_INFO << "OpLogApplier: retrieved missing OpLog entry, sequence_id="
+    LOG(INFO) << "OpLogApplier: retrieved missing OpLog entry, sequence_id="
               << missing_seq_id
               << ", op_type=" << static_cast<int>(entry.op_type)
               << ", key=" << entry.object_key;

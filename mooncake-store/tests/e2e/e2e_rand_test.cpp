@@ -36,11 +36,11 @@ class E2ERandTest : public ::testing::Test {
 
         FLAGS_logtostderr = 1;
 
-        LOG_INFO << "Protocol: " << FLAGS_protocol
+        LOG(INFO) << "Protocol: " << FLAGS_protocol
                   << ", Device name: " << FLAGS_device_name
                   << ", Metadata URL: " << FLAGS_engine_meta_url;
 
-        LOG_INFO << "Random seed: " << FLAGS_rand_seed;
+        LOG(INFO) << "Random seed: " << FLAGS_rand_seed;
         srand(FLAGS_rand_seed);
     }
 
@@ -171,7 +171,7 @@ TEST_F(E2ERandTest, RandomSequentialDeletePutGet) {
                         std::string get_substr = get_value.substr(
                             i, std::min(
                                    10, static_cast<int>(get_value.size() - i)));
-                        LOG_ERROR
+                        LOG(ERROR)
                             << "Get value mismatch at position " << i << ": "
                             << get_substr << " != " << val_substr;
                         ASSERT_EQ(get_substr, val_substr);

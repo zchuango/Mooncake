@@ -108,7 +108,7 @@ TEST_F(BufferAllocatorTest, AllocateMultiple) {
 
         // Clean up allocated memory
         handles.clear();
-        LOG_INFO << "Cleaned up handles in AllocateMultiple test";
+        LOG(INFO) << "Cleaned up handles in AllocateMultiple test";
     }
 }
 
@@ -198,7 +198,7 @@ TEST_F(BufferAllocatorTest, ParallelAllocation) {
             thread.join();
         }
 
-        LOG_INFO << "Completed parallel allocation/deallocation test for "
+        LOG(INFO) << "Completed parallel allocation/deallocation test for "
                   << (allocator_type == BufferAllocatorType::CACHELIB
                           ? "CACHELIB"
                           : "OFFSET");

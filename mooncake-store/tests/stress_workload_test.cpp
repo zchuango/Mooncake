@@ -67,18 +67,18 @@ bool initialize_segment() {
     g_ram_buffer_size = FLAGS_ram_buffer_size_gb * 1024ull * 1024 * 1024;
     g_segment_ptr = allocate_buffer_allocator_memory(g_ram_buffer_size);
     if (!g_segment_ptr) {
-        LOG_ERROR << "Failed to allocate segment memory of size "
+        LOG(ERROR) << "Failed to allocate segment memory of size "
                    << FLAGS_ram_buffer_size_gb << "GB";
         return false;
     }
 
     auto result = g_client->MountSegment(g_segment_ptr, g_ram_buffer_size);
     if (!result.has_value()) {
-        LOG_ERROR << "Failed to mount segment: " << toString(result.error());
+        LOG(ERROR) << "Failed to mount segment: " << toString(result.error());
         return false;
     }
 
-    LOG_INFO << "Segment initialized successfully with "
+    LOG(INFO) << "Segment initialized successfully with "
               << FLAGS_ram_buffer_size_gb << "GB RAM buffer";
     return true;
 }
@@ -88,7 +88,7 @@ void cleanup_segment() {
         auto result =
             g_client->UnmountSegment(g_segment_ptr, g_ram_buffer_size);
         if (!result.has_value()) {
-            LOG_ERROR << "Failed to unmount segment: "
+            LOG(ERROR) << "Failed to unmount segment: "
                        << toString(result.error());
         }
     }
@@ -101,11 +101,11 @@ bool initialize_client() {
         FLAGS_protocol, FLAGS_master_address);
 
     if (!client_opt.has_value()) {
-        LOG_ERROR << "Failed to create client";
+        LOG(ERROR) << "Failed to create client";
         return false;
     }
 
-    LOG_INFO << "Create client successfully";
+    LOG(INFO) << "Create client successfully";
 
     g_client = *client_opt;
 
@@ -120,7 +120,7 @@ bool initialize_client() {
         "cpu:0", false, false);
 
     if (!result.has_value()) {
-        LOG_ERROR << "Failed to register local memory: "
+        LOG(ERROR) << "Failed to register local memory: "
                    << toString(result.error());
         return false;
     }
@@ -128,14 +128,14 @@ bool initialize_client() {
     // Verify that the buffer allocator has enough space for all threads
     size_t total_required_memory = FLAGS_num_threads * FLAGS_value_size;
     if (total_required_memory > client_buffer_allocator_size) {
-        LOG_ERROR << "Insufficient buffer allocator memory. Required: "
+        LOG(ERROR) << "Insufficient buffer allocator memory. Required: "
                    << total_required_memory / (1024 * 1024)
                    << "MB, Available: " << FLAGS_client_buffer_allocator_size_mb
                    << "MB";
         return false;
     }
 
-    LOG_INFO << "Client initialized successfully with "
+    LOG(INFO) << "Client initialized successfully with "
               << FLAGS_client_buffer_allocator_size_mb << "MB buffer allocator";
     return true;
 }
@@ -157,7 +157,7 @@ void worker_thread(int thread_id, std::atomic<bool>& stop_flag,
     // Allocate thread-local buffer
     void* write_buffer = g_client_buffer_allocator->allocate(FLAGS_value_size);
     if (!write_buffer) {
-        LOG_ERROR << "Thread " << thread_id
+        LOG(ERROR) << "Thread " << thread_id
                    << ": Failed to allocate write buffer";
         return;
     }
@@ -302,40 +302,40 @@ void print_results(const std::vector<ThreadStats>& thread_stats,
         put_data_throughput_mb_s + get_data_throughput_mb_s;
 
     // Print results
-    LOG_INFO << "=== Benchmark Results ===";
-    LOG_INFO << "Test Duration: " << duration_s << " seconds";
-    LOG_INFO << "Threads: " << FLAGS_num_threads;
-    LOG_INFO << "Key Size: 128 bytes";
-    LOG_INFO << "Value Size: " << FLAGS_value_size << " bytes";
-    LOG_INFO << "Operations per thread: " << FLAGS_test_operation_nums;
-    LOG_INFO << "";
-    LOG_INFO << "=== Operation Statistics ===";
-    LOG_INFO << "Total Operations: " << total_ops;
-    LOG_INFO << "Successful Operations: " << successful_ops;
-    LOG_INFO << "PUT Operations: " << total_put_ops;
-    LOG_INFO << "GET Operations: " << total_get_ops;
-    LOG_INFO << "Success Rate: " << (100.0 * successful_ops / total_ops)
+    LOG(INFO) << "=== Benchmark Results ===";
+    LOG(INFO) << "Test Duration: " << duration_s << " seconds";
+    LOG(INFO) << "Threads: " << FLAGS_num_threads;
+    LOG(INFO) << "Key Size: 128 bytes";
+    LOG(INFO) << "Value Size: " << FLAGS_value_size << " bytes";
+    LOG(INFO) << "Operations per thread: " << FLAGS_test_operation_nums;
+    LOG(INFO) << "";
+    LOG(INFO) << "=== Operation Statistics ===";
+    LOG(INFO) << "Total Operations: " << total_ops;
+    LOG(INFO) << "Successful Operations: " << successful_ops;
+    LOG(INFO) << "PUT Operations: " << total_put_ops;
+    LOG(INFO) << "GET Operations: " << total_get_ops;
+    LOG(INFO) << "Success Rate: " << (100.0 * successful_ops / total_ops)
               << "%";
-    LOG_INFO << "";
-    LOG_INFO << "=== Throughput ===";
-    LOG_INFO << "Total Operations/sec: " << ops_per_second;
-    LOG_INFO << "PUT Operations/sec: " << put_ops_per_second;
-    LOG_INFO << "GET Operations/sec: " << get_ops_per_second;
-    LOG_INFO << "Total Data Throughput (MB/s): " << total_data_throughput_mb_s;
-    LOG_INFO << "PUT Data Throughput (MB/s): " << put_data_throughput_mb_s;
-    LOG_INFO << "GET Data Throughput (MB/s): " << get_data_throughput_mb_s;
-    LOG_INFO << "";
-    LOG_INFO << "=== Latency (microseconds) ===";
-    LOG_INFO << "All Operations - P50: " << all_p50 << ", P90: " << all_p90
+    LOG(INFO) << "";
+    LOG(INFO) << "=== Throughput ===";
+    LOG(INFO) << "Total Operations/sec: " << ops_per_second;
+    LOG(INFO) << "PUT Operations/sec: " << put_ops_per_second;
+    LOG(INFO) << "GET Operations/sec: " << get_ops_per_second;
+    LOG(INFO) << "Total Data Throughput (MB/s): " << total_data_throughput_mb_s;
+    LOG(INFO) << "PUT Data Throughput (MB/s): " << put_data_throughput_mb_s;
+    LOG(INFO) << "GET Data Throughput (MB/s): " << get_data_throughput_mb_s;
+    LOG(INFO) << "";
+    LOG(INFO) << "=== Latency (microseconds) ===";
+    LOG(INFO) << "All Operations - P50: " << all_p50 << ", P90: " << all_p90
               << ", P95: " << all_p95 << ", P99: " << all_p99;
 
     if (!put_latencies.empty()) {
-        LOG_INFO << "PUT Operations - P50: " << put_p50 << ", P90: " << put_p90
+        LOG(INFO) << "PUT Operations - P50: " << put_p50 << ", P90: " << put_p90
                   << ", P95: " << put_p95 << ", P99: " << put_p99;
     }
 
     if (!get_latencies.empty()) {
-        LOG_INFO << "GET Operations - P50: " << get_p50 << ", P90: " << get_p90
+        LOG(INFO) << "GET Operations - P50: " << get_p50 << ", P90: " << get_p90
                   << ", P95: " << get_p95 << ", P99: " << get_p99;
     }
 }
@@ -351,24 +351,24 @@ int main(int argc, char** argv) {
 
     using namespace mooncake::benchmark;
 
-    LOG_INFO << "Starting Mooncake Store Stress Benchmark";
-    LOG_INFO << "Protocol: " << FLAGS_protocol
+    LOG(INFO) << "Starting Mooncake Store Stress Benchmark";
+    LOG(INFO) << "Protocol: " << FLAGS_protocol
               << ", Device: " << FLAGS_device_name;
-    LOG_INFO << "Local hostname: " << FLAGS_local_hostname;
-    LOG_INFO << "Metadata connection: " << FLAGS_metadata_connection_string;
-    LOG_INFO << "Operations per thread: " << FLAGS_test_operation_nums;
-    LOG_INFO << "RAM buffer size: " << FLAGS_ram_buffer_size_gb << "GB";
-    LOG_INFO << "Client buffer allocator size: "
+    LOG(INFO) << "Local hostname: " << FLAGS_local_hostname;
+    LOG(INFO) << "Metadata connection: " << FLAGS_metadata_connection_string;
+    LOG(INFO) << "Operations per thread: " << FLAGS_test_operation_nums;
+    LOG(INFO) << "RAM buffer size: " << FLAGS_ram_buffer_size_gb << "GB";
+    LOG(INFO) << "Client buffer allocator size: "
               << FLAGS_client_buffer_allocator_size_mb << "MB";
 
     // Initialize client and segment
     if (!initialize_client()) {
-        LOG_ERROR << "Failed to initialize client";
+        LOG(ERROR) << "Failed to initialize client";
         return 1;
     }
 
     if (!initialize_segment()) {
-        LOG_ERROR << "Failed to initialize segment";
+        LOG(ERROR) << "Failed to initialize segment";
         cleanup_client();
         return 1;
     }
@@ -378,7 +378,7 @@ int main(int argc, char** argv) {
     std::vector<ThreadStats> thread_stats(FLAGS_num_threads);
     std::atomic<bool> stop_flag{false};
 
-    LOG_INFO << "Starting " << FLAGS_num_threads << " worker threads with "
+    LOG(INFO) << "Starting " << FLAGS_num_threads << " worker threads with "
               << FLAGS_test_operation_nums << " operations each";
 
     // Start worker threads
@@ -410,6 +410,6 @@ int main(int argc, char** argv) {
     cleanup_client();
     google::ShutdownGoogleLogging();
 
-    LOG_INFO << "Benchmark completed successfully";
+    LOG(INFO) << "Benchmark completed successfully";
     return 0;
 }

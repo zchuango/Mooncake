@@ -29,7 +29,7 @@ struct rocm_plugin_ctx_t {
     do {                                                                      \
         auto err = call;                                                      \
         if (err != hipSuccess) {                                              \
-            LOG_ERROR << std::string(#call) + ": " + hipGetErrorString(err); \
+            LOG(ERROR) << std::string(#call) + ": " + hipGetErrorString(err); \
             return -1;                                                        \
         }                                                                     \
     } while (0)

@@ -42,7 +42,7 @@ int LocalCopyEngine::Initialize(int32_t transfer_timeout) {
     transfer_timeout_ = transfer_timeout;
     auto ret = aclrtCreateStreamWithConfig(&stream_, 0, kStreamFlags);
     if (ret != ACL_ERROR_NONE) {
-        LOG_ERROR << "aclrtCreateStreamWithConfig failed, ret:" << ret
+        LOG(ERROR) << "aclrtCreateStreamWithConfig failed, ret:" << ret
                    << ", errmsg:" << aclGetRecentErrMsg();
         return -1;
     }
@@ -65,7 +65,7 @@ void LocalCopyEngine::Copy(TransferRequest::OpCode opcode,
     }
 
     if (!initialized_) {
-        LOG_ERROR << "LocalCopyEngine not initialized";
+        LOG(ERROR) << "LocalCopyEngine not initialized";
         for (auto &slice : slice_list) {
             slice->markFailed();
         }
@@ -79,7 +79,7 @@ void LocalCopyEngine::Copy(TransferRequest::OpCode opcode,
     aclrtPtrAttributes src_attrs;
     auto ret = aclrtPointerGetAttributes(first_slice->source_addr, &src_attrs);
     if (ret != ACL_ERROR_NONE) {
-        LOG_ERROR << "aclrtPointerGetAttributes failed for source, ret:"
+        LOG(ERROR) << "aclrtPointerGetAttributes failed for source, ret:"
                    << ret;
         for (auto &slice : slice_list) {
             slice->markFailed();
@@ -90,7 +90,7 @@ void LocalCopyEngine::Copy(TransferRequest::OpCode opcode,
     aclrtPtrAttributes dst_attrs;
     ret = aclrtPointerGetAttributes(remote_ptr, &dst_attrs);
     if (ret != ACL_ERROR_NONE) {
-        LOG_ERROR << "aclrtPointerGetAttributes failed for dest, ret:" << ret;
+        LOG(ERROR) << "aclrtPointerGetAttributes failed for dest, ret:" << ret;
         for (auto &slice : slice_list) {
             slice->markFailed();
         }
@@ -198,13 +198,13 @@ aclError LocalCopyEngine::CopyWithBatch(TransferRequest::OpCode opcode,
 
     if (ret != ACL_ERROR_RT_FEATURE_NOT_SUPPORT) {
         if (ret == ACL_ERROR_NONE) {
-            LOG_INFO << "Copy with aclrtMemcpyBatch suc.";
+            LOG(INFO) << "Copy with aclrtMemcpyBatch suc.";
             for (size_t i = 0; i < batch_num; i++) {
                 auto &slice = slice_list[slice_index + i];
                 slice->markSuccess();
             }
         } else {
-            LOG_ERROR << "aclrtMemcpyBatch failed, ret:" << ret;
+            LOG(ERROR) << "aclrtMemcpyBatch failed, ret:" << ret;
             for (size_t i = 0; i < batch_num; i++) {
                 auto &slice = slice_list[slice_index + i];
                 slice->markFailed();
@@ -232,10 +232,10 @@ void LocalCopyEngine::CopyWithSync(TransferRequest::OpCode opcode,
         }
 
         if (ret == ACL_ERROR_NONE) {
-            LOG_INFO << "Copy with aclrtMemcpy suc.";
+            LOG(INFO) << "Copy with aclrtMemcpy suc.";
             slice->markSuccess();
         } else {
-            LOG_ERROR << "aclrtMemcpy failed, ret:" << ret;
+            LOG(ERROR) << "aclrtMemcpy failed, ret:" << ret;
             slice->markFailed();
         }
     }
@@ -263,7 +263,7 @@ void LocalCopyEngine::CopyWithAsync(TransferRequest::OpCode opcode,
         }
 
         if (ret != ACL_ERROR_NONE) {
-            LOG_ERROR << "aclrtMemcpyAsync failed, ret:" << ret;
+            LOG(ERROR) << "aclrtMemcpyAsync failed, ret:" << ret;
             slice->markFailed();
             continue;
         }
@@ -277,12 +277,12 @@ void LocalCopyEngine::CopyWithAsync(TransferRequest::OpCode opcode,
     aclError ret =
         aclrtSynchronizeStreamWithTimeout(stream_, transfer_timeout_);
     if (ret == ACL_ERROR_NONE) {
-        LOG_INFO << "Copy with aclrtMemcpyAsync suc.";
+        LOG(INFO) << "Copy with aclrtMemcpyAsync suc.";
         for (auto &slice : async_list) {
             slice->markSuccess();
         }
     } else {
-        LOG_ERROR << "Memory copy failed, ret:" << ret;
+        LOG(ERROR) << "Memory copy failed, ret:" << ret;
         (void)aclrtStreamAbort(stream_);
         for (auto &slice : async_list) {
             slice->markFailed();

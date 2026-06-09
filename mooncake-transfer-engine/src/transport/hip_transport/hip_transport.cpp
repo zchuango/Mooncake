@@ -67,7 +67,7 @@ struct FdGuard {
 
 static bool checkHip(hipError_t result, const char* message) {
     if (result != hipSuccess) {
-        LOG_ERROR << message << " (Error code: " << result << " - "
+        LOG(ERROR) << message << " (Error code: " << result << " - "
                    << hipGetErrorString(result) << ")";
         return false;
     }
@@ -108,14 +108,14 @@ static int open_fd(const hipxFabricHandle& export_handle) {
 
     int pid_fd = (int)syscall(__NR_pidfd_open, pid, 0);
     if (pid_fd == -1) {
-        LOG_ERROR << "HIPTransport: pidfd_open error: " << strerror(errno)
+        LOG(ERROR) << "HIPTransport: pidfd_open error: " << strerror(errno)
                    << " ( " << pid << " " << fd << ")";
         return -1;
     }
 
     int open_fd = (int)syscall(__NR_pidfd_getfd, pid_fd, fd, 0);
     if (open_fd == -1) {
-        LOG_ERROR << "HIPTransport: pidfd_getfd error: " << strerror(errno)
+        LOG(ERROR) << "HIPTransport: pidfd_getfd error: " << strerror(errno)
                    << " ( " << pid << " " << fd << ")";
         close(pid_fd);
         return -1;
@@ -148,7 +148,7 @@ static int openShareableHandle(const std::vector<unsigned char>& buffer,
     if (HIPX_MEM_HANDLE_TYPE_FABRIC == hipMemHandleTypePosixFileDescriptor) {
         int opened_fd = open_fd(export_handle);
         if (opened_fd == -1) {
-            LOG_ERROR << "HIPTransport: failed to open fd";
+            LOG(ERROR) << "HIPTransport: failed to open fd";
             return -1;
         }
         fd_guard.fd = opened_fd;
@@ -195,7 +195,7 @@ static int openShareableHandle(const std::vector<unsigned char>& buffer,
 
 static int getDeviceFromPointer(void* ptr) {
     if (!ptr) {
-        LOG_ERROR << "HipTransport: null pointer passed to "
+        LOG(ERROR) << "HipTransport: null pointer passed to "
                       "getDeviceFromPointer";
         return -1;
     }
@@ -215,13 +215,13 @@ static int getDeviceFromPointer(void* ptr) {
         // This is not an error, just indicates we should use current device
         // context
         if (globalConfig().trace) {
-            LOG_INFO << "HipTransport: pointer " << ptr
+            LOG(INFO) << "HipTransport: pointer " << ptr
                       << " is host memory (type: " << attributes.type
                       << "), will use current device context";
         }
         return -1;
     } else {
-        LOG_WARNING << "HipTransport: unknown memory type " << attributes.type
+        LOG(WARNING) << "HipTransport: unknown memory type " << attributes.type
                      << " for pointer " << ptr;
         return -1;
     }
@@ -271,7 +271,7 @@ static void setupP2PAccess(int num_devices) {
         hipError_t last_error = hipGetLastError();
         if (last_error != hipSuccess &&
             last_error != hipErrorPeerAccessAlreadyEnabled) {
-            LOG_WARNING << "HipTransport: unexpected sticky HIP error after "
+            LOG(WARNING) << "HipTransport: unexpected sticky HIP error after "
                             "enabling P2P access from device "
                          << src_device << " to device " << dst_device << " ("
                          << hipGetErrorString(last_error) << ")";
@@ -300,13 +300,13 @@ static void setupP2PAccess(int num_devices) {
                     clearStickyPeerAccessError(i, j);
                 } else if (result != hipSuccess) {
                     clearStickyPeerAccessError(i, j);
-                    LOG_WARNING << "HipTransport: failed to enable P2P access "
+                    LOG(WARNING) << "HipTransport: failed to enable P2P access "
                                     "from device "
                                  << i << " to device " << j << " ("
                                  << hipGetErrorString(result) << ")";
                 }
             } else if (i < j) {
-                LOG_WARNING
+                LOG(WARNING)
                     << "HipTransport: P2P access not available between device "
                     << i << " and device " << j;
             }
@@ -328,11 +328,11 @@ static int getNumStreams() {
             if (value > 0) {
                 return value;
             }
-            LOG_WARNING << "MC_HIP_NUM_STREAMS value " << value
+            LOG(WARNING) << "MC_HIP_NUM_STREAMS value " << value
                          << " must be positive, using default "
                          << kDefaultNumStreams;
         } catch (...) {
-            LOG_WARNING << "Invalid MC_HIP_NUM_STREAMS value, using default "
+            LOG(WARNING) << "Invalid MC_HIP_NUM_STREAMS value, using default "
                          << kDefaultNumStreams;
         }
     }
@@ -347,11 +347,11 @@ static int getNumEvents() {
             if (value > 0) {
                 return value;
             }
-            LOG_WARNING << "MC_HIP_NUM_EVENTS value " << value
+            LOG(WARNING) << "MC_HIP_NUM_EVENTS value " << value
                          << " must be positive, using default "
                          << kDefaultNumEvents;
         } catch (...) {
-            LOG_WARNING << "Invalid MC_HIP_NUM_EVENTS value, using default "
+            LOG(WARNING) << "Invalid MC_HIP_NUM_EVENTS value, using default "
                          << kDefaultNumEvents;
         }
     }
@@ -378,7 +378,7 @@ static bool supportFabricMem() {
     }
 
     if (num_devices == 0) {
-        LOG_ERROR << "HipTransport: no device found";
+        LOG(ERROR) << "HipTransport: no device found";
         return false;
     }
 
@@ -396,7 +396,7 @@ static bool supportFabricMem() {
             &vmm_supported, hipDeviceAttributeVirtualMemoryManagementSupported,
             device);
         if (result != hipSuccess || !vmm_supported) {
-            LOG_WARNING << "HipTransport: Device " << device_id
+            LOG(WARNING) << "HipTransport: Device " << device_id
                          << " does not support virtual memory management, "
                          << "falling back to IPC mode";
             return false;
@@ -537,7 +537,7 @@ void HipTransport::synchronizePendingTransfers(
         if (err == hipSuccess) {
             pt.slice->markSuccess();
         } else {
-            LOG_ERROR << "HipTransport: hipEventSynchronize failed: "
+            LOG(ERROR) << "HipTransport: hipEventSynchronize failed: "
                        << hipGetErrorString(err);
             pt.slice->markFailed();
         }
@@ -551,7 +551,7 @@ Status HipTransport::submitTransfer(
     BatchID batch_id, const std::vector<TransferRequest>& entries) {
     auto& batch_desc = *((BatchDesc*)(batch_id));
     if (batch_desc.task_list.size() + entries.size() > batch_desc.batch_size) {
-        LOG_ERROR << "HipTransport: Exceed the limitation of current batch's "
+        LOG(ERROR) << "HipTransport: Exceed the limitation of current batch's "
                       "capacity";
         return Status::InvalidArgument(
             "HipTransport: Exceed the limitation of capacity, batch id: " +
@@ -656,7 +656,7 @@ int HipTransport::registerLocalMemory(void* addr, size_t length,
     std::lock_guard<std::mutex> lock(register_mutex_);
 
     if (globalConfig().trace) {
-        LOG_INFO << "register memory: addr " << addr << ", length " << length;
+        LOG(INFO) << "register memory: addr " << addr << ", length " << length;
     }
 
     // IPC-based memory registration
@@ -669,7 +669,7 @@ int HipTransport::registerLocalMemory(void* addr, size_t length,
         }
 
         if (attr.type != hipMemoryTypeDevice) {
-            LOG_ERROR << "Unsupported memory type, " << addr << " "
+            LOG(ERROR) << "Unsupported memory type, " << addr << " "
                        << attr.type;
             return -1;
         }
@@ -697,7 +697,7 @@ int HipTransport::registerLocalMemory(void* addr, size_t length,
         hipMemGenericAllocationHandle_t handle;
         hipError_t result = hipMemRetainAllocationHandle(&handle, addr);
         if (result != hipSuccess) {
-            LOG_WARNING << "Memory region " << addr
+            LOG(WARNING) << "Memory region " << addr
                          << " is not allocated by hipMemCreate, "
                          << "but it can be used as local buffer";
             return 0;
@@ -709,7 +709,7 @@ int HipTransport::registerLocalMemory(void* addr, size_t length,
         result = hipMemGetAddressRange((hipDeviceptr_t*)&real_addr, &real_size,
                                        (hipDeviceptr_t)addr);
         if (result != hipSuccess) {
-            LOG_WARNING << "HipTransport: hipMemGetAddressRange failed: "
+            LOG(WARNING) << "HipTransport: hipMemGetAddressRange failed: "
                          << result;
             const uint64_t granularity = 2ULL * 1024 * 1024;
             real_addr = addr;
@@ -778,7 +778,7 @@ int HipTransport::relocateSharedMemoryAddress(uint64_t& dest_addr,
                     rc = openShareableHandle(output_buffer, entry.length,
                                              &shm_addr);
                 } else {
-                    LOG_ERROR << "Mismatched HIP data transfer method";
+                    LOG(ERROR) << "Mismatched HIP data transfer method";
                     return -1;
                 }
 
@@ -800,7 +800,7 @@ int HipTransport::relocateSharedMemoryAddress(uint64_t& dest_addr,
             return 0;
         }
     }
-    LOG_ERROR << "Requested address " << (void*)dest_addr << " to "
+    LOG(ERROR) << "Requested address " << (void*)dest_addr << " to "
                << (void*)(dest_addr + length) << " not found!";
     return ERR_INVALID_ARGUMENT;
 }

@@ -45,7 +45,7 @@ static inline int getCudaDeviceNumaID(int cuda_id) {
     char pci_bus_id[20];
     auto err = cudaDeviceGetPCIBusId(pci_bus_id, sizeof(pci_bus_id), cuda_id);
     if (err != cudaSuccess) {
-        LOG_WARNING << "cudaDeviceGetPCIBusId: " << cudaGetErrorString(err);
+        LOG(WARNING) << "cudaDeviceGetPCIBusId: " << cudaGetErrorString(err);
         return 0;
     }
     for (char* ch = pci_bus_id; (*ch = tolower(*ch)); ch++);
@@ -60,11 +60,11 @@ volatile bool g_te_triggered_sig = false;
 
 void signalHandlerV0(int signum) {
     if (g_te_triggered_sig) {
-        LOG_ERROR << "Received signal " << signum
+        LOG(ERROR) << "Received signal " << signum
                    << " again, forcefully terminating...";
         std::exit(EXIT_FAILURE);
     }
-    LOG_INFO << "Received signal " << signum << ", stopping target server...";
+    LOG(INFO) << "Received signal " << signum << ", stopping target server...";
     g_te_running = false;
     g_te_triggered_sig = true;
 }
@@ -75,7 +75,7 @@ static void* allocateMemoryPool(size_t size, int buffer_id,
     if (from_vram) {
         int gpu_id = buffer_id;
         void* d_buf;
-        LOG_INFO << "Allocating memory on GPU " << gpu_id;
+        LOG(INFO) << "Allocating memory on GPU " << gpu_id;
         cudaSetDevice(gpu_id);
 #ifdef USE_MNNVL
         d_buf = mooncake::NvlinkTransport::allocatePinnedLocalMemory(size);
@@ -108,7 +108,7 @@ static void freeMemoryPool(void* addr, size_t size) {
                attributes.type == cudaMemoryTypeUnregistered) {
         numa_free(addr, size);
     } else {
-        LOG_ERROR << "Unknown memory type, " << addr << " " << attributes.type;
+        LOG(ERROR) << "Unknown memory type, " << addr << " " << attributes.type;
     }
 #else
     numa_free(addr, size);
@@ -150,7 +150,7 @@ int TEBenchRunner::allocateBuffers() {
         }
 #endif
     } else {
-        LOG_ERROR << "Unknown seg_type: " << XferBenchConfig::seg_type;
+        LOG(ERROR) << "Unknown seg_type: " << XferBenchConfig::seg_type;
     }
     return 0;
 }
@@ -292,7 +292,7 @@ double TEBenchRunner::runSingleTransfer(uint64_t local_addr,
             if (overall_status.s == TransferStatusEnum::COMPLETED) {
                 success_count++;
             } else if (overall_status.s == TransferStatusEnum::FAILED) {
-                LOG_ERROR << "Failed transfer detected";
+                LOG(ERROR) << "Failed transfer detected";
                 exit(EXIT_FAILURE);
             }
         }

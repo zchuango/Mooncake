@@ -63,23 +63,23 @@ Status ConfigHelper::loadFromEnv(Config& config) {
         try {
             is_file = std::filesystem::exists(conf);
         } catch (const std::filesystem::filesystem_error& e) {
-            LOG_WARNING << "Failed to check file existence for MC_TENT_CONF="
+            LOG(WARNING) << "Failed to check file existence for MC_TENT_CONF="
                          << conf << ": " << e.what()
                          << ", treating as JSON string";
         }
         if (is_file) {
             status = config.loadFile(conf);
             if (!status.ok()) {
-                LOG_WARNING
+                LOG(WARNING)
                     << "Failed to load config file from MC_TENT_CONF=" << conf
                     << ": " << status.ToString();
             } else {
-                LOG_INFO << "Loaded tent config from file: " << conf;
+                LOG(INFO) << "Loaded tent config from file: " << conf;
             }
         } else {
             status = config.load(conf);
             if (!status.ok()) {
-                LOG_WARNING
+                LOG(WARNING)
                     << "Failed to parse MC_TENT_CONF: " << status.ToString();
             }
         }
@@ -129,7 +129,7 @@ bool ConfigHelper::parseBool(const std::string& str, bool default_value) {
                lower_str == "off") {
         return false;
     } else {
-        LOG_WARNING << "Invalid boolean value '" << str
+        LOG(WARNING) << "Invalid boolean value '" << str
                      << "', using default: " << default_value;
         return default_value;
     }
@@ -139,7 +139,7 @@ int ConfigHelper::parseInt(const std::string& str, int default_value) {
     try {
         return std::stoi(str);
     } catch (const std::exception& e) {
-        LOG_WARNING << "Failed to parse integer '" << str << "': " << e.what()
+        LOG(WARNING) << "Failed to parse integer '" << str << "': " << e.what()
                      << ", using default: " << default_value;
         return default_value;
     }
@@ -152,13 +152,13 @@ uint16_t ConfigHelper::parsePort(const std::string& str,
         if (port > 0 && port <= 65535) {
             return static_cast<uint16_t>(port);
         } else {
-            LOG_WARNING << "Port " << port
+            LOG(WARNING) << "Port " << port
                          << " out of range (1-65535), using default: "
                          << default_value;
             return default_value;
         }
     } catch (const std::exception& e) {
-        LOG_WARNING << "Failed to parse port '" << str << "': " << e.what()
+        LOG(WARNING) << "Failed to parse port '" << str << "': " << e.what()
                      << ", using default: " << default_value;
         return default_value;
     }
@@ -182,7 +182,7 @@ std::vector<double> ConfigHelper::parseDoubleArray(const std::string& str) {
                 }
             }
         } catch (const std::exception& e) {
-            LOG_WARNING << "Failed to parse double value '" << item
+            LOG(WARNING) << "Failed to parse double value '" << item
                          << "': " << e.what();
         }
     }

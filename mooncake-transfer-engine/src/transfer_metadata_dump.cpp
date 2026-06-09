@@ -18,22 +18,22 @@
 
 namespace mooncake {
 void TransferMetadata::SegmentDesc::dump() const {
-    LOG_INFO << "  segment name: " << name;
-    LOG_INFO << "  protocol: " << protocol;
-    LOG_INFO << "  topology: " << topology.toString();
-    LOG_INFO << "  devices: ";
+    LOG(INFO) << "  segment name: " << name;
+    LOG(INFO) << "  protocol: " << protocol;
+    LOG(INFO) << "  topology: " << topology.toString();
+    LOG(INFO) << "  devices: ";
     for (auto &device : devices) {
-        LOG_INFO << "    device name " << device.name << ", lid " << device.lid
+        LOG(INFO) << "    device name " << device.name << ", lid " << device.lid
                   << ", " << device.gid;
     }
-    LOG_INFO << "  buffers: ";
+    LOG(INFO) << "  buffers: ";
     for (auto &buffer : buffers) {
-        LOG_INFO << "    buffer type " << buffer.name << ", address "
+        LOG(INFO) << "    buffer type " << buffer.name << ", address "
                   << (void *)buffer.addr << "--"
                   << (void *)(buffer.addr + buffer.length);
     }
-    LOG_INFO << "  nvmeof buffers: " << nvmeof_buffers.size() << " items";
-    LOG_INFO << "  timestamp: " << timestamp;
+    LOG(INFO) << "  nvmeof buffers: " << nvmeof_buffers.size() << " items";
+    LOG(INFO) << "  timestamp: " << timestamp;
 }
 
 void TransferMetadata::dumpMetadataContent(const std::string &segment_name,
@@ -49,7 +49,7 @@ void TransferMetadata::dumpMetadataContent(const std::string &segment_name,
     }
 
     if (current_ts - last_ts > kMinDisplayThreshold || globalConfig().trace) {
-        LOG_INFO << "Failed to get segment descriptor for segment "
+        LOG(INFO) << "Failed to get segment descriptor for segment "
                   << segment_name << " address " << (void *)offset << "--"
                   << (void *)(offset + length);
         dumpMetadataContentUnlocked();
@@ -61,26 +61,26 @@ void TransferMetadata::dumpMetadataContent(const std::string &segment_name,
 }
 
 void TransferMetadata::dumpMetadataContentUnlocked() {
-    LOG_INFO << "-----------------------------------------------------------";
-    LOG_INFO << "TransferMetadata::dumpMetadataContent";
-    LOG_INFO << "-----------------------------------------------------------";
-    LOG_INFO << "=== Cached Segment Descriptors ===";
+    LOG(INFO) << "-----------------------------------------------------------";
+    LOG(INFO) << "TransferMetadata::dumpMetadataContent";
+    LOG(INFO) << "-----------------------------------------------------------";
+    LOG(INFO) << "=== Cached Segment Descriptors ===";
     for (auto &entry : segment_id_to_desc_map_) {
         auto &desc = entry.second;
         if (!desc) {
-            LOG_INFO << "segment id: " << entry.first << ", ref object nil";
+            LOG(INFO) << "segment id: " << entry.first << ", ref object nil";
         } else {
-            LOG_INFO << "segment id: " << entry.first << ", ref object "
+            LOG(INFO) << "segment id: " << entry.first << ", ref object "
                       << &desc;
             desc->dump();
         }
     }
-    LOG_INFO << "=== Local RPC Route ===";
-    LOG_INFO << "location: " << local_rpc_meta_.ip_or_host_name << ":"
+    LOG(INFO) << "=== Local RPC Route ===";
+    LOG(INFO) << "location: " << local_rpc_meta_.ip_or_host_name << ":"
               << local_rpc_meta_.rpc_port;
-    LOG_INFO << "=== Remote RPC Routes ===";
+    LOG(INFO) << "=== Remote RPC Routes ===";
     for (auto &entry : rpc_meta_map_) {
-        LOG_INFO << "segment name: " << entry.first
+        LOG(INFO) << "segment name: " << entry.first
                   << ", location: " << entry.second.ip_or_host_name << ":"
                   << entry.second.rpc_port;
     }

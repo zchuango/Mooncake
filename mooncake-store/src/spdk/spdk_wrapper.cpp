@@ -22,7 +22,7 @@ bool ParseEnvU64(const char *name, uint64_t *out) {
     char *end = nullptr;
     unsigned long long parsed = std::strtoull(val, &end, 10);
     if (errno != 0 || end == val || (end && *end != '\0')) {
-        LOG_WARNING << "Invalid value for " << name << ": " << val;
+        LOG(WARNING) << "Invalid value for " << name << ": " << val;
         return false;
     }
 
@@ -68,7 +68,7 @@ void ApplyCtrlrOptsFromEnv(struct spdk_nvme_ctrlr_opts *opts) {
     if (ParseEnvBool("MC_NVME_DATA_DIGEST", &bv)) {
         opts->data_digest = bv;
     }
-    LOG_INFO << "NVMe ctrlr opts: num_io_queues=" << opts->num_io_queues
+    LOG(INFO) << "NVMe ctrlr opts: num_io_queues=" << opts->num_io_queues
               << ", io_queue_size=" << opts->io_queue_size
               << ", io_queue_requests=" << opts->io_queue_requests
               << ", keep_alive_timeout_ms=" << opts->keep_alive_timeout_ms
@@ -242,7 +242,7 @@ int SpdkWrapper::ParseTransPortStr(const std::string &tr_str, tr_info *info) {
     info->ns = 1;
 
     if (spdk_nvme_transport_id_parse(&info->trid, tr_str.c_str()) != 0) {
-        LOG_ERROR << "Error parsing transport address";
+        LOG(ERROR) << "Error parsing transport address";
         return -1;
     }
 
@@ -262,12 +262,12 @@ int SpdkWrapper::ParseTransPortStr(const std::string &tr_str, tr_info *info) {
         try {
             info->ns = std::stoul(ns_str);
         } catch (const std::exception &e) {
-            LOG_ERROR << "Failed to parse ns value: " << ns_str
+            LOG(ERROR) << "Failed to parse ns value: " << ns_str
                        << ", error: " << e.what();
             return -1;
         }
     } else {
-        LOG_ERROR << "No ns field found in transport string";
+        LOG(ERROR) << "No ns field found in transport string";
     }
 
     info->ctrlr_key = std::string(info->trid.traddr) + "|" +
@@ -275,7 +275,7 @@ int SpdkWrapper::ParseTransPortStr(const std::string &tr_str, tr_info *info) {
                       std::string(info->trid.subnqn) + "|" +
                       std::to_string(static_cast<int>(info->trid.trtype));
 
-    LOG_INFO << "traddr:" << info->trid.traddr
+    LOG(INFO) << "traddr:" << info->trid.traddr
               << "trsvcid:" << info->trid.trsvcid << "ns:" << info->ns
               << "subnqn:" << info->trid.subnqn
               << "trtype:" << info->trid.trtype;
@@ -288,14 +288,14 @@ int SpdkWrapper::ConnectController(const struct spdk_nvme_transport_id *trid,
     auto probe_cb = [](void *cb_ctx, const struct spdk_nvme_transport_id *trid,
                        struct spdk_nvme_ctrlr_opts *opts) -> bool {
         ApplyCtrlrOptsFromEnv(opts);
-        LOG_INFO << "Attaching to " << trid->traddr << " " << trid->subnqn;
+        LOG(INFO) << "Attaching to " << trid->traddr << " " << trid->subnqn;
         return true;
     };
 
     auto attach_cb = [](void *cb_ctx, const struct spdk_nvme_transport_id *trid,
                         struct spdk_nvme_ctrlr *ctrlr,
                         const struct spdk_nvme_ctrlr_opts *opts) {
-        LOG_INFO << "Attached to " << trid->traddr << " " << trid->subnqn;
+        LOG(INFO) << "Attached to " << trid->traddr << " " << trid->subnqn;
         ctrlr_info *info = (ctrlr_info *)cb_ctx;
         info->ctrlr = ctrlr;
     };
@@ -343,13 +343,13 @@ nof_seg_handle *SpdkWrapper::OpenNofSegment(const std::string &tr_str) {
         if (spdk_nvme_ctrlr_is_active_ns(info->ctrlr, tr.ns)) {
             ns = spdk_nvme_ctrlr_get_ns(info->ctrlr, tr.ns);
         } else {
-            LOG_ERROR << "spdk_nvme_ctrlr_is_active_ns failed";
+            LOG(ERROR) << "spdk_nvme_ctrlr_is_active_ns failed";
             return nullptr;
         }
 
         qpair = spdk_nvme_ctrlr_alloc_io_qpair(info->ctrlr, nullptr, 0);
         if (!qpair) {
-            LOG_ERROR << "alloc spdk_nvme_qpair failed";
+            LOG(ERROR) << "alloc spdk_nvme_qpair failed";
             return nullptr;
         }
 

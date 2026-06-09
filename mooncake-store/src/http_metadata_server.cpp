@@ -108,7 +108,7 @@ bool HttpMetadataServer::start() {
 
     server_->async_start();
     running_ = true;
-    LOG_INFO << "HTTP metadata server started on " << host_ << ":" << port_;
+    LOG(INFO) << "HTTP metadata server started on " << host_ << ":" << port_;
     return true;
 }
 
@@ -119,7 +119,7 @@ void HttpMetadataServer::stop() {
 
     server_->stop();
     running_ = false;
-    LOG_INFO << "HTTP metadata server stopped";
+    LOG(INFO) << "HTTP metadata server stopped";
 }
 
 KVPoll HttpMetadataServer::poll() const {

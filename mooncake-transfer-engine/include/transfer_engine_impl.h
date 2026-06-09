@@ -299,7 +299,7 @@ class TransferEngineImpl {
             TransferStatus dummy_status;
             auto status = getBatchTransferStatus(batch_id, dummy_status, true);
             if (!status.ok()) {
-                LOG_ERROR << status.ToString();
+                LOG(ERROR) << status.ToString();
             }
         }
         return result;
@@ -324,7 +324,7 @@ class TransferEngineImpl {
             auto value = notifies_to_send_[batch_id];
             auto rc = sendNotifyByID(value.first, value.second);
             if (rc) {
-                LOG_ERROR << "Failed to send notify message, error code: "
+                LOG(ERROR) << "Failed to send notify message, error code: "
                            << rc;
             }
             notifies_to_send_.erase(batch_id);

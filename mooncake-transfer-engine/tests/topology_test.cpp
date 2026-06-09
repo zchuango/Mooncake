@@ -11,7 +11,7 @@ TEST(ToplogyTest, GetTopologyMatrix) {
     mooncake::Topology topology;
     topology.discover();
     std::string json_str = topology.toString();
-    LOG_INFO << json_str;
+    LOG(INFO) << json_str;
     topology.clear();
     topology.parse(json_str);
     ASSERT_EQ(topology.toString(), json_str);

@@ -41,7 +41,7 @@ ClientTestWrapper::CreateClientWrapper(const std::string& hostname,
     std::shared_ptr<SimpleAllocator> allocator =
         std::make_shared<SimpleAllocator>(local_buffer_size);
     if (!allocator) {
-        LOG_ERROR << "Failed to create allocator";
+        LOG(ERROR) << "Failed to create allocator";
         return std::nullopt;
     }
 
@@ -50,7 +50,7 @@ ClientTestWrapper::CreateClientWrapper(const std::string& hostname,
     ErrorCode error_code =
         register_result.has_value() ? ErrorCode::OK : register_result.error();
     if (error_code != ErrorCode::OK) {
-        LOG_ERROR << "register_local_memory_failed base="
+        LOG(ERROR) << "register_local_memory_failed base="
                    << allocator->getBase() << " size=" << local_buffer_size
                    << ", error=" << error_code;
         return std::nullopt;
@@ -61,7 +61,7 @@ ClientTestWrapper::CreateClientWrapper(const std::string& hostname,
 ErrorCode ClientTestWrapper::Mount(const size_t size, void*& buffer) {
     buffer = allocate_buffer_allocator_memory(size);
     if (!buffer) {
-        LOG_ERROR << " Failed to allocate memory for segment";
+        LOG(ERROR) << " Failed to allocate memory for segment";
         return ErrorCode::INTERNAL_ERROR;
     }
 
@@ -208,7 +208,7 @@ ClientTestWrapper::SliceGuard::SliceGuard(
     for (size_t i = 0; i < descriptors.size(); i++) {
         void* buffer = allocator_->allocate(descriptors[i].size_);
         if (!buffer) {
-            LOG_ERROR << "Failed to allocate memory for slice";
+            LOG(ERROR) << "Failed to allocate memory for slice";
             throw std::runtime_error("Failed to allocate memory for slice");
         }
         slices_[i] = Slice{buffer, descriptors[i].size_};
@@ -222,7 +222,7 @@ ClientTestWrapper::SliceGuard::SliceGuard(
         auto chunk_size = std::min(size, kMaxSliceSize);
         auto ptr = allocator_->allocate(chunk_size);
         if (!ptr) {
-            LOG_ERROR << "Failed to allocate memory for slice";
+            LOG(ERROR) << "Failed to allocate memory for slice";
             throw std::runtime_error("Failed to allocate memory for slice");
         }
         slices_.emplace_back(Slice{ptr, chunk_size});

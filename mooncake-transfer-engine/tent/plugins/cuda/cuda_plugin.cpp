@@ -29,7 +29,7 @@ struct cuda_plugin_ctx_t {
     do {                                                                       \
         auto err = call;                                                       \
         if (err != cudaSuccess) {                                              \
-            LOG_ERROR << std::string(#call) + ": " + cudaGetErrorString(err); \
+            LOG(ERROR) << std::string(#call) + ": " + cudaGetErrorString(err); \
             return -1;                                                         \
         }                                                                      \
     } while (0)

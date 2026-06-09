@@ -24,13 +24,13 @@ int allocate_physical_memory(size_t total_size, aclrtDrvMemHandle &handle) {
     int32_t user_dev_id;
     auto ret = aclrtGetDevice(&user_dev_id);
     if (ret != ACL_ERROR_NONE) {
-        LOG_ERROR << "Failed to get device: " << ret;
+        LOG(ERROR) << "Failed to get device: " << ret;
         return -1;
     }
     int32_t physical_dev_id;
     ret = aclrtGetPhyDevIdByLogicDevId(user_dev_id, &physical_dev_id);
     if (ret != ACL_ERROR_NONE) {
-        LOG_ERROR << "Failed to get physical dev id: " << ret;
+        LOG(ERROR) << "Failed to get physical dev id: " << ret;
         return -1;
     }
     aclrtPhysicalMemProp prop = {};
@@ -43,20 +43,20 @@ int allocate_physical_memory(size_t total_size, aclrtDrvMemHandle &handle) {
     const int32_t kNumaNodeStep = 2;
     prop.location.id = (physical_dev_id / kDevicesPerChip) * kNumaNodeStep;
     prop.reserve = 0;
-    LOG_INFO << "Malloc host memory for numa:" << prop.location.id;
+    LOG(INFO) << "Malloc host memory for numa:" << prop.location.id;
     ret = aclrtMallocPhysical(&handle, total_size, &prop, 0);
     if (ret != ACL_ERROR_NONE) {
-        LOG_INFO << "Malloc host memory for numa:" << prop.location.id
+        LOG(INFO) << "Malloc host memory for numa:" << prop.location.id
                   << " failed, try common allocate instead.";
         prop.location.type = ACL_MEM_LOCATION_TYPE_HOST;
         prop.location.id = 0;
         ret = aclrtMallocPhysical(&handle, total_size, &prop, 0);
         if (ret != ACL_ERROR_NONE) {
-            LOG_INFO << "Malloc failed, try smaller page instead.";
+            LOG(INFO) << "Malloc failed, try smaller page instead.";
             prop.memAttr = ACL_MEM_P2P_HUGE;
             ret = aclrtMallocPhysical(&handle, total_size, &prop, 0);
             if (ret != ACL_ERROR_NONE) {
-                LOG_ERROR << "Failed to allocate memory: " << ret;
+                LOG(ERROR) << "Failed to allocate memory: " << ret;
                 return -1;
             }
         }
@@ -74,13 +74,13 @@ void *allocate_vmm_memory_direct_impl(size_t total_size) {
     void *va = nullptr;
     auto ret = aclrtReserveMemAddress(&va, total_size, 0, nullptr, 1);
     if (ret != ACL_ERROR_NONE) {
-        LOG_ERROR << "Failed to reserve memory: " << ret;
+        LOG(ERROR) << "Failed to reserve memory: " << ret;
         (void)aclrtFreePhysical(handle);
         return nullptr;
     }
     ret = aclrtMapMem(va, total_size, 0, handle, 0);
     if (ret != ACL_ERROR_NONE) {
-        LOG_ERROR << "Failed to map memory: " << ret;
+        LOG(ERROR) << "Failed to map memory: " << ret;
         (void)aclrtReleaseMemAddress(va);
         (void)aclrtFreePhysical(handle);
         return nullptr;
@@ -139,11 +139,11 @@ void *ascend_allocate_memory(size_t total_size, const std::string &protocol) {
             auto status = adxl::AdxlEngine::MallocMem(adxl::MemType::MEM_HOST,
                                                       total_size, &va);
             if (status != adxl::SUCCESS) {
-                LOG_ERROR << "Failed to allocate fabric memory, errmsg: "
+                LOG(ERROR) << "Failed to allocate fabric memory, errmsg: "
                            << aclGetRecentErrMsg();
                 return nullptr;
             }
-            LOG_INFO << "Call adxl MallocMem suc, va:" << va;
+            LOG(INFO) << "Call adxl MallocMem suc, va:" << va;
             std::lock_guard<std::mutex> lock(g_vmm_alloc_mutex);
             g_vmm_alloc_records.emplace(va, AllocRecord{nullptr, false});
             return va;
@@ -155,12 +155,12 @@ void *ascend_allocate_memory(size_t total_size, const std::string &protocol) {
         }
         return va;
 #else
-        LOG_ERROR << "Fabric mem mode is not supported, please upgrade Ascend "
+        LOG(ERROR) << "Fabric mem mode is not supported, please upgrade Ascend "
                       "HDK and CANN.";
 #endif
     }
     if (protocol == "ubshmem") {
-        LOG_ERROR << "ubshmem protocol only support fabric mem, please "
+        LOG(ERROR) << "ubshmem protocol only support fabric mem, please "
                       "configure ASCEND_ENABLE_USE_FABRIC_MEM environment.";
         return nullptr;
     }
@@ -168,10 +168,10 @@ void *ascend_allocate_memory(size_t total_size, const std::string &protocol) {
     void *buffer = nullptr;
     auto ret = aclrtMallocHost(&buffer, total_size);
     if (ret != ACL_ERROR_NONE) {
-        LOG_ERROR << "Failed to allocate memory: " << ret;
+        LOG(ERROR) << "Failed to allocate memory: " << ret;
         return nullptr;
     }
-    LOG_INFO << "aclrtMallocHost suc, addr: " << buffer;
+    LOG(INFO) << "aclrtMallocHost suc, addr: " << buffer;
     if (buffer) {
         std::lock_guard<std::mutex> store_lock(g_store_mem_mutex);
         g_store_mem_ranges.push_back({buffer, total_size});
@@ -202,7 +202,7 @@ void ascend_free_memory(const std::string &protocol, void *ptr) {
         std::lock_guard<std::mutex> lock(g_vmm_alloc_mutex);
         auto it = g_vmm_alloc_records.find(ptr);
         if (it == g_vmm_alloc_records.end()) {
-            LOG_INFO << "Can not find record for va:" << ptr;
+            LOG(INFO) << "Can not find record for va:" << ptr;
             return;
         }
         const AllocRecord alloc_record = it->second;
@@ -211,7 +211,7 @@ void ascend_free_memory(const std::string &protocol, void *ptr) {
             if (&adxl::AdxlEngine::FreeMem != nullptr) {
                 auto status = adxl::AdxlEngine::FreeMem(ptr);
                 if (status != adxl::SUCCESS) {
-                    LOG_ERROR << "Failed to free fabric memory, errmsg: "
+                    LOG(ERROR) << "Failed to free fabric memory, errmsg: "
                                << aclGetRecentErrMsg();
                 }
                 return;
@@ -219,17 +219,17 @@ void ascend_free_memory(const std::string &protocol, void *ptr) {
         }
         auto ret = aclrtUnmapMem(ptr);
         if (ret != ACL_ERROR_NONE) {
-            LOG_ERROR << "Failed to unmap memory: " << ptr;
+            LOG(ERROR) << "Failed to unmap memory: " << ptr;
             return;
         }
         ret = aclrtReleaseMemAddress(ptr);
         if (ret != ACL_ERROR_NONE) {
-            LOG_ERROR << "Failed to release mem address: " << ptr;
+            LOG(ERROR) << "Failed to release mem address: " << ptr;
             return;
         }
         ret = aclrtFreePhysical(alloc_record.handle);
         if (ret != ACL_ERROR_NONE) {
-            LOG_ERROR << "Failed to free physical mem: " << ptr;
+            LOG(ERROR) << "Failed to free physical mem: " << ptr;
             return;
         }
 #endif

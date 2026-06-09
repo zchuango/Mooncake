@@ -27,7 +27,7 @@ enum class MemoryType { FABRIC_MEM_HOST, FABRIC_MEM_DEVICE, IPC_MEM_DEVICE };
 static bool checkAcl(aclError result, const char* message) {
     if (result != ACL_ERROR_NONE) {
         const char* errMsg = aclGetRecentErrMsg();
-        LOG_ERROR << message << " (Error code: " << result << " - " << errMsg
+        LOG(ERROR) << message << " (Error code: " << result << " - " << errMsg
                    << ")";
         return false;
     }
@@ -120,7 +120,7 @@ static void* allocateAclBuffer(size_t size, int npu_id, MemoryType mem_type) {
             return ptr;
 
         default:
-            LOG_ERROR << "UBShmemTransport: Unsupported memory type";
+            LOG(ERROR) << "UBShmemTransport: Unsupported memory type";
             return nullptr;
     }
 }
@@ -145,7 +145,7 @@ static void freeAclBuffer(void* addr, MemoryType mem_type) {
             break;
 
         default:
-            LOG_ERROR << "UBShmemTransport: Unsupported memory type for free";
+            LOG(ERROR) << "UBShmemTransport: Unsupported memory type for free";
             break;
     }
 }
@@ -155,7 +155,7 @@ static void serverThread(int npu_id, const std::string& metadataServer,
                          const std::string& localServerName,
                          std::promise<void>& serverReady,
                          std::future<void>& testComplete, MemoryType mem_type) {
-    LOG_INFO << "Server thread starting on NPU " << npu_id;
+    LOG(INFO) << "Server thread starting on NPU " << npu_id;
     checkAclError(aclrtSetDevice(npu_id), "Failed to set device");
     // Server (target) setup
     auto server_engine = std::make_unique<TransferEngine>(false);
@@ -188,7 +188,7 @@ static void serverThread(int npu_id, const std::string& metadataServer,
     server_engine->unregisterLocalMemory(server_buffer);
     freeAclBuffer(server_buffer, mem_type);
 
-    LOG_INFO << "Server thread completed";
+    LOG(INFO) << "Server thread completed";
 }
 
 // Client thread function
@@ -197,7 +197,7 @@ static void clientThread(int npu_id, const std::string& metadataServer,
                          std::future<void>& serverReady,
                          std::promise<void>& testComplete,
                          MemoryType mem_type) {
-    LOG_INFO << "Client thread starting on NPU " << npu_id;
+    LOG(INFO) << "Client thread starting on NPU " << npu_id;
     checkAclError(aclrtSetDevice(npu_id), "Failed to set device");
     // Wait for server to be ready
     serverReady.wait();
@@ -223,7 +223,7 @@ static void clientThread(int npu_id, const std::string& metadataServer,
         client_engine->getMetadata()->getSegmentDescByID(server_segment_id);
     // Write: client -> server
     {
-        LOG_INFO << "Client sending data";
+        LOG(INFO) << "Client sending data";
 
         // Fill client buffer with data
         std::vector<char> host_data(kDataLength, 'A');
@@ -252,12 +252,12 @@ static void clientThread(int npu_id, const std::string& metadataServer,
         s = client_engine->freeBatchID(batch_id);
         ASSERT_TRUE(s.ok());
 
-        LOG_INFO << "Client write completed";
+        LOG(INFO) << "Client write completed";
     }
 
     // Read: server -> client
     {
-        LOG_INFO << "Client receiving data";
+        LOG(INFO) << "Client receiving data";
 
         auto batch_id = client_engine->allocateBatchID(1);
         TransferRequest entry;
@@ -280,7 +280,7 @@ static void clientThread(int npu_id, const std::string& metadataServer,
         s = client_engine->freeBatchID(batch_id);
         ASSERT_TRUE(s.ok());
 
-        LOG_INFO << "Client read completed";
+        LOG(INFO) << "Client read completed";
     }
 
     // Check data
@@ -300,11 +300,11 @@ static void clientThread(int npu_id, const std::string& metadataServer,
     // Notify server to cleanup
     testComplete.set_value();
 
-    LOG_INFO << "Client thread completed";
+    LOG(INFO) << "Client thread completed";
 }
 
 TEST(UBShmemTransportTest, WriteAndReadCrossNPUFabric) {
-    LOG_INFO << "Test started: Server on NPU " << FLAGS_server_npu_id
+    LOG(INFO) << "Test started: Server on NPU " << FLAGS_server_npu_id
               << ", Client on NPU " << FLAGS_client_npu_id;
 
     unsetenv("MC_USE_UBSHMEM_IPC");
@@ -335,11 +335,11 @@ TEST(UBShmemTransportTest, WriteAndReadCrossNPUFabric) {
         clientThreadObj.join();
     }
 
-    LOG_INFO << "Test completed successfully";
+    LOG(INFO) << "Test completed successfully";
 }
 
 TEST(UBShmemTransportTest, WriteAndReadCrossNPUIPC) {
-    LOG_INFO << "Test started: Server on NPU " << FLAGS_server_npu_id
+    LOG(INFO) << "Test started: Server on NPU " << FLAGS_server_npu_id
               << ", Client on NPU " << FLAGS_client_npu_id;
 
     setenv("MC_USE_UBSHMEM_IPC", "1", 1);
@@ -370,7 +370,7 @@ TEST(UBShmemTransportTest, WriteAndReadCrossNPUIPC) {
         clientThreadObj.join();
     }
 
-    LOG_INFO << "Test completed successfully";
+    LOG(INFO) << "Test completed successfully";
 }
 
 int main(int argc, char** argv) {

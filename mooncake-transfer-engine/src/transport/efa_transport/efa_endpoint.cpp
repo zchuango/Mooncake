@@ -33,7 +33,7 @@ void EfaEndPoint::setPeerNicPath(const std::string& peer_nic_path) {
     RWSpinlock::WriteGuard guard(lock_);
     if (peer_nic_path_ == peer_nic_path) return;  // No change
     if (status_.load(std::memory_order_relaxed) == CONNECTED) {
-        LOG_INFO << "Peer reconnected with new address, re-establishing: "
+        LOG(INFO) << "Peer reconnected with new address, re-establishing: "
                   << peer_nic_path_ << " -> " << peer_nic_path;
         disconnectUnlocked();
     }
@@ -53,7 +53,7 @@ int EfaEndPoint::setupConnectionsByActive() {
                                                peer_fi_addr_);
         if (ret != 0) return ret;
         status_.store(CONNECTED, std::memory_order_release);
-        LOG_INFO << "EFA loopback connection established: " << toString();
+        LOG(INFO) << "EFA loopback connection established: " << toString();
         return 0;
     }
 
@@ -66,7 +66,7 @@ int EfaEndPoint::setupConnectionsByActive() {
     auto peer_server_name = getServerNameFromNicPath(peer_nic_path_);
     auto peer_nic_name = getNicNameFromNicPath(peer_nic_path_);
     if (peer_server_name.empty() || peer_nic_name.empty()) {
-        LOG_ERROR << "Parse peer EFA nic path failed: " << peer_nic_path_;
+        LOG(ERROR) << "Parse peer EFA nic path failed: " << peer_nic_path_;
         return ERR_INVALID_ARGUMENT;
     }
 
@@ -75,7 +75,7 @@ int EfaEndPoint::setupConnectionsByActive() {
     if (rc) return rc;
 
     if (peer_desc.efa_addr.empty()) {
-        LOG_ERROR << "Peer did not provide EFA address in handshake";
+        LOG(ERROR) << "Peer did not provide EFA address in handshake";
         return ERR_REJECT_HANDSHAKE;
     }
 
@@ -84,7 +84,7 @@ int EfaEndPoint::setupConnectionsByActive() {
     cached_peer_addr_ = peer_desc.efa_addr;
 
     status_.store(CONNECTED, std::memory_order_release);
-    LOG_INFO << "EFA connection established: " << toString()
+    LOG(INFO) << "EFA connection established: " << toString()
             << " peer_fi_addr=" << peer_fi_addr_;
     return 0;
 }
@@ -96,7 +96,7 @@ int EfaEndPoint::setupConnectionsByPassive(const HandShakeDesc& peer_desc,
     if (peer_desc.peer_nic_path != context_.nicPath() ||
         peer_desc.local_nic_path != peer_nic_path_) {
         local_desc.reply_msg = "EFA nic path inconsistency";
-        LOG_ERROR << "Invalid argument: peer EFA nic path inconsistency"
+        LOG(ERROR) << "Invalid argument: peer EFA nic path inconsistency"
                    << " peer_nic_path=" << peer_desc.peer_nic_path
                    << " context_.nicPath()=" << context_.nicPath()
                    << " local_nic_path=" << peer_desc.local_nic_path
@@ -106,7 +106,7 @@ int EfaEndPoint::setupConnectionsByPassive(const HandShakeDesc& peer_desc,
 
     if (peer_desc.efa_addr.empty()) {
         local_desc.reply_msg = "No EFA address provided";
-        LOG_ERROR << "Peer did not provide EFA address";
+        LOG(ERROR) << "Peer did not provide EFA address";
         return ERR_REJECT_HANDSHAKE;
     }
 
@@ -128,9 +128,9 @@ int EfaEndPoint::setupConnectionsByPassive(const HandShakeDesc& peer_desc,
     if (status_.load(std::memory_order_relaxed) == CONNECTED) {
         if (!cached_peer_addr_.empty() &&
             peer_desc.efa_addr == cached_peer_addr_) {
-            LOG_INFO << "EFA passive handshake (same peer addr): " << toString();
+            LOG(INFO) << "EFA passive handshake (same peer addr): " << toString();
         } else {
-            LOG_WARNING << "Re-establish EFA connection: " << toString();
+            LOG(WARNING) << "Re-establish EFA connection: " << toString();
         }
         disconnectUnlocked();
     }
@@ -148,7 +148,7 @@ int EfaEndPoint::setupConnectionsByPassive(const HandShakeDesc& peer_desc,
     // reply_msg empty on success
 
     status_.store(CONNECTED, std::memory_order_release);
-    LOG_INFO << "EFA connection established (passive): " << toString();
+    LOG(INFO) << "EFA connection established (passive): " << toString();
     return 0;
 }
 

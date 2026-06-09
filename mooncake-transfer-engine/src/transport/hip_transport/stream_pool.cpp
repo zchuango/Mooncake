@@ -62,7 +62,7 @@ hipStream_t StreamPool::getNextStream(int device_id) {
 bool StreamPool::initializeStreamsForDevice(int device_id) {
     hipError_t err = hipSetDevice(device_id);
     if (err != hipSuccess) {
-        LOG_ERROR << "StreamPool: Failed to set device " << device_id << ": "
+        LOG(ERROR) << "StreamPool: Failed to set device " << device_id << ": "
                    << hipGetErrorString(err);
         return false;
     }
@@ -74,7 +74,7 @@ bool StreamPool::initializeStreamsForDevice(int device_id) {
         hipStream_t stream;
         err = hipStreamCreateWithFlags(&stream, hipStreamNonBlocking);
         if (err != hipSuccess) {
-            LOG_ERROR << "StreamPool: Failed to create stream for device "
+            LOG(ERROR) << "StreamPool: Failed to create stream for device "
                        << device_id << ": " << hipGetErrorString(err);
             // Clean up already created streams
             for (auto s : device_streams) {

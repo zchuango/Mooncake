@@ -19,7 +19,7 @@ EtcdOpLogChangeNotifier::EtcdOpLogChangeNotifier(const std::string& cluster_id,
                                                  EtcdOpLogStore* oplog_store)
     : cluster_id_(cluster_id), oplog_store_(oplog_store) {
     if (!NormalizeAndValidateClusterId(cluster_id_)) {
-        LOG_FATAL << "Invalid cluster_id for EtcdOpLogChangeNotifier: '"
+        LOG(FATAL) << "Invalid cluster_id for EtcdOpLogChangeNotifier: '"
                    << cluster_id_
                    << "'. Allowed chars: [A-Za-z0-9_.-], max_len=128.";
     }
@@ -44,7 +44,7 @@ ErrorCode EtcdOpLogChangeNotifier::Start(uint64_t start_sequence_id,
                                          EntryCallback on_entry,
                                          ErrorCallback on_error) {
     if (running_.load()) {
-        LOG_WARNING << "EtcdOpLogChangeNotifier is already running";
+        LOG(WARNING) << "EtcdOpLogChangeNotifier is already running";
         return ErrorCode::OK;
     }
 
@@ -58,14 +58,14 @@ ErrorCode EtcdOpLogChangeNotifier::Start(uint64_t start_sequence_id,
         if (delivered < 0) {
             next_watch_revision_.store(0);
         }
-        LOG_INFO << "EtcdOpLogChangeNotifier initial sync done"
+        LOG(INFO) << "EtcdOpLogChangeNotifier initial sync done"
                   << ", last_seq=" << last_processed_sequence_id_.load()
                   << ", next_watch_revision=" << next_watch_revision_.load();
     }
 
     running_.store(true);
     watch_thread_ = std::thread(&EtcdOpLogChangeNotifier::WatchLoop, this);
-    LOG_INFO << "EtcdOpLogChangeNotifier started for cluster_id="
+    LOG(INFO) << "EtcdOpLogChangeNotifier started for cluster_id="
               << cluster_id_;
     return ErrorCode::OK;
 }
@@ -91,7 +91,7 @@ void EtcdOpLogChangeNotifier::Stop() {
     ErrorCode err = EtcdHelper::CancelWatchWithPrefix(watch_prefix_.c_str(),
                                                       watch_prefix_.size());
     if (err != ErrorCode::OK) {
-        LOG_WARNING << "Failed to cancel watch for prefix " << watch_prefix_
+        LOG(WARNING) << "Failed to cancel watch for prefix " << watch_prefix_
                      << ", error=" << static_cast<int>(err);
     }
 
@@ -101,13 +101,13 @@ void EtcdOpLogChangeNotifier::Stop() {
     if (wait_err == ErrorCode::OK) {
         delete callback_ctx_;
     } else {
-        LOG_WARNING << "Watch goroutine did not stop in time for prefix "
+        LOG(WARNING) << "Watch goroutine did not stop in time for prefix "
                      << watch_prefix_
                      << "; leaking ChangeNotifierCallbackContext to avoid UAF";
     }
     callback_ctx_ = nullptr;
 
-    LOG_INFO << "EtcdOpLogChangeNotifier stopped";
+    LOG(INFO) << "EtcdOpLogChangeNotifier stopped";
 }
 
 bool EtcdOpLogChangeNotifier::IsHealthy() const {
@@ -123,7 +123,7 @@ bool EtcdOpLogChangeNotifier::ReadOpLogSince(uint64_t start_seq_id,
     ErrorCode err = oplog_store_->ReadOpLogSinceWithRevision(
         start_seq_id, kSyncBatchSize, entries, revision_id);
     if (err != ErrorCode::OK) {
-        LOG_ERROR << "Failed to read OpLog since sequence_id=" << start_seq_id
+        LOG(ERROR) << "Failed to read OpLog since sequence_id=" << start_seq_id
                    << ", error=" << static_cast<int>(err);
         return false;
     }
@@ -161,7 +161,7 @@ void EtcdOpLogChangeNotifier::WatchCallback(void* context, const char* key,
 }
 
 void EtcdOpLogChangeNotifier::WatchLoop() {
-    LOG_INFO << "OpLog watch thread started for cluster_id=" << cluster_id_;
+    LOG(INFO) << "OpLog watch thread started for cluster_id=" << cluster_id_;
 
     while (running_.load()) {
         // Cancel any existing watch before starting a new one
@@ -178,7 +178,7 @@ void EtcdOpLogChangeNotifier::WatchLoop() {
             callback_ctx_, WatchCallback);
 
         if (err != ErrorCode::OK) {
-            LOG_ERROR << "Failed to start watch for prefix " << watch_prefix_
+            LOG(ERROR) << "Failed to start watch for prefix " << watch_prefix_
                        << ", error=" << static_cast<int>(err);
             watch_healthy_.store(false);
             if (on_error_) {
@@ -190,7 +190,7 @@ void EtcdOpLogChangeNotifier::WatchLoop() {
             continue;
         }
 
-        LOG_INFO << "Watch started for prefix " << watch_prefix_;
+        LOG(INFO) << "Watch started for prefix " << watch_prefix_;
         watch_healthy_.store(true);
         consecutive_errors_.store(0);
 
@@ -198,7 +198,7 @@ void EtcdOpLogChangeNotifier::WatchLoop() {
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
             if (consecutive_errors_.load() >= kMaxConsecutiveErrors) {
-                LOG_WARNING
+                LOG(WARNING)
                     << "Too many consecutive errors ("
                     << consecutive_errors_.load() << "), reconnecting watch...";
                 watch_healthy_.store(false);
@@ -216,7 +216,7 @@ void EtcdOpLogChangeNotifier::WatchLoop() {
         }
     }
 
-    LOG_INFO << "OpLog watch thread stopped";
+    LOG(INFO) << "OpLog watch thread stopped";
 }
 
 void EtcdOpLogChangeNotifier::HandleWatchEvent(const std::string& key,
@@ -225,7 +225,7 @@ void EtcdOpLogChangeNotifier::HandleWatchEvent(const std::string& key,
                                                int64_t mod_revision) {
     // event_type: 0 = PUT, 1 = DELETE, 2 = WATCH_BROKEN
     if (event_type == 2) {
-        LOG_WARNING << "OpLog watch broken, will reconnect. cluster_id="
+        LOG(WARNING) << "OpLog watch broken, will reconnect. cluster_id="
                      << cluster_id_
                      << ", next_watch_revision=" << next_watch_revision_.load()
                      << ", last_seq=" << last_processed_sequence_id_.load();
@@ -243,13 +243,13 @@ void EtcdOpLogChangeNotifier::HandleWatchEvent(const std::string& key,
     }
 
     if (event_type == 1) {
-        LOG_INFO << "OpLog entry deleted: " << key;
+        LOG(INFO) << "OpLog entry deleted: " << key;
         consecutive_errors_.store(0);
         return;
     }
 
     if (event_type != 0) {
-        LOG_WARNING << "Unknown event type: " << event_type
+        LOG(WARNING) << "Unknown event type: " << event_type
                      << " for key: " << key;
         consecutive_errors_.fetch_add(1);
         return;
@@ -264,14 +264,14 @@ void EtcdOpLogChangeNotifier::HandleWatchEvent(const std::string& key,
     // Parse the OpLog entry (DeserializeOpLogEntry validates entry size)
     OpLogEntry entry;
     if (!DeserializeOpLogEntry(value, entry)) {
-        LOG_ERROR << "Failed to deserialize OpLog entry from key: " << key;
+        LOG(ERROR) << "Failed to deserialize OpLog entry from key: " << key;
         consecutive_errors_.fetch_add(1);
         return;
     }
 
     // Verify checksum at the trust boundary (data from etcd)
     if (!OpLogManager::VerifyChecksum(entry)) {
-        LOG_ERROR << "OpLog entry checksum mismatch: sequence_id="
+        LOG(ERROR) << "OpLog entry checksum mismatch: sequence_id="
                    << entry.sequence_id << ", key=" << entry.object_key
                    << ". Possible data corruption. Discarding entry.";
         consecutive_errors_.fetch_add(1);
@@ -293,7 +293,7 @@ void EtcdOpLogChangeNotifier::HandleWatchEvent(const std::string& key,
 
     consecutive_errors_.store(0);
     reconnect_count_.store(0);
-    LOG_INFO << "Delivered OpLog entry: sequence_id=" << entry.sequence_id
+    LOG(INFO) << "Delivered OpLog entry: sequence_id=" << entry.sequence_id
             << ", op_type=" << static_cast<int>(entry.op_type)
             << ", key=" << entry.object_key;
 }
@@ -307,15 +307,15 @@ void EtcdOpLogChangeNotifier::TryReconnect() {
     int delay_ms =
         std::min(kReconnectDelayMs * reconnect_attempt, kMaxReconnectDelayMs);
 
-    LOG_INFO << "Attempting to reconnect watch (attempt #" << reconnect_attempt
+    LOG(INFO) << "Attempting to reconnect watch (attempt #" << reconnect_attempt
               << "), waiting " << delay_ms << "ms...";
 
     std::this_thread::sleep_for(std::chrono::milliseconds(delay_ms));
 
     if (SyncMissedEntries()) {
-        LOG_INFO << "Successfully synced missed OpLog entries";
+        LOG(INFO) << "Successfully synced missed OpLog entries";
     } else {
-        LOG_WARNING
+        LOG(WARNING)
             << "Failed to sync missed OpLog entries, continuing anyway";
     }
 }
@@ -325,12 +325,12 @@ bool EtcdOpLogChangeNotifier::SyncMissedEntries() {
     if (last_seq == 0) {
         return true;
     }
-    LOG_INFO << "Syncing missed OpLog entries since sequence_id=" << last_seq;
+    LOG(INFO) << "Syncing missed OpLog entries since sequence_id=" << last_seq;
     int64_t delivered = DeliverHistoricalEntries(last_seq);
     if (delivered < 0) {
         return false;
     }
-    LOG_INFO << "Synced " << delivered << " missed OpLog entries";
+    LOG(INFO) << "Synced " << delivered << " missed OpLog entries";
     return true;
 }
 
@@ -391,7 +391,7 @@ EtcdOpLogChangeNotifier::~EtcdOpLogChangeNotifier() {
 ErrorCode EtcdOpLogChangeNotifier::Start(uint64_t /*start_sequence_id*/,
                                          EntryCallback /*on_entry*/,
                                          ErrorCallback /*on_error*/) {
-    LOG_ERROR << "EtcdOpLogChangeNotifier requires STORE_USE_ETCD";
+    LOG(ERROR) << "EtcdOpLogChangeNotifier requires STORE_USE_ETCD";
     return ErrorCode::ETCD_OPERATION_ERROR;
 }
 

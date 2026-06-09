@@ -94,7 +94,7 @@ class LocalHotCacheTest : public ::testing::Test {
             << "Failed to start in-proc master";
         master_address_ = master_.master_address();
         metadata_url_ = master_.metadata_url();
-        LOG_INFO << "Started in-proc master at " << master_address_
+        LOG(INFO) << "Started in-proc master at " << master_address_
                   << ", metadata="
                   << (metadata_url_.empty() ? "disabled" : metadata_url_);
     }

@@ -81,7 +81,7 @@ std::string_view Status::CodeToString(Status::Code code) {
         case Code::kNotImplemented:
             return "NotImplemented";
         default:
-            LOG_ERROR << "Unknown code: " << static_cast<uint16_t>(code);
+            LOG(ERROR) << "Unknown code: " << static_cast<uint16_t>(code);
             return "UnknownCode";
     }
 }

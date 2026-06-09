@@ -143,7 +143,7 @@ tl::expected<ReturnType, ErrorCode> DummyClient::invoke_rpc(Args&&... args) {
 
     if constexpr (!can_invoke_when_disconnected<ServiceMethod>()) {
         if (!connected_.load()) {
-            LOG_ERROR << "Dummy Client not connected";
+            LOG(ERROR) << "Dummy Client not connected";
             return tl::make_unexpected(ErrorCode::RPC_FAIL);
         }
     }
@@ -157,12 +157,12 @@ tl::expected<ReturnType, ErrorCode> DummyClient::invoke_rpc(Args&&... args) {
                         std::forward<Args>(args)...);
                 });
             if (!ret.has_value()) {
-                LOG_ERROR << "Dummy Client not available";
+                LOG(ERROR) << "Dummy Client not available";
                 co_return tl::make_unexpected(ErrorCode::RPC_FAIL);
             }
             auto result = co_await std::move(ret.value());
             if (!result) {
-                LOG_ERROR << "RPC call failed: " << result.error().msg;
+                LOG(ERROR) << "RPC call failed: " << result.error().msg;
                 co_return tl::make_unexpected(ErrorCode::RPC_FAIL);
             }
             co_return result->result();
@@ -174,7 +174,7 @@ std::vector<tl::expected<ResultType, ErrorCode>> DummyClient::invoke_batch_rpc(
     size_t input_size, Args&&... args) {
     auto pool = client_accessor_.GetClientPool();
     if (!connected_.load()) {
-        LOG_ERROR << "Dummy Client not connected";
+        LOG(ERROR) << "Dummy Client not connected";
         std::vector<tl::expected<ResultType, ErrorCode>> error_results;
         error_results.reserve(input_size);
         for (size_t i = 0; i < input_size; ++i) {
@@ -194,13 +194,13 @@ std::vector<tl::expected<ResultType, ErrorCode>> DummyClient::invoke_batch_rpc(
                         std::forward<Args>(args)...);
                 });
             if (!ret.has_value()) {
-                LOG_ERROR << "Dummy Client not available";
+                LOG(ERROR) << "Dummy Client not available";
                 co_return std::vector<tl::expected<ResultType, ErrorCode>>(
                     input_size, tl::make_unexpected(ErrorCode::RPC_FAIL));
             }
             auto result = co_await std::move(ret.value());
             if (!result) {
-                LOG_ERROR << "Batch RPC call failed: " << result.error().msg;
+                LOG(ERROR) << "Batch RPC call failed: " << result.error().msg;
                 std::vector<tl::expected<ResultType, ErrorCode>> error_results;
                 error_results.reserve(input_size);
                 for (size_t i = 0; i < input_size; ++i) {
@@ -284,12 +284,12 @@ int DummyClient::register_ascend_shm(const ShmHelper::ShmSegment* shm,
     auto mapped_result = invoke_rpc<&RealClient::is_shm_mapped_internal, bool>(
         dummy_base_addr, client_id_);
     if (!mapped_result.has_value()) {
-        LOG_WARNING << "Failed to query real-side shared memory mapping, addr="
+        LOG(WARNING) << "Failed to query real-side shared memory mapping, addr="
                      << shm->base_addr;
         return -1;
     }
     if (mapped_result.value()) {
-        LOG_INFO << "Real-side shared memory mapping already exists, addr="
+        LOG(INFO) << "Real-side shared memory mapping already exists, addr="
                   << shm->base_addr << ", size=" << shm->size;
         return 0;
     }
@@ -298,7 +298,7 @@ int DummyClient::register_ascend_shm(const ShmHelper::ShmSegment* shm,
     aclrtPtrAttributes attributes;
     auto ret = aclrtPointerGetAttributes(shm->base_addr, &attributes);
     if (ret != ACL_ERROR_NONE) {
-        LOG_ERROR << "Failed to get pointer attributes, ret=" << ret;
+        LOG(ERROR) << "Failed to get pointer attributes, ret=" << ret;
         return -1;
     }
     // all device mem shared by ipc
@@ -309,7 +309,7 @@ int DummyClient::register_ascend_shm(const ShmHelper::ShmSegment* shm,
             shm->base_addr, shm->size, ipc_key, kIPCKeyLen,
             ACL_RT_IPC_MEM_EXPORT_FLAG_DISABLE_PID_VALIDATION);
         if (ret != ACL_ERROR_NONE) {
-            LOG_ERROR << "aclrtIpcMemGetExportKey failed, ret=" << ret
+            LOG(ERROR) << "aclrtIpcMemGetExportKey failed, ret=" << ret
                        << ", errmsg: " << aclGetRecentErrMsg();
             return -1;
         }
@@ -319,10 +319,10 @@ int DummyClient::register_ascend_shm(const ShmHelper::ShmSegment* shm,
             dummy_base_addr, shm->size, is_local, ipc_key_bytes, device_id_,
             client_id_);
         if (!map_ret.has_value()) {
-            LOG_ERROR << "Failed to map IPC buffer on real side";
+            LOG(ERROR) << "Failed to map IPC buffer on real side";
             return -1;
         }
-        LOG_INFO << "Registered device memory via IPC, addr=" << shm->base_addr
+        LOG(INFO) << "Registered device memory via IPC, addr=" << shm->base_addr
                   << ", size=" << shm->size << ", device_id=" << device_id_;
         return 0;
     }
@@ -330,7 +330,7 @@ int DummyClient::register_ascend_shm(const ShmHelper::ShmSegment* shm,
         // Host: memfd + mmap (ShmHelper); register with Real like non-agent GPU
         // path.
         if (shm->fd < 0) {
-            LOG_ERROR
+            LOG(ERROR)
                 << "Host POSIX shared memory requires memfd-backed allocation "
                    "(use ShmHelper::allocate / alloc_from_mem_pool)";
             return -1;
@@ -342,7 +342,7 @@ int DummyClient::register_ascend_shm(const ShmHelper::ShmSegment* shm,
     aclrtDrvMemHandle physical_handle =
         ascend_get_physical_handle_from_va(shm->base_addr);
     if (physical_handle == nullptr) {
-        LOG_ERROR << "Failed to get physical handle for va (memory must be "
+        LOG(ERROR) << "Failed to get physical handle for va (memory must be "
                       "allocated via ascend_allocate_vmm_memory_direct)";
         return -1;
     }
@@ -352,7 +352,7 @@ int DummyClient::register_ascend_shm(const ShmHelper::ShmSegment* shm,
         physical_handle, ACL_RT_VMM_EXPORT_FLAG_DISABLE_PID_VALIDATION,
         ACL_MEM_SHARE_HANDLE_TYPE_FABRIC, &export_handle);
     if (ret != ACL_ERROR_NONE) {
-        LOG_ERROR << "Failed to export shareable handle, ret=" << ret;
+        LOG(ERROR) << "Failed to export shareable handle, ret=" << ret;
         return -1;
     }
 
@@ -362,10 +362,10 @@ int DummyClient::register_ascend_shm(const ShmHelper::ShmSegment* shm,
         dummy_base_addr, shm->size, is_local, handle_bytes, device_id_,
         client_id_);
     if (!map_ret.has_value()) {
-        LOG_ERROR << "Failed to map VMM buffer on real side";
+        LOG(ERROR) << "Failed to map VMM buffer on real side";
         return -1;
     }
-    LOG_INFO << "Registered memory suc, addr=" << shm->base_addr
+    LOG(INFO) << "Registered memory suc, addr=" << shm->base_addr
               << ", size=" << shm->size << ", device_id=" << device_id_;
 #endif
     return 0;
@@ -374,13 +374,13 @@ int DummyClient::register_ascend_shm(const ShmHelper::ShmSegment* shm,
 int DummyClient::register_shm_via_ipc(const ShmHelper::ShmSegment* shm,
                                       bool is_local) {
     if (shm->fd < 0) {
-        LOG_ERROR << "Invalid shm_fd during IPC registration";
+        LOG(ERROR) << "Invalid shm_fd during IPC registration";
         return -1;
     }
 
     int sock_fd = socket(AF_UNIX, SOCK_STREAM, 0);
     if (sock_fd < 0) {
-        LOG_ERROR << "Failed to create IPC socket: " << strerror(errno);
+        LOG(ERROR) << "Failed to create IPC socket: " << strerror(errno);
         return -1;
     }
 
@@ -391,7 +391,7 @@ int DummyClient::register_shm_via_ipc(const ShmHelper::ShmSegment* shm,
     // Use abstract namespace
     std::string abstract_name = ipc_socket_path_;
     if (abstract_name.size() > sizeof(addr.sun_path) - 2) {
-        LOG_ERROR << "IPC socket path too long";
+        LOG(ERROR) << "IPC socket path too long";
         close(sock_fd);
         return -1;
     }
@@ -399,7 +399,7 @@ int DummyClient::register_shm_via_ipc(const ShmHelper::ShmSegment* shm,
     strncpy(addr.sun_path + 1, abstract_name.c_str(),
             sizeof(addr.sun_path) - 2);
     socklen_t addr_len = sizeof(sa_family_t) + 1 + abstract_name.length();
-    LOG_INFO << "Connecting to IPC socket: " << abstract_name;
+    LOG(INFO) << "Connecting to IPC socket: " << abstract_name;
 
     if (::connect(sock_fd, (struct sockaddr*)&addr, addr_len) < 0) {
         // This is expected if RealClient is down
@@ -410,7 +410,7 @@ int DummyClient::register_shm_via_ipc(const ShmHelper::ShmSegment* shm,
     // Send request type first
     IpcRequestType type = IPC_SHM_REGISTER;
     if (::send(sock_fd, &type, sizeof(type), 0) < 0) {
-        LOG_ERROR << "Failed to send IPC request type: " << strerror(errno);
+        LOG(ERROR) << "Failed to send IPC request type: " << strerror(errno);
         close(sock_fd);
         return -1;
     }
@@ -425,14 +425,14 @@ int DummyClient::register_shm_via_ipc(const ShmHelper::ShmSegment* shm,
     req.is_local_buffer = is_local;
 
     if (ipc_send_fd(sock_fd, shm->fd, &req, sizeof(req)) < 0) {
-        LOG_ERROR << "Failed to send FD to RealClient: " << strerror(errno);
+        LOG(ERROR) << "Failed to send FD to RealClient: " << strerror(errno);
         close(sock_fd);
         return -1;
     }
 
     int status = -1;
     if (recv(sock_fd, &status, sizeof(status), 0) < 0) {
-        LOG_ERROR << "Failed to receive response from RealClient";
+        LOG(ERROR) << "Failed to receive response from RealClient";
         close(sock_fd);
         return -1;
     }
@@ -440,12 +440,12 @@ int DummyClient::register_shm_via_ipc(const ShmHelper::ShmSegment* shm,
     close(sock_fd);
 
     if (status != 0) {
-        LOG_ERROR << "RealClient failed to map shared memory, error code: "
+        LOG(ERROR) << "RealClient failed to map shared memory, error code: "
                    << status;
         return -1;
     }
 
-    LOG_INFO << "Successfully registered SHM via IPC, base: "
+    LOG(INFO) << "Successfully registered SHM via IPC, base: "
               << shm->base_addr;
     return 0;
 }
@@ -462,7 +462,7 @@ int DummyClient::setup_dummy(size_t mem_pool_size, size_t local_buffer_size,
     void* base_addr = nullptr;
     ErrorCode err = connect(server_address);
     if (err != ErrorCode::OK) {
-        LOG_ERROR << "Failed to connect to real client";
+        LOG(ERROR) << "Failed to connect to real client";
         return -1;
     }
 
@@ -472,16 +472,16 @@ int DummyClient::setup_dummy(size_t mem_pool_size, size_t local_buffer_size,
     int32_t logic_dev = 0;
     auto acl_ret = aclrtGetDevice(&logic_dev);
     if (acl_ret != ACL_ERROR_NONE) {
-        LOG_ERROR << "Failed to get current device, ret=" << acl_ret;
+        LOG(ERROR) << "Failed to get current device, ret=" << acl_ret;
         return -1;
     }
     acl_ret = aclrtGetPhyDevIdByLogicDevId(logic_dev, &device_id_);
     if (acl_ret != ACL_ERROR_NONE) {
-        LOG_ERROR << "Failed to get physical device id, ret=" << acl_ret
+        LOG(ERROR) << "Failed to get physical device id, ret=" << acl_ret
                    << ", errmsg: " << aclGetRecentErrMsg();
         return -1;
     }
-    LOG_INFO << "Setup dummy: logic_dev=" << logic_dev
+    LOG(INFO) << "Setup dummy: logic_dev=" << logic_dev
               << " physical_dev=" << device_id_;
 #endif
 
@@ -491,27 +491,27 @@ int DummyClient::setup_dummy(size_t mem_pool_size, size_t local_buffer_size,
         try {
             base_addr = shm_helper_->allocate(local_buffer_size);
         } catch (const std::exception& e) {
-            LOG_ERROR << "Failed to allocate shared memory: " << e.what();
+            LOG(ERROR) << "Failed to allocate shared memory: " << e.what();
             return -1;
         }
         // Attempt registration for the primary segment
         auto local_buffer_shm = shm_helper_->get_shm(base_addr);
         if (!local_buffer_shm) {
-            LOG_ERROR << "Failed to get shm segment for base address";
+            LOG(ERROR) << "Failed to get shm segment for base address";
             shm_helper_->free(base_addr);
             return -1;
         }
 
         if (globalConfig().ascend_agent_mode) {
             if (register_ascend_shm(local_buffer_shm.get(), true) != 0) {
-                LOG_ERROR << "Failed to register SHM via IPC";
+                LOG(ERROR) << "Failed to register SHM via IPC";
                 // Register failed, cleanup
                 shm_helper_->free(local_buffer_shm->base_addr);
                 return -1;
             }
         } else {
             if (register_shm_via_ipc(local_buffer_shm.get(), true) != 0) {
-                LOG_ERROR << "Failed to register SHM via IPC";
+                LOG(ERROR) << "Failed to register SHM via IPC";
                 // Register failed, cleanup
                 shm_helper_->free(local_buffer_shm->base_addr);
                 return -1;
@@ -522,7 +522,7 @@ int DummyClient::setup_dummy(size_t mem_pool_size, size_t local_buffer_size,
 
         // Best-effort: request hot cache shm from real client
         if (request_hot_cache_fd() != 0) {
-            LOG_INFO
+            LOG(INFO)
                 << "Hot cache shm not available (real client may not have it)";
         }
     }
@@ -564,7 +564,7 @@ int DummyClient::tearDownAll() {
 }
 
 int64_t DummyClient::unregister_shm() {
-    LOG_INFO << "[unregister_shm] client_id=" << client_id_;
+    LOG(INFO) << "[unregister_shm] client_id=" << client_id_;
 #if defined(USE_ASCEND_DIRECT)
     if (globalConfig().ascend_agent_mode) {
         return to_py_ret(
@@ -584,7 +584,7 @@ int DummyClient::register_device_buffer_for_reconnect(void* buffer,
         std::lock_guard<std::mutex> lock(registered_device_buffers_mutex_);
         auto it = registered_device_buffers_.find(buffer_addr);
         if (it != registered_device_buffers_.end() && it->second != size) {
-            LOG_ERROR << "Device buffer size mismatch for tracked buffer, "
+            LOG(ERROR) << "Device buffer size mismatch for tracked buffer, "
                        << "buffer=" << buffer << ", size=" << size
                        << ", tracked_size=" << it->second;
             return -1;
@@ -595,7 +595,7 @@ int DummyClient::register_device_buffer_for_reconnect(void* buffer,
     shm.base_addr = buffer;
     shm.size = size;
     if (register_ascend_shm(&shm, false) != 0) {
-        LOG_ERROR << "Failed to register device buffer, buffer=" << buffer
+        LOG(ERROR) << "Failed to register device buffer, buffer=" << buffer
                    << ", size=" << size;
         return -1;
     }
@@ -613,7 +613,7 @@ int DummyClient::unregister_device_buffer_for_reconnect(void* buffer) {
         std::lock_guard<std::mutex> lock(registered_device_buffers_mutex_);
         if (registered_device_buffers_.find(buffer_addr) ==
             registered_device_buffers_.end()) {
-            LOG_ERROR << "Device buffer is not registered with RealClient";
+            LOG(ERROR) << "Device buffer is not registered with RealClient";
             return -1;
         }
     }
@@ -645,7 +645,7 @@ std::vector<ShmHelper::ShmSegment> DummyClient::get_registered_device_buffers()
 // Dummy only register buffer within the shared memory region
 int DummyClient::register_buffer(void* buffer, size_t size) {
     if (buffer == nullptr) {
-        LOG_ERROR << "Invalid buffer pointer";
+        LOG(ERROR) << "Invalid buffer pointer";
         return -1;
     }
 #if defined(USE_ASCEND_DIRECT)
@@ -653,7 +653,7 @@ int DummyClient::register_buffer(void* buffer, size_t size) {
         aclrtPtrAttributes attributes{};
         auto acl_ret = aclrtPointerGetAttributes(buffer, &attributes);
         if (acl_ret != ACL_ERROR_NONE) {
-            LOG_ERROR << "Failed to get pointer attributes, ret=" << acl_ret;
+            LOG(ERROR) << "Failed to get pointer attributes, ret=" << acl_ret;
             return -1;
         }
         if (attributes.location.type == ACL_MEM_LOCATION_TYPE_DEVICE) {
@@ -664,7 +664,7 @@ int DummyClient::register_buffer(void* buffer, size_t size) {
             shm->base_addr = buffer;
             shm->size = size;
             if (register_ascend_shm(shm.get(), false) != 0) {
-                LOG_ERROR << "Failed to register buffer, buffer=" << buffer
+                LOG(ERROR) << "Failed to register buffer, buffer=" << buffer
                            << ", size=" << size;
                 return -1;
             }
@@ -676,7 +676,7 @@ int DummyClient::register_buffer(void* buffer, size_t size) {
     // Find which shm this buffer belongs to
     auto shm = shm_helper_->get_shm(buffer);
     if (!shm) {
-        LOG_ERROR << "Buffer is not in any registered shared memory";
+        LOG(ERROR) << "Buffer is not in any registered shared memory";
         return -1;
     }
     if (shm_helper_->is_hugepage()) {
@@ -686,7 +686,7 @@ int DummyClient::register_buffer(void* buffer, size_t size) {
     if (reinterpret_cast<uint8_t*>(buffer) !=
             reinterpret_cast<uint8_t*>(shm->base_addr) ||
         size != shm->size) {
-        LOG_ERROR << "Invalid buffer address or size for registration: "
+        LOG(ERROR) << "Invalid buffer address or size for registration: "
                       "Buffer addr: "
                    << buffer << ", need addr: " << shm->base_addr
                    << ", buffer size: " << size << ", need size: " << shm->size;
@@ -696,7 +696,7 @@ int DummyClient::register_buffer(void* buffer, size_t size) {
     // If this shm is not registered with RealClient yet, do it now
     if (!shm->registered) {
         if (register_shm_via_ipc(shm.get(), shm->is_local) != 0) {
-            LOG_ERROR << "Failed to implicitly register new SHM via IPC";
+            LOG(ERROR) << "Failed to implicitly register new SHM via IPC";
             return -1;
         }
         shm->registered = true;
@@ -707,7 +707,7 @@ int DummyClient::register_buffer(void* buffer, size_t size) {
 
 int DummyClient::unregister_buffer(void* buffer) {
     if (buffer == nullptr) {
-        LOG_ERROR << "Invalid buffer pointer";
+        LOG(ERROR) << "Invalid buffer pointer";
         return -1;
     }
 
@@ -724,16 +724,16 @@ int DummyClient::unregister_buffer(void* buffer) {
 
     auto shm = shm_helper_->get_shm(buffer);
     if (!shm) {
-        LOG_ERROR << "Buffer is not in any registered shared memory";
+        LOG(ERROR) << "Buffer is not in any registered shared memory";
         return -1;
     }
     if (!shm->registered) {
-        LOG_ERROR << "Buffer is not registered with RealClient";
+        LOG(ERROR) << "Buffer is not registered with RealClient";
         return -1;
     }
     if (reinterpret_cast<uint8_t*>(buffer) !=
         reinterpret_cast<uint8_t*>(shm->base_addr)) {
-        LOG_ERROR << "Invalid buffer address for unregistration";
+        LOG(ERROR) << "Invalid buffer address for unregistration";
         return -1;
     }
     auto ret = invoke_rpc<&RealClient::unregister_shm_buffer_internal, void>(
@@ -749,7 +749,7 @@ uint64_t DummyClient::alloc_from_mem_pool(size_t size) {
         void* addr = shm_helper_->allocate(size);
         return reinterpret_cast<uint64_t>(addr);
     } catch (const std::exception& e) {
-        LOG_ERROR << "Failed to allocate from mem pool: " << e.what();
+        LOG(ERROR) << "Failed to allocate from mem pool: " << e.what();
         return 0;
     }
 }
@@ -883,7 +883,7 @@ std::vector<int> DummyClient::batchIsExist(
         if (result.has_value()) {
             results.push_back(result.value() ? 1 : 0);
         } else {
-            LOG_ERROR << "Batch isExist failed: " << toString(result.error());
+            LOG(ERROR) << "Batch isExist failed: " << toString(result.error());
             results.push_back(-1);
         }
     }
@@ -904,7 +904,7 @@ std::shared_ptr<BufferHandle> DummyClient::get_buffer(const std::string& key) {
         if (result.has_value()) {
             auto [offset, size] = result.value();
             if (offset + size > hot_cache_size_) {
-                LOG_ERROR << "Hot cache offset out of bounds: offset="
+                LOG(ERROR) << "Hot cache offset out of bounds: offset="
                            << offset << " size=" << size
                            << " cache_size=" << hot_cache_size_;
                 return nullptr;
@@ -956,7 +956,7 @@ std::vector<std::shared_ptr<BufferHandle>> DummyClient::batch_get_buffer(
             if (hot_results[i].has_value()) {
                 auto [offset, size] = hot_results[i].value();
                 if (offset + size > hot_cache_size_) {
-                    LOG_ERROR
+                    LOG(ERROR)
                         << "Hot cache offset out of bounds: offset=" << offset
                         << " size=" << size
                         << " cache_size=" << hot_cache_size_;
@@ -1052,7 +1052,7 @@ std::vector<std::vector<std::vector<int64_t>>> DummyClient::get_into_ranges(
             all_sizes, device_id_, client_id_);
 
     if (!internal_results) {
-        LOG_ERROR << "get_into_ranges RPC failed";
+        LOG(ERROR) << "get_into_ranges RPC failed";
         return build_ranged_read_error_results(buffers.size(), all_keys,
                                                all_dst_offsets,
                                                internal_results.error());
@@ -1197,7 +1197,7 @@ DummyClient::batch_get_replica_desc(const std::vector<std::string>& keys) {
                    std::map<std::string, std::vector<Replica::Descriptor>>>(
             keys);
     if (!batch_result.has_value()) {
-        LOG_ERROR << "Batch get replica failed."
+        LOG(ERROR) << "Batch get replica failed."
                    << "Error is: " << toString(batch_result.error());
         return replica_list_map;
     }
@@ -1211,7 +1211,7 @@ std::vector<Replica::Descriptor> DummyClient::get_replica_desc(
     auto result = invoke_rpc<&RealClient::get_replica_desc,
                              std::vector<Replica::Descriptor>>(key);
     if (!result.has_value()) {
-        LOG_ERROR << "Get replica failed for key: " << key
+        LOG(ERROR) << "Get replica failed for key: " << key
                    << " with error: " << toString(result.error());
         return replica_list;
     }
@@ -1259,12 +1259,12 @@ void DummyClient::ping_thread_main() {
         // Ping failed
         ping_fail_count++;
         last_ping_healthy_.store(false);
-        LOG_WARNING << "Ping failed " << ping_fail_count << "/"
+        LOG(WARNING) << "Ping failed " << ping_fail_count << "/"
                      << max_ping_fail_count;
 
         if (ping_fail_count >= max_ping_fail_count) {
             connected_.store(false);
-            LOG_ERROR << "RealClient lost, entering reconnection loop...";
+            LOG(ERROR) << "RealClient lost, entering reconnection loop...";
 
             // Reconnection Loop
             while (ping_running_) {
@@ -1276,7 +1276,7 @@ void DummyClient::ping_thread_main() {
                         if (globalConfig().ascend_agent_mode) {
                             if (register_ascend_shm(shm_ptr.get(),
                                                     shm_ptr->is_local) != 0) {
-                                LOG_WARNING
+                                LOG(WARNING)
                                     << "Failed to re-register Ascend shared "
                                        "memory during reconnection";
                                 all_registered = false;
@@ -1284,7 +1284,7 @@ void DummyClient::ping_thread_main() {
                             }
                         } else if (register_shm_via_ipc(
                                        shm_ptr.get(), shm_ptr->is_local) != 0) {
-                            LOG_WARNING
+                            LOG(WARNING)
                                 << "Failed to re-register shared memory "
                                    "during reconnection";
                             all_registered = false;
@@ -1298,7 +1298,7 @@ void DummyClient::ping_thread_main() {
                     auto device_buffers = get_registered_device_buffers();
                     for (const auto& device_buffer : device_buffers) {
                         if (register_ascend_shm(&device_buffer, false) != 0) {
-                            LOG_WARNING
+                            LOG(WARNING)
                                 << "Failed to re-register device buffer "
                                    "during reconnection, buffer="
                                 << device_buffer.base_addr
@@ -1311,7 +1311,7 @@ void DummyClient::ping_thread_main() {
 #endif
 
                 if (all_registered) {
-                    LOG_INFO
+                    LOG(INFO)
                         << "Re-registered all shared memorys successfully";
 
                     // Try to validate RPC connection
@@ -1321,14 +1321,14 @@ void DummyClient::ping_thread_main() {
                         invoke_rpc<&RealClient::ping, PingResponse>(client_id_);
                     if (check_rpc.has_value() &&
                         check_rpc.value().client_status == ClientStatus::OK) {
-                        LOG_INFO << "RPC connection restored";
+                        LOG(INFO) << "RPC connection restored";
                         ping_fail_count = 0;
                         connected_.store(true);
                         break;  // Exit reconnection loop
                     }
                 }
 
-                LOG_WARNING << "Reconnection attempt failed, retrying in "
+                LOG(WARNING) << "Reconnection attempt failed, retrying in "
                              << retry_connect_interval_ms << "ms";
                 std::this_thread::sleep_for(
                     std::chrono::milliseconds(retry_connect_interval_ms));
@@ -1350,7 +1350,7 @@ int DummyClient::health_check() {
 int DummyClient::request_hot_cache_fd() {
     int sock_fd = socket(AF_UNIX, SOCK_STREAM, 0);
     if (sock_fd < 0) {
-        LOG_ERROR << "Failed to create IPC socket: " << strerror(errno);
+        LOG(ERROR) << "Failed to create IPC socket: " << strerror(errno);
         return -1;
     }
 
@@ -1370,7 +1370,7 @@ int DummyClient::request_hot_cache_fd() {
     // Send request type
     IpcRequestType type = IPC_SHM_FD_REQUEST;
     if (::send(sock_fd, &type, sizeof(type), 0) < 0) {
-        LOG_ERROR << "Failed to send IPC request type";
+        LOG(ERROR) << "Failed to send IPC request type";
         close(sock_fd);
         return -1;
     }
@@ -1381,7 +1381,7 @@ int DummyClient::request_hot_cache_fd() {
     req.client_id_second = client_id_.second;
     req.segment_type = SHM_SEG_HOT_CACHE;
     if (::send(sock_fd, &req, sizeof(req), 0) < 0) {
-        LOG_ERROR << "Failed to send ShmFdRequest";
+        LOG(ERROR) << "Failed to send ShmFdRequest";
         close(sock_fd);
         return -1;
     }
@@ -1392,7 +1392,7 @@ int DummyClient::request_hot_cache_fd() {
     close(sock_fd);
 
     if (fd < 0 || resp.status != 0) {
-        LOG_ERROR << "Failed to receive hot cache fd, status=" << resp.status;
+        LOG(ERROR) << "Failed to receive hot cache fd, status=" << resp.status;
         if (fd >= 0) close(fd);
         return -1;
     }
@@ -1400,7 +1400,7 @@ int DummyClient::request_hot_cache_fd() {
     // mmap the received fd
     void* base = mmap(nullptr, resp.shm_size, PROT_READ, MAP_SHARED, fd, 0);
     if (base == MAP_FAILED) {
-        LOG_ERROR << "Failed to mmap hot cache shm: " << strerror(errno);
+        LOG(ERROR) << "Failed to mmap hot cache shm: " << strerror(errno);
         close(fd);
         return -1;
     }
@@ -1408,7 +1408,7 @@ int DummyClient::request_hot_cache_fd() {
     hot_cache_fd_ = fd;
     hot_cache_base_ = base;
     hot_cache_size_ = resp.shm_size;
-    LOG_INFO << "Hot cache shm mapped at " << base
+    LOG(INFO) << "Hot cache shm mapped at " << base
               << ", size=" << resp.shm_size;
     return 0;
 }

@@ -50,7 +50,7 @@ constexpr uint64_t kGetStreamTimeoutMillis = 3000;
 static bool checkAcl(aclError result, const char *message) {
     if (result != ACL_ERROR_NONE) {
         const char *errMsg = aclGetRecentErrMsg();
-        LOG_ERROR << message << " (Error code: " << result << " - " << errMsg
+        LOG(ERROR) << message << " (Error code: " << result << " - " << errMsg
                    << ")";
         return false;
     }
@@ -61,7 +61,7 @@ static int openIPCHandle(const std::vector<unsigned char> &buffer,
                          void **shm_addr) {
     // Validate buffer size before copying
     if (buffer.size() != kIPCHandleKeyLength) {
-        LOG_ERROR << "UBShmemTransport: buffer size " << buffer.size()
+        LOG(ERROR) << "UBShmemTransport: buffer size " << buffer.size()
                    << " does not match expected size " << kIPCHandleKeyLength;
         return -1;
     }
@@ -114,7 +114,7 @@ static int openShareableHandle(const std::vector<unsigned char> &buffer,
 
 static int getDeviceFromPointer(void *ptr) {
     if (ptr == nullptr) {
-        LOG_ERROR << "UBShmemTransport: null pointer passed to "
+        LOG(ERROR) << "UBShmemTransport: null pointer passed to "
                       "getDeviceFromPointer";
         return -1;
     }
@@ -132,13 +132,13 @@ static int getDeviceFromPointer(void *ptr) {
         // This is not an error, just indicates we should use current device
         // context
         if (globalConfig().trace) {
-            LOG_INFO << "UBShmemTransport: pointer " << ptr
+            LOG(INFO) << "UBShmemTransport: pointer " << ptr
                       << " is host memory (type: " << attributes.location.type
                       << "), will use current device context";
         }
         return -1;
     } else {
-        LOG_WARNING << "UBShmemTransport: unknown memory type "
+        LOG(WARNING) << "UBShmemTransport: unknown memory type "
                      << attributes.location.type << " for pointer " << ptr;
         return -1;
     }
@@ -171,7 +171,7 @@ static bool supportFabricMem() {
     }
 
     if (num_devices == 0) {
-        LOG_ERROR << "UBShmemTransport: no device found";
+        LOG(ERROR) << "UBShmemTransport: no device found";
         return false;
     }
     return true;
@@ -209,12 +209,12 @@ UBShmemTransport::UBShmemTransport()
         if (env_value.has_value() && env_value.value() > 0 &&
             env_value.value() <= 64) {
             thread_pool_size_ = static_cast<size_t>(env_value.value());
-            LOG_INFO
+            LOG(INFO)
                 << "UBShmemTransport: Using thread pool size "
                 << thread_pool_size_
                 << " from environment variable MC_UBSHMEM_THREAD_POOL_SIZE";
         } else {
-            LOG_WARNING << "UBShmemTransport: Invalid thread pool size "
+            LOG(WARNING) << "UBShmemTransport: Invalid thread pool size "
                          << thread_pool_size_env
                          << " (must be 1-64), using default "
                          << thread_pool_size_;
@@ -227,12 +227,12 @@ UBShmemTransport::UBShmemTransport()
             parseFromString<int32_t>(stream_timeout_env);
         if (env_value.has_value() && env_value.value() > 0) {
             stream_pool_timeout_ms_ = static_cast<uint64_t>(env_value.value());
-            LOG_INFO
+            LOG(INFO)
                 << "UBShmemTransport: Using stream pool timeout "
                 << stream_pool_timeout_ms_
                 << "ms from environment variable MC_UBSHMEM_GET_STREAM_TIMEOUT";
         } else {
-            LOG_WARNING << "UBShmemTransport: Invalid stream pool timeout "
+            LOG(WARNING) << "UBShmemTransport: Invalid stream pool timeout "
                          << stream_timeout_env
                          << "ms (must be > 0), using default "
                          << stream_pool_timeout_ms_ << "ms";
@@ -266,7 +266,7 @@ void UBShmemTransport::initializeThreadPool() {
     for (auto i = 0U; i < thread_pool_size_; ++i) {
         workers_.emplace_back([this] { workerThread(); });
     }
-    LOG_INFO << "UBShmemTransport: Thread pool initialized with "
+    LOG(INFO) << "UBShmemTransport: Thread pool initialized with "
               << thread_pool_size_ << " threads";
 }
 
@@ -306,7 +306,7 @@ void UBShmemTransport::workerThread() {
             try {
                 task();
             } catch (...) {
-                LOG_ERROR << "UBShmemTransport: Worker thread caught unknown "
+                LOG(ERROR) << "UBShmemTransport: Worker thread caught unknown "
                               "exception";
             }
         }
@@ -359,7 +359,7 @@ void UBShmemTransport::submitSlices(std::vector<Slice *> &slice_list) {
                 // Get device ID from first slice
                 int rc = setDeviceContext(moved_slices[0]->source_addr);
                 if (rc != 0) {
-                    LOG_ERROR << "Failed to set device context";
+                    LOG(ERROR) << "Failed to set device context";
                     for (auto slice : moved_slices) {
                         slice->markFailed();
                     }
@@ -372,7 +372,7 @@ void UBShmemTransport::submitSlices(std::vector<Slice *> &slice_list) {
                     int32_t temp_device_id;
                     if (!checkAcl(aclrtGetDevice(&temp_device_id),
                                   "UBShmemTransport: aclrtGetDevice failed")) {
-                        LOG_ERROR << "Failed to get current device context";
+                        LOG(ERROR) << "Failed to get current device context";
                         for (auto slice : moved_slices) {
                             slice->markFailed();
                         }
@@ -384,7 +384,7 @@ void UBShmemTransport::submitSlices(std::vector<Slice *> &slice_list) {
                 if (!stream_pool_->tryGetStreams(num_streams_per_transfer_,
                                                  streams,
                                                  stream_pool_timeout_ms_)) {
-                    LOG_ERROR << "Failed to get streams from pool";
+                    LOG(ERROR) << "Failed to get streams from pool";
                     for (auto slice : moved_slices) {
                         slice->markFailed();
                     }
@@ -400,7 +400,7 @@ void UBShmemTransport::submitSlices(std::vector<Slice *> &slice_list) {
                         int rc = relocateSharedMemoryAddress(
                             dest_addr, slice->length, slice->target_id);
                         if (rc) {
-                            LOG_ERROR << "Device memory not registered";
+                            LOG(ERROR) << "Device memory not registered";
                             slice->markFailed();
                             continue;
                         }
@@ -434,7 +434,7 @@ void UBShmemTransport::submitSlices(std::vector<Slice *> &slice_list) {
                     if (!checkAcl(aclrtSynchronizeStream(stream),
                                   "UBShmemTransport: aclrtSynchronizeStream "
                                   "failed")) {
-                        LOG_ERROR << "Stream synchronization failed";
+                        LOG(ERROR) << "Stream synchronization failed";
                         for (auto slice : moved_slices) {
                             if (slice->status == Slice::PENDING) {
                                 slice->markFailed();
@@ -454,7 +454,7 @@ void UBShmemTransport::submitSlices(std::vector<Slice *> &slice_list) {
 
                 stream_pool_->releaseStreams(streams);
             } catch (...) {
-                LOG_ERROR << "Unknown exception in transfer task";
+                LOG(ERROR) << "Unknown exception in transfer task";
                 for (auto slice : moved_slices) {
                     if (slice->status == Slice::PENDING) {
                         slice->markFailed();
@@ -474,7 +474,7 @@ Status UBShmemTransport::submitTransfer(
     BatchID batch_id, const std::vector<TransferRequest> &entries) {
     auto &batch_desc = *((BatchDesc *)(batch_id));
     if (batch_desc.task_list.size() + entries.size() > batch_desc.batch_size) {
-        LOG_ERROR
+        LOG(ERROR)
             << "UBShmemTransport: Exceed the limitation of current batch's "
                "capacity";
         return Status::InvalidArgument(
@@ -582,7 +582,7 @@ int UBShmemTransport::registerLocalMemory(void *addr, size_t length,
     std::lock_guard<std::mutex> lock(register_mutex_);
 
     if (globalConfig().trace) {
-        LOG_INFO << "register memory: addr " << addr << ", length " << length;
+        LOG(INFO) << "register memory: addr " << addr << ", length " << length;
     }
 
     // IPC-based memory registration
@@ -680,7 +680,7 @@ int UBShmemTransport::relocateSharedMemoryAddress(uint64_t &dest_addr,
                     rc = openShareableHandle(output_buffer, entry.length,
                                              &shm_addr);
                 } else {
-                    LOG_ERROR << "Mismatched UBShmem data transfer method";
+                    LOG(ERROR) << "Mismatched UBShmem data transfer method";
                     return -1;
                 }
 
@@ -712,7 +712,7 @@ int UBShmemTransport::relocateSharedMemoryAddress(uint64_t &dest_addr,
             return 0;
         }
     }
-    LOG_ERROR << "Requested address " << (void *)dest_addr << " to "
+    LOG(ERROR) << "Requested address " << (void *)dest_addr << " to "
                << (void *)(dest_addr + length) << " not found!";
     return ERR_INVALID_ARGUMENT;
 }

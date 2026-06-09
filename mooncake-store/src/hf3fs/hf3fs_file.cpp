@@ -17,7 +17,7 @@ ThreeFSFile::~ThreeFSFile() {
     if (fd_ >= 0) {
         hf3fs_dereg_fd(fd_);
         if (close(fd_) == -1) {
-            LOG_WARNING << "Failed to close file: " << filename_;
+            LOG(WARNING) << "Failed to close file: " << filename_;
         }
         fd_ = -1;
     }
@@ -25,9 +25,9 @@ ThreeFSFile::~ThreeFSFile() {
     // Delete potentially corrupted file if write failed
     if (error_code_ == ErrorCode::FILE_WRITE_FAIL) {
         if (::unlink(filename_.c_str()) == -1) {
-            LOG_ERROR << "Failed to delete corrupted file: " << filename_;
+            LOG(ERROR) << "Failed to delete corrupted file: " << filename_;
         } else {
-            LOG_INFO << "Deleted corrupted file: " << filename_;
+            LOG(INFO) << "Deleted corrupted file: " << filename_;
         }
     }
 }

@@ -76,7 +76,7 @@ MooncakeEpBuffer::MooncakeEpBuffer(int rank, int num_ranks,
         CUdevice cu_dev;
         CUresult res = cuDeviceGet(&cu_dev, device_id);
         if (res != CUDA_SUCCESS) {
-            LOG_ERROR << "[EP] cuDeviceGet failed: " << res;
+            LOG(ERROR) << "[EP] cuDeviceGet failed: " << res;
             throw std::runtime_error("cuDeviceGet failed");
         }
 
@@ -97,7 +97,7 @@ MooncakeEpBuffer::MooncakeEpBuffer(int rank, int num_ranks,
         res = cuMemGetAllocationGranularity(&granularity, &prop,
                                             CU_MEM_ALLOC_GRANULARITY_MINIMUM);
         if (res != CUDA_SUCCESS) {
-            LOG_ERROR << "[EP] cuMemGetAllocationGranularity failed: " << res;
+            LOG(ERROR) << "[EP] cuMemGetAllocationGranularity failed: " << res;
             throw std::runtime_error("cuMemGetAllocationGranularity failed");
         }
 
@@ -107,7 +107,7 @@ MooncakeEpBuffer::MooncakeEpBuffer(int rank, int num_ranks,
 
         res = cuMemCreate(&fabric_mem_handle_, fabric_alloc_size_, &prop, 0);
         if (res != CUDA_SUCCESS) {
-            LOG_ERROR << "[EP] cuMemCreate(FABRIC) failed: " << res;
+            LOG(ERROR) << "[EP] cuMemCreate(FABRIC) failed: " << res;
             throw std::runtime_error("cuMemCreate failed");
         }
 
@@ -115,7 +115,7 @@ MooncakeEpBuffer::MooncakeEpBuffer(int rank, int num_ranks,
         res = cuMemAddressReserve(&dptr, fabric_alloc_size_, granularity, 0, 0);
         if (res != CUDA_SUCCESS) {
             cuMemRelease(fabric_mem_handle_);
-            LOG_ERROR << "[EP] cuMemAddressReserve failed: " << res;
+            LOG(ERROR) << "[EP] cuMemAddressReserve failed: " << res;
             throw std::runtime_error("cuMemAddressReserve failed");
         }
 
@@ -123,7 +123,7 @@ MooncakeEpBuffer::MooncakeEpBuffer(int rank, int num_ranks,
         if (res != CUDA_SUCCESS) {
             cuMemAddressFree(dptr, fabric_alloc_size_);
             cuMemRelease(fabric_mem_handle_);
-            LOG_ERROR << "[EP] cuMemMap failed: " << res;
+            LOG(ERROR) << "[EP] cuMemMap failed: " << res;
             throw std::runtime_error("cuMemMap failed");
         }
 
@@ -142,12 +142,12 @@ MooncakeEpBuffer::MooncakeEpBuffer(int rank, int num_ranks,
             cuMemUnmap(dptr, fabric_alloc_size_);
             cuMemAddressFree(dptr, fabric_alloc_size_);
             cuMemRelease(fabric_mem_handle_);
-            LOG_ERROR << "[EP] cuMemSetAccess failed: " << res;
+            LOG(ERROR) << "[EP] cuMemSetAccess failed: " << res;
             throw std::runtime_error("cuMemSetAccess failed");
         }
 
         gdr_buffer = reinterpret_cast<void*>(dptr);
-        LOG_INFO << "[EP] Allocated " << fabric_alloc_size_
+        LOG(INFO) << "[EP] Allocated " << fabric_alloc_size_
                   << " bytes with fabric handle on GPU " << device_id;
     } else {
         CUDA_CHECK(cudaMalloc(&gdr_buffer, num_ep_buffer_bytes));
@@ -465,7 +465,7 @@ int MooncakeEpBuffer::init_ibgda() {
         throw std::runtime_error("Device matching name '" + device_name +
                                  "' not found.");
     }
-    LOG_INFO << "[EP] GPU " << device_id << " uses NIC " << nic_id
+    LOG(INFO) << "[EP] GPU " << device_id << " uses NIC " << nic_id
               << " out of " << num_devices << " NIC(s)";
     ibv_context* ctx = ibv_open_device(dev_list[nic_id]);
     if (!ctx) {
@@ -484,7 +484,7 @@ int MooncakeEpBuffer::init_ibgda() {
     // Dynamically find the best GID index (replaces hardcoded index 3)
     gid_index_ = findBestGidIndex(ctx, port_num, port_attr);
     if (gid_index_ < 0) {
-        LOG_ERROR << "[EP] Failed to find a suitable GID index on "
+        LOG(ERROR) << "[EP] Failed to find a suitable GID index on "
                    << device_name;
         return -1;
     }
@@ -730,7 +730,7 @@ void MooncakeEpBuffer::sync_nvlink_ipc_handles(
             ipc_peer_ptrs_host[i] = (i == rank) ? gdr_buffer : nullptr;
         }
         p2p_ipc_all_enabled_ = true;
-        LOG_INFO << "[EP] Fabric memory enabled, skipping IPC handle exchange";
+        LOG(INFO) << "[EP] Fabric memory enabled, skipping IPC handle exchange";
     } else {
         // Non-MNNVL: use cudaIpc for intra-node P2P (original path)
         int node_id = rank / device_count;
@@ -759,7 +759,7 @@ void MooncakeEpBuffer::sync_nvlink_ipc_handles(
                     nvlink_array[dst_rank] = 1;
 
                     if (dst_rank >= static_cast<int>(remote_handles.size())) {
-                        LOG_WARNING
+                        LOG(WARNING)
                             << "[EP] Rank " << rank
                             << " missing IPC handle for rank " << dst_rank;
                         continue;
@@ -770,7 +770,7 @@ void MooncakeEpBuffer::sync_nvlink_ipc_handles(
                         (handle_size + sizeof(int32_t) - 1) / sizeof(int32_t);
                     const auto& handle_ints = remote_handles[dst_rank];
                     if (handle_ints.size() < num_int32s) {
-                        LOG_WARNING
+                        LOG(WARNING)
                             << "[EP] Rank " << rank
                             << " invalid IPC handle size for rank " << dst_rank;
                         continue;
@@ -784,7 +784,7 @@ void MooncakeEpBuffer::sync_nvlink_ipc_handles(
                         cudaIpcOpenMemHandle(&peer_ptr, remote_handle,
                                              cudaIpcMemLazyEnablePeerAccess);
                     if (ipc_err != cudaSuccess) {
-                        LOG_WARNING
+                        LOG(WARNING)
                             << "[EP] Rank " << rank
                             << " failed to open IPC handle for rank "
                             << dst_rank << ": " << cudaGetErrorString(ipc_err);

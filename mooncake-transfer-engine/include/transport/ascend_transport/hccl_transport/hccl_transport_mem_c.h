@@ -86,12 +86,12 @@ struct ConnectionInfo {
         int retryCount = 0;                                             \
         int __ret = funcCall;                                           \
         while (__ret && retryCount < 3) {                               \
-            LOG_ERROR << errorMsg << ", retrying... (" << ++retryCount \
+            LOG(ERROR) << errorMsg << ", retrying... (" << ++retryCount \
                        << "/3), ret :" << __ret;                        \
             __ret = funcCall;                                           \
         }                                                               \
         if (__ret) {                                                    \
-            LOG_ERROR << errorMsg                                      \
+            LOG(ERROR) << errorMsg                                      \
                        << " failed after 3 retries, ret: " << __ret;    \
             return __ret;                                               \
         }                                                               \

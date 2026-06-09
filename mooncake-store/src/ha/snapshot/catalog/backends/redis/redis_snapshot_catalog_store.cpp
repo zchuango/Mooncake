@@ -272,7 +272,7 @@ RedisSnapshotCatalogStore::List(size_t limit) {
 
         auto descriptor = LoadSnapshotDescriptor(object_store_, snapshot_id);
         if (!descriptor) {
-            LOG_WARNING << "Skipping unreadable Redis snapshot descriptor, "
+            LOG(WARNING) << "Skipping unreadable Redis snapshot descriptor, "
                          << "snapshot_id=" << snapshot_id
                          << ", error=" << toString(descriptor.error());
             continue;
@@ -305,7 +305,7 @@ ErrorCode RedisSnapshotCatalogStore::Delete(const SnapshotId& snapshot_id) {
     auto delete_result = object_store_->DeleteObjectsWithPrefix(
         snapshot_catalog_store_detail::BuildSnapshotPrefix(snapshot_id));
     if (!delete_result) {
-        LOG_ERROR << "Failed to delete snapshot objects after Redis catalog "
+        LOG(ERROR) << "Failed to delete snapshot objects after Redis catalog "
                       "update, snapshot_id="
                    << snapshot_id << ", error=" << delete_result.error();
         return ErrorCode::PERSISTENT_FAIL;

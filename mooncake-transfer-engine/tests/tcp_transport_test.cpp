@@ -35,7 +35,7 @@
 
 static void checkCudaError(cudaError_t result, const char *message) {
     if (result != cudaSuccess) {
-        LOG_ERROR << message << " (Error code: " << result << " - "
+        LOG(ERROR) << message << " (Error code: " << result << " - "
                    << cudaGetErrorString(result) << ")" << std::endl;
         exit(EXIT_FAILURE);
     }
@@ -66,14 +66,14 @@ class TCPTransportTest : public ::testing::Test {
             metadata_server = env;
         else
             metadata_server = metadata_server;
-        LOG_INFO << "metadata_server: " << metadata_server;
+        LOG(INFO) << "metadata_server: " << metadata_server;
 
         env = std::getenv("MC_LOCAL_SERVER_NAME");
         if (env)
             local_server_name = env;
         else
             local_server_name = "127.0.0.2:12345";
-        LOG_INFO << "local_server_name: " << local_server_name;
+        LOG(INFO) << "local_server_name: " << local_server_name;
     }
 
     void TearDown() override {

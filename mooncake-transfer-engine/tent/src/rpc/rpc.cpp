@@ -111,7 +111,7 @@ Status CoroRpcAgent::start(uint16_t& port, bool ipv6) {
             server_->async_start();
             const auto err = server_->get_errc();
             if (err) {
-                LOG_WARNING
+                LOG(WARNING)
                     << "Failed to start RPC server(async_start) on port "
                     << port << ": " << err.message();
                 delete server_;
@@ -122,7 +122,7 @@ Status CoroRpcAgent::start(uint16_t& port, bool ipv6) {
             running_ = true;
             return Status::OK();
         } catch (const std::exception& e) {
-            LOG_WARNING << "Failed to start RPC server on port " << port
+            LOG(WARNING) << "Failed to start RPC server on port " << port
                          << ": " << e.what();
             port = 0;
         }

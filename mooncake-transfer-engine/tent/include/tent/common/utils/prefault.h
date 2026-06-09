@@ -90,7 +90,7 @@ struct PrefaultCapabilities {
         munmap(test_mem, test_size);
 
         // Log detected capabilities once for visibility
-        LOG_INFO << "Prefault capability detection: madvise="
+        LOG(INFO) << "Prefault capability detection: madvise="
                   << (madvise_available ? "available" : "unavailable")
                   << ", mlock="
                   << (mlock_available ? "available" : "unavailable")
@@ -308,12 +308,12 @@ inline bool prefaultBeforeProbe(void** pages, int n, uintptr_t aligned_start,
     const PrefaultResult result =
         prefaultPages(pages, n, aligned_start, options);
     if (result.err != 0) {
-        LOG_WARNING << "[" << tag << "] Prefault " << result.method
+        LOG(WARNING) << "[" << tag << "] Prefault " << result.method
                      << " failed with errno=" << result.err
                      << ", continuing with unprefaulted pages";
         return false;
     }
-    LOG_INFO << "[" << tag << "] Prefault succeeded: method=" << result.method
+    LOG(INFO) << "[" << tag << "] Prefault succeeded: method=" << result.method
             << " duration_ms=" << result.duration_ms
             << " threads=" << result.threads
             << " chunk_bytes=" << result.chunk_bytes;

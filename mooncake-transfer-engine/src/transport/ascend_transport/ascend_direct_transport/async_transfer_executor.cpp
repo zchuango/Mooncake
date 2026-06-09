@@ -47,7 +47,7 @@ int AsyncTransferExecutor::initialize() {
     }
     running_ = true;
     query_thread_ = std::thread(&AsyncTransferExecutor::queryThreadLoop, this);
-    LOG_INFO << "AsyncTransferExecutor query thread started";
+    LOG(INFO) << "AsyncTransferExecutor query thread started";
     return 0;
 }
 
@@ -61,7 +61,7 @@ void AsyncTransferExecutor::finalize() {
     if (query_thread_.joinable()) {
         query_thread_.join();
     }
-    LOG_INFO << "AsyncTransferExecutor query thread stopped";
+    LOG(INFO) << "AsyncTransferExecutor query thread stopped";
     cleanupConnections();
     finalizeEngines();
     finalized_ = true;
@@ -72,7 +72,7 @@ TransferExecutorBase::ExecuteResult AsyncTransferExecutor::execute(
     adxl::TransferOp operation,
     const std::vector<Transport::Slice*>& slice_list) {
     if (local_engine_idx >= adxl_engines_.size()) {
-        LOG_ERROR << "Invalid local_engine_idx: " << local_engine_idx;
+        LOG(ERROR) << "Invalid local_engine_idx: " << local_engine_idx;
         return {.ret = -1, .status = adxl::FAILED, .retryable = false};
     }
 
@@ -206,7 +206,7 @@ bool AsyncTransferExecutor::processOneBatch(
 
     auto fail_batch = [&](const std::string& message,
                           const std::string& target_adxl_engine_name) {
-        LOG_ERROR << message;
+        LOG(ERROR) << message;
         for (auto* slice : slice_list) {
             slice->markFailed();
         }

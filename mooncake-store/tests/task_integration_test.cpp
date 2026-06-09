@@ -102,7 +102,7 @@ class TaskExecutorIntegrationTest : public ::testing::Test {
         if (getenv("PROTOCOL")) FLAGS_protocol = getenv("PROTOCOL");
         if (getenv("DEVICE_NAME")) FLAGS_device_name = getenv("DEVICE_NAME");
 
-        LOG_INFO << "Protocol: " << FLAGS_protocol
+        LOG(INFO) << "Protocol: " << FLAGS_protocol
                   << ", Device name: " << FLAGS_device_name;
 
         uint64_t default_kv_lease_ttl = DEFAULT_DEFAULT_KV_LEASE_TTL;
@@ -121,7 +121,7 @@ class TaskExecutorIntegrationTest : public ::testing::Test {
         master_address_ = master_.master_address();
         metadata_url_ = master_.metadata_url();
 
-        LOG_INFO << "Started in-proc master at " << master_address_
+        LOG(INFO) << "Started in-proc master at " << master_address_
                   << ", metadata_url=" << metadata_url_;
     }
 
@@ -928,7 +928,7 @@ TEST_F(TaskExecutorIntegrationTest, MultipleCopyTasks) {
             // Query task to get error message
             auto query_task = master_client_->QueryTask(task_ids[i]);
             if (query_task.has_value()) {
-                LOG_ERROR << "Task " << i
+                LOG(ERROR) << "Task " << i
                            << " failed: " << query_task.value().message;
             }
         }
@@ -1106,7 +1106,7 @@ TEST_F(TaskExecutorIntegrationTest, MultipleMoveTasks) {
         if (!completed) {
             auto query_task = master_client_->QueryTask(task_ids[i]);
             if (query_task.has_value()) {
-                LOG_ERROR << "Task " << i
+                LOG(ERROR) << "Task " << i
                            << " failed: " << query_task.value().message;
             }
         }

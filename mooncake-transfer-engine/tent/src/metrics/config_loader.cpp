@@ -115,7 +115,7 @@ MetricsConfig MetricsConfigLoader::loadFromConfig(const Config& config) {
         metrics_config.size_buckets = size_buckets_array;
     }
 
-    LOG_INFO << "Loaded metrics config from Config object: enabled="
+    LOG(INFO) << "Loaded metrics config from Config object: enabled="
               << metrics_config.enabled
               << ", port=" << metrics_config.http_port;
 
@@ -126,7 +126,7 @@ MetricsConfig MetricsConfigLoader::loadFromEnvironment() {
     MetricsConfig metrics_config = getDefaultConfig();
     applyEnvironmentOverrides(metrics_config);
 
-    LOG_INFO << "Loaded metrics config from environment: enabled="
+    LOG(INFO) << "Loaded metrics config from environment: enabled="
               << metrics_config.enabled
               << ", port=" << metrics_config.http_port;
 

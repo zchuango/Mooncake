@@ -166,7 +166,7 @@ EmbeddedSnapshotCatalogStore::List(size_t limit) {
         }
         auto descriptor = LoadSnapshotDescriptor(object_store_, snapshot_id);
         if (!descriptor) {
-            LOG_WARNING << "Skipping unreadable embedded snapshot descriptor, "
+            LOG(WARNING) << "Skipping unreadable embedded snapshot descriptor, "
                          << "snapshot_id=" << snapshot_id
                          << ", error=" << toString(descriptor.error());
             continue;

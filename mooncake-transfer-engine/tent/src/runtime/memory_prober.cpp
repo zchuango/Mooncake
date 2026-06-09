@@ -46,7 +46,7 @@ Status MemoryProber::loadPlugins(const std::string& path) {
         const std::string so_path = entry.path().string();
         void* handle = dlopen(so_path.c_str(), RTLD_NOW);
         if (!handle) {
-            LOG_WARNING << "[MemoryProber] dlopen failed for " << so_path
+            LOG(WARNING) << "[MemoryProber] dlopen failed for " << so_path
                          << ": " << dlerror();
             continue;
         }
@@ -56,7 +56,7 @@ Status MemoryProber::loadPlugins(const std::string& path) {
             dlsym(handle, TENT_DEVICE_PLUGIN_REGISTER_SYMBOL));
         const char* err = dlerror();
         if (err != nullptr || !reg_fn) {
-            LOG_WARNING << "[MemoryProber] dlsym(" << so_path
+            LOG(WARNING) << "[MemoryProber] dlsym(" << so_path
                          << ") failed: " << (err ? err : "null");
             dlclose(handle);
             continue;
@@ -64,7 +64,7 @@ Status MemoryProber::loadPlugins(const std::string& path) {
 
         device_plugin_t iface{};
         if (reg_fn(&iface) != 0) {
-            LOG_WARNING << "[MemoryProber] tent_register_device_plugin "
+            LOG(WARNING) << "[MemoryProber] tent_register_device_plugin "
                             "failed for "
                          << so_path;
             dlclose(handle);
@@ -73,7 +73,7 @@ Status MemoryProber::loadPlugins(const std::string& path) {
 
         void* ctx = iface.create_plugin();
         if (!ctx) {
-            LOG_WARNING << "[MemoryProber] create_plugin failed for "
+            LOG(WARNING) << "[MemoryProber] create_plugin failed for "
                          << so_path << "\n";
             dlclose(handle);
             continue;
@@ -88,7 +88,7 @@ Status MemoryProber::loadPlugins(const std::string& path) {
         ++count;
     }
 
-    LOG_INFO << "[MemoryProber] loaded " << count
+    LOG(INFO) << "[MemoryProber] loaded " << count
               << " device plugins from: " << path;
     return Status::OK();
 }
@@ -270,7 +270,7 @@ static void probeHostMemory(const std::vector<Topology::NicEntry>& nic_list,
                             std::vector<Topology::MemEntry>& mem_list) {
     DIR* dir = opendir("/sys/devices/system/node");
     if (!dir) {
-        PLOG_WARNING << "open /sys/devices/system/node failed";
+        PLOG(WARNING) << "open /sys/devices/system/node failed";
         return;
     }
 

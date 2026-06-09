@@ -8,7 +8,7 @@ int write_manifest_impl(const std::string &key,
     py::gil_scoped_release release_gil;
     int ret = write_manifest(bytes);
     if (ret != 0) {
-        LOG_ERROR << operation_name << " manifest failed for key " << key
+        LOG(ERROR) << operation_name << " manifest failed for key " << key
                    << " with code " << ret;
     }
     return ret;
@@ -49,7 +49,7 @@ std::vector<int> batch_write_tensor_impl(const std::vector<std::string> &keys,
                 store_->client_buffer_allocator_->allocate(total_size);
 
             if (!alloc_result) {
-                LOG_ERROR << "Failed to allocate buffer for " << operation_name
+                LOG(ERROR) << "Failed to allocate buffer for " << operation_name
                            << " key: " << keys[i];
                 results[i] = to_py_ret(ErrorCode::NO_AVAILABLE_HANDLE);
                 continue;
@@ -86,7 +86,7 @@ std::vector<int> batch_write_tensor_impl(const std::vector<std::string> &keys,
 
 bool ensure_tensor_write_supported(const char *operation_name) const {
     if (!is_client_initialized() || use_dummy_client_) {
-        LOG_ERROR << operation_name
+        LOG(ERROR) << operation_name
                    << ": client not initialized or dummy client not "
                       "supported for tensors";
         return false;
@@ -119,7 +119,7 @@ std::vector<int> execute_batch_tensor_write(
     }
     if (keys.size() != value_count || keys.empty()) {
         if (!keys.empty()) {
-            LOG_ERROR << size_error_context;
+            LOG(ERROR) << size_error_context;
         }
         return std::vector<int>(keys.size(),
                                 to_py_ret(ErrorCode::INVALID_PARAMS));
@@ -137,7 +137,7 @@ bool validate_tensor_object_buffers(const std::vector<std::string> &keys,
                                     const char *size_error_context,
                                     const char *buffer_error_context) {
     if (keys.size() != buffer_ptrs.size() || keys.size() != sizes.size()) {
-        LOG_ERROR << size_error_context;
+        LOG(ERROR) << size_error_context;
         return false;
     }
     for (size_t i = 0; i < sizes.size(); ++i) {
@@ -211,14 +211,14 @@ std::vector<int> execute_batch_parallelism_write_requests(
     ParallelismWriteFn &&parallelism_write,
     WriterPartitionWriteFn &&writer_partition_write) {
     if (!parallelisms.is_none() && !writer_partitions.is_none()) {
-        LOG_ERROR
+        LOG(ERROR)
             << error_context
             << ": writer_partitions cannot be combined with parallelisms";
         return std::vector<int>(keys.size(),
                                 to_py_ret(ErrorCode::INVALID_PARAMS));
     }
     if (value_count != keys.size()) {
-        LOG_ERROR << error_context
+        LOG(ERROR) << error_context
                    << ": values and keys must have the same length";
         return std::vector<int>(keys.size(),
                                 to_py_ret(ErrorCode::INVALID_PARAMS));
@@ -325,7 +325,7 @@ int execute_tensor_parts_write(const std::string &key,
     py::gil_scoped_release release_gil;
     int ret = write_parts(key, values, config);
     if (ret != 0) {
-        LOG_ERROR << ops.parts_operation_name << " failed for key " << key
+        LOG(ERROR) << ops.parts_operation_name << " failed for key " << key
                    << " with code " << ret;
     }
     return ret;
@@ -358,7 +358,7 @@ pybind11::object decode_tensor_object_buffer(uintptr_t buffer_ptr, size_t size,
     pybind11::object tensor = buffer_to_tensor(
         NULL, reinterpret_cast<char *>(buffer_ptr), static_cast<int64_t>(size));
     if (tensor.is_none()) {
-        LOG_ERROR << "Failed to decode tensor buffer for " << operation_name;
+        LOG(ERROR) << "Failed to decode tensor buffer for " << operation_name;
     }
     return tensor;
 }
@@ -392,7 +392,7 @@ int execute_tp_tensor_write_impl(const std::string &key,
             [&](int rank) { return get_tp_write_shard_key(key, rank, axes); },
             axes);
         if (!shard_infos.has_value()) {
-            LOG_ERROR << error_context;
+            LOG(ERROR) << error_context;
             return to_py_ret(ErrorCode::INVALID_PARAMS);
         }
 
@@ -406,7 +406,7 @@ int execute_tp_tensor_write_impl(const std::string &key,
         }
         return 0;
     } catch (const std::exception &e) {
-        LOG_ERROR << error_context << ": " << e.what();
+        LOG(ERROR) << error_context << ": " << e.what();
         return to_py_ret(ErrorCode::INVALID_PARAMS);
     }
 }
@@ -538,7 +538,7 @@ std::vector<int> batch_execute_tp_tensor_write_impl(
             }
         }
     } catch (const std::exception &e) {
-        LOG_ERROR << error_context << ": " << e.what();
+        LOG(ERROR) << error_context << ": " << e.what();
     }
 
     return final_results;
@@ -567,7 +567,7 @@ std::vector<int> batch_decode_tensor_buffers_and_write(
             buffer_to_tensor(NULL, reinterpret_cast<char *>(buffer_ptrs[i]),
                              static_cast<int64_t>(sizes[i]));
         if (tensor.is_none()) {
-            LOG_ERROR << decode_error_context << " at index " << i;
+            LOG(ERROR) << decode_error_context << " at index " << i;
             final_results[i] = to_py_ret(ErrorCode::INVALID_PARAMS);
             continue;
         }
@@ -1004,7 +1004,7 @@ int execute_put_tensor_with_parallelism_from_route(
                     int ret =
                         store_->put_parts(shard_key, values, parts_config);
                     if (ret != 0) {
-                        LOG_ERROR << "put_parts failed for key " << shard_key
+                        LOG(ERROR) << "put_parts failed for key " << shard_key
                                    << " with code " << ret;
                     }
                     return ret;
@@ -1066,7 +1066,7 @@ std::vector<int> batch_put_tensor_with_parallelism_from(
                 }
                 if (keys.size() != buffer_ptrs.size() ||
                     keys.size() != sizes.size()) {
-                    LOG_ERROR << "Size mismatch: keys, buffer_ptrs, and sizes "
+                    LOG(ERROR) << "Size mismatch: keys, buffer_ptrs, and sizes "
                                   "must have the same length";
                     return std::vector<int>(
                         keys.size(), to_py_ret(ErrorCode::INVALID_PARAMS));
@@ -1293,11 +1293,11 @@ int execute_upsert_tensor_with_parallelism_from_route(
                 }
                 void *buffer = reinterpret_cast<void *>(write_buffer_ptr);
                 if (!is_client_initialized()) {
-                    LOG_ERROR << "Client is not initialized";
+                    LOG(ERROR) << "Client is not initialized";
                     return to_py_ret(ErrorCode::INVALID_PARAMS);
                 }
                 if (use_dummy_client_) {
-                    LOG_ERROR << "upsert_tensor_with_parallelism_from is not "
+                    LOG(ERROR) << "upsert_tensor_with_parallelism_from is not "
                                   "supported for dummy client";
                     return to_py_ret(ErrorCode::INVALID_PARAMS);
                 }
@@ -1329,7 +1329,7 @@ int execute_upsert_tensor_with_parallelism_from_route(
                     int ret =
                         store_->upsert_parts(shard_key, values, parts_config);
                     if (ret != 0) {
-                        LOG_ERROR << "upsert_parts failed for key "
+                        LOG(ERROR) << "upsert_parts failed for key "
                                    << shard_key << " with code " << ret;
                     }
                     return ret;
@@ -1423,12 +1423,12 @@ std::vector<int> batch_upsert_tensor_with_parallelism_from(
         [this, &keys, &buffer_ptrs, &sizes, &config]() {
             if (!is_default_replicate_config(config)) {
                 if (!is_client_initialized()) {
-                    LOG_ERROR << "Client is not initialized";
+                    LOG(ERROR) << "Client is not initialized";
                     return std::vector<int>(
                         keys.size(), to_py_ret(ErrorCode::INVALID_PARAMS));
                 }
                 if (use_dummy_client_) {
-                    LOG_ERROR << "batch_upsert_tensor_with_parallelism_from "
+                    LOG(ERROR) << "batch_upsert_tensor_with_parallelism_from "
                                   "is not supported for dummy client";
                     return std::vector<int>(
                         keys.size(), to_py_ret(ErrorCode::INVALID_PARAMS));
@@ -1442,7 +1442,7 @@ std::vector<int> batch_upsert_tensor_with_parallelism_from(
                 }
                 if (keys.size() != buffer_ptrs.size() ||
                     keys.size() != sizes.size()) {
-                    LOG_ERROR << "Size mismatch: keys, buffer_ptrs, and sizes "
+                    LOG(ERROR) << "Size mismatch: keys, buffer_ptrs, and sizes "
                                   "must have the same length";
                     return std::vector<int>(
                         keys.size(), to_py_ret(ErrorCode::INVALID_PARAMS));

@@ -101,14 +101,14 @@ int BarexContext::submitPostSend(
                 for (int j = 0; j < retry_cnt; j++) {
                     channel = channel_cache_.find(sid, dev, i);
                     if (!channel) {
-                        LOG_ERROR
+                        LOG(ERROR)
                             << "Write fail, sid " << sid << ", dev " << dev
                             << ", id " << i << " not found, retry " << j << "/"
                             << retry_cnt;
                         break;
                     }
                     if (!channel->IsActive()) {
-                        LOG_WARNING
+                        LOG(WARNING)
                             << "Write fail, channel status error " << channel
                             << " retry " << j << "/" << retry_cnt;
                         channel_cache_.erase(sid, dev, i);
@@ -116,7 +116,7 @@ int BarexContext::submitPostSend(
                     }
                 }
                 if (!channel) {
-                    LOG_ERROR << "Write fail, no channel found";
+                    LOG(ERROR) << "Write fail, no channel found";
                     return -1;
                 }
 
@@ -151,7 +151,7 @@ int BarexContext::submitPostSend(
                         data_chunk_write,
                         [slice_chunk_write](accl::barex::Status s) {
                             if (!s.IsOk()) {
-                                LOG_ERROR << "WriteBatch fail, "
+                                LOG(ERROR) << "WriteBatch fail, "
                                            << s.ErrMsg().c_str();
                                 for (auto slice : *slice_chunk_write) {
                                     slice->markFailed();
@@ -164,7 +164,7 @@ int BarexContext::submitPostSend(
                         },
                         true);
                     if (r != accl::barex::BAREX_SUCCESS) {
-                        LOG_ERROR << "WriteBatch fail, ret " << r;
+                        LOG(ERROR) << "WriteBatch fail, ret " << r;
                         return -2;
                     }
                 }
@@ -173,7 +173,7 @@ int BarexContext::submitPostSend(
                         data_chunk_read,
                         [slice_chunk_read](accl::barex::Status s) {
                             if (!s.IsOk()) {
-                                LOG_ERROR
+                                LOG(ERROR)
                                     << "ReadBatch fail, " << s.ErrMsg().c_str();
                                 for (auto slice : *slice_chunk_read) {
                                     slice->markFailed();
@@ -186,7 +186,7 @@ int BarexContext::submitPostSend(
                         },
                         true);
                     if (r != accl::barex::BAREX_SUCCESS) {
-                        LOG_ERROR << "ReadBatch fail, ret " << r;
+                        LOG(ERROR) << "ReadBatch fail, ret " << r;
                         return -2;
                     }
                 }

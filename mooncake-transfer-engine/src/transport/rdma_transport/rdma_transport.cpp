@@ -62,7 +62,7 @@ bool has_ibv_reg_mr_iova2(void) {
 RdmaTransport::RdmaTransport() {
     MCIbRelaxedOrderingMode = getIbRelaxedOrderingMode();
     if (MCIbRelaxedOrderingMode == 0) {
-        LOG_INFO << "[RDMA] Relaxed ordering disabled via "
+        LOG(INFO) << "[RDMA] Relaxed ordering disabled via "
                   << "MC_IB_PCI_RELAXED_ORDERING=0. "
                   << "Falling back to strict ordering.";
         MCIbRelaxedOrderingEnabled = false;
@@ -71,11 +71,11 @@ RdmaTransport::RdmaTransport() {
 
     MCIbRelaxedOrderingEnabled = has_ibv_reg_mr_iova2();
     if (MCIbRelaxedOrderingEnabled) {
-        LOG_INFO << "[RDMA] Relaxed ordering is supported on this host; "
+        LOG(INFO) << "[RDMA] Relaxed ordering is supported on this host; "
                      "IBV_ACCESS_RELAXED_ORDERING will be requested for "
                      "registered memory regions.";
     } else {
-        LOG_INFO << "[RDMA] Relaxed ordering is NOT supported ("
+        LOG(INFO) << "[RDMA] Relaxed ordering is NOT supported ("
                   << "ibv_reg_mr_iova2 missing or unavailable). "
                   << "Falling back to strict ordering.";
     }
@@ -95,7 +95,7 @@ int RdmaTransport::install(std::string &local_server_name,
                            std::shared_ptr<TransferMetadata> meta,
                            std::shared_ptr<Topology> topo) {
     if (topo == nullptr) {
-        LOG_ERROR << "RdmaTransport: missing topology";
+        LOG(ERROR) << "RdmaTransport: missing topology";
         return ERR_INVALID_ARGUMENT;
     }
 
@@ -105,26 +105,26 @@ int RdmaTransport::install(std::string &local_server_name,
 
     auto ret = initializeRdmaResources();
     if (ret) {
-        LOG_ERROR << "RdmaTransport: cannot initialize RDMA resources";
+        LOG(ERROR) << "RdmaTransport: cannot initialize RDMA resources";
         return ret;
     }
 
     ret = allocateLocalSegmentID();
     if (ret) {
-        LOG_ERROR << "Transfer engine cannot be initialized: cannot "
+        LOG(ERROR) << "Transfer engine cannot be initialized: cannot "
                       "allocate local segment";
         return ret;
     }
 
     ret = startHandshakeDaemon(local_server_name);
     if (ret) {
-        LOG_ERROR << "RdmaTransport: cannot start handshake daemon";
+        LOG(ERROR) << "RdmaTransport: cannot start handshake daemon";
         return ret;
     }
 
     ret = metadata_->updateLocalSegmentDesc();
     if (ret) {
-        LOG_ERROR << "RdmaTransport: cannot publish segments";
+        LOG(ERROR) << "RdmaTransport: cannot publish segments";
         return ret;
     }
 
@@ -245,7 +245,7 @@ int RdmaTransport::registerLocalMemoryInternal(void *addr, size_t length,
 
         for (size_t i = 0; i < ret_codes.size(); ++i) {
             if (ret_codes[i] != 0) {
-                LOG_ERROR << "Failed to register memory region with context "
+                LOG(ERROR) << "Failed to register memory region with context "
                            << i;
                 return ret_codes[i];
             }
@@ -255,7 +255,7 @@ int RdmaTransport::registerLocalMemoryInternal(void *addr, size_t length,
             int ret = context_list_[i]->registerMemoryRegion(addr, length,
                                                              access_rights);
             if (ret) {
-                LOG_ERROR << "Failed to register memory region with context "
+                LOG(ERROR) << "Failed to register memory region with context "
                            << i;
                 return ret;
             }
@@ -269,7 +269,7 @@ int RdmaTransport::registerLocalMemoryInternal(void *addr, size_t length,
             .count();
 
     if (globalConfig().trace) {
-        LOG_INFO << "registerMemoryRegion: addr=" << addr
+        LOG(INFO) << "registerMemoryRegion: addr=" << addr
                   << ", length=" << length
                   << ", contexts=" << context_list_.size()
                   << ", parallel=" << (use_parallel_reg ? "true" : "false")
@@ -340,7 +340,7 @@ int RdmaTransport::unregisterLocalMemoryInternal(void *addr,
 
         for (size_t i = 0; i < ret_codes.size(); ++i) {
             if (ret_codes[i] != 0) {
-                LOG_ERROR << "Failed to unregister memory region with context "
+                LOG(ERROR) << "Failed to unregister memory region with context "
                            << i;
                 return ret_codes[i];
             }
@@ -349,7 +349,7 @@ int RdmaTransport::unregisterLocalMemoryInternal(void *addr,
         for (size_t i = 0; i < context_list_.size(); ++i) {
             int ret = context_list_[i]->unregisterMemoryRegion(addr);
             if (ret) {
-                LOG_ERROR << "Failed to unregister memory region with context "
+                LOG(ERROR) << "Failed to unregister memory region with context "
                            << i;
                 return ret;
             }
@@ -391,7 +391,7 @@ int RdmaTransport::registerLocalMemoryBatch(
             int ret = registerLocalMemory(buffer.addr, buffer.length, location,
                                           true, false);
             if (ret) {
-                LOG_WARNING
+                LOG(WARNING)
                     << "RdmaTransport: Failed to register memory: addr "
                     << buffer.addr << " length " << buffer.length;
             }
@@ -411,7 +411,7 @@ int RdmaTransport::registerLocalMemoryBatch(
 
         for (size_t i = 0; i < buffer_list.size(); ++i) {
             if (results[i].get()) {
-                LOG_WARNING
+                LOG(WARNING)
                     << "RdmaTransport: Failed to register memory: addr "
                     << buffer_list[i].addr << " length "
                     << buffer_list[i].length;
@@ -437,7 +437,7 @@ int RdmaTransport::unregisterLocalMemoryBatch(
 
     for (size_t i = 0; i < addr_list.size(); ++i) {
         if (results[i].get())
-            LOG_WARNING << "RdmaTransport: Failed to unregister memory: addr "
+            LOG(WARNING) << "RdmaTransport: Failed to unregister memory: addr "
                          << addr_list[i];
     }
 
@@ -448,7 +448,7 @@ Status RdmaTransport::submitTransfer(
     BatchID batch_id, const std::vector<TransferRequest> &entries) {
     auto &batch_desc = *((BatchDesc *)(batch_id));
     if (batch_desc.task_list.size() + entries.size() > batch_desc.batch_size) {
-        LOG_ERROR << "RdmaTransport: Exceed the limitation of current batch's "
+        LOG(ERROR) << "RdmaTransport: Exceed the limitation of current batch's "
                       "capacity";
         return Status::InvalidArgument(
             "RdmaTransport: Exceed the limitation of capacity, batch id: " +
@@ -543,7 +543,7 @@ Status RdmaTransport::submitTransferTask(
                 auto source_addr = slice->source_addr;
                 for (auto &entry : slices_to_post)
                     for (auto s : entry.second) getSliceCache().deallocate(s);
-                LOG_ERROR
+                LOG(ERROR)
                     << "Memory region not registered by any active device(s): "
                     << source_addr;
                 return Status::AddressNotRegistered(
@@ -552,7 +552,7 @@ Status RdmaTransport::submitTransferTask(
             } else {
                 auto &context = context_list_[device_id];
                 if (!context->active()) {
-                    LOG_ERROR << "Device " << device_id << " is not active";
+                    LOG(ERROR) << "Device " << device_id << " is not active";
                     return Status::InvalidArgument("Device " +
                                                    std::to_string(device_id) +
                                                    " is not active");
@@ -668,13 +668,13 @@ int RdmaTransport::initializeRdmaResources() {
                                      config.max_cqe, config.max_ep_per_ctx);
         if (ret) {
             local_topology_->disableDevice(device_name);
-            LOG_WARNING << "Disable device " << device_name;
+            LOG(WARNING) << "Disable device " << device_name;
         } else {
             context_list_.push_back(context);
         }
     }
     if (local_topology_->empty()) {
-        LOG_ERROR << "RdmaTransport: No available RNIC";
+        LOG(ERROR) << "RdmaTransport: No available RNIC";
         return ERR_DEVICE_NOT_FOUND;
     }
     return 0;

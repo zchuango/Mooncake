@@ -82,7 +82,7 @@ static size_t getMaxPteEntries() {
         if (env) {
             size_t val = std::stoull(env);
             if (val > 0) {
-                LOG_INFO << "MC_EFA_MAX_PTE_ENTRIES override: " << val;
+                LOG(INFO) << "MC_EFA_MAX_PTE_ENTRIES override: " << val;
                 return val;
             }
         }
@@ -92,7 +92,7 @@ static size_t getMaxPteEntries() {
 }
 
 EfaTransport::EfaTransport() {
-    LOG_INFO << "[EFA] AWS Elastic Fabric Adapter transport initialized";
+    LOG(INFO) << "[EFA] AWS Elastic Fabric Adapter transport initialized";
 }
 
 EfaTransport::~EfaTransport() {
@@ -111,7 +111,7 @@ void EfaTransport::startWorkerThreads() {
     for (size_t i = 0; i < num_threads; i++) {
         worker_threads_.emplace_back(&EfaTransport::workerThreadFunc, this, i);
     }
-    LOG_INFO << "EfaTransport: Started " << num_threads
+    LOG(INFO) << "EfaTransport: Started " << num_threads
               << " CQ polling worker threads";
 }
 
@@ -125,7 +125,7 @@ void EfaTransport::stopWorkerThreads() {
         }
     }
     worker_threads_.clear();
-    LOG_INFO << "EfaTransport: Stopped CQ polling worker threads";
+    LOG(INFO) << "EfaTransport: Stopped CQ polling worker threads";
 }
 
 void EfaTransport::workerThreadFunc(int thread_id) {
@@ -164,7 +164,7 @@ int EfaTransport::install(std::string& local_server_name,
                           std::shared_ptr<TransferMetadata> meta,
                           std::shared_ptr<Topology> topo) {
     if (topo == nullptr) {
-        LOG_ERROR << "EfaTransport: missing topology";
+        LOG(ERROR) << "EfaTransport: missing topology";
         return ERR_INVALID_ARGUMENT;
     }
 
@@ -174,26 +174,26 @@ int EfaTransport::install(std::string& local_server_name,
 
     auto ret = initializeEfaResources();
     if (ret) {
-        LOG_ERROR << "EfaTransport: cannot initialize EFA resources";
+        LOG(ERROR) << "EfaTransport: cannot initialize EFA resources";
         return ret;
     }
 
     ret = allocateLocalSegmentID();
     if (ret) {
-        LOG_ERROR << "Transfer engine cannot be initialized: cannot "
+        LOG(ERROR) << "Transfer engine cannot be initialized: cannot "
                       "allocate local segment";
         return ret;
     }
 
     ret = startHandshakeDaemon(local_server_name);
     if (ret) {
-        LOG_ERROR << "EfaTransport: cannot start handshake daemon";
+        LOG(ERROR) << "EfaTransport: cannot start handshake daemon";
         return ret;
     }
 
     ret = metadata_->updateLocalSegmentDesc();
     if (ret) {
-        LOG_ERROR << "EfaTransport: cannot publish segments";
+        LOG(ERROR) << "EfaTransport: cannot publish segments";
         return ret;
     }
 
@@ -274,7 +274,7 @@ int EfaTransport::registerLocalMemoryInternal(void* addr, size_t length,
     // When max_mr_size is not configured, fall back to pte_limit so that
     // PTE-aware splitting still kicks in for large buffers on 4KB pages.
     size_t chunk_limit = (max_mr > 0) ? std::min(max_mr, pte_limit) : pte_limit;
-    LOG_INFO << "Auto-split params: page_size=" << page_size
+    LOG(INFO) << "Auto-split params: page_size=" << page_size
               << ", max_pte_entries=" << getMaxPteEntries()
               << ", pte_limit=" << pte_limit << ", max_mr_size=" << max_mr
               << ", chunk_limit=" << chunk_limit;
@@ -288,7 +288,7 @@ int EfaTransport::registerLocalMemoryInternal(void* addr, size_t length,
             chunks.emplace_back(static_cast<char*>(addr) + offset, chunk_len);
             offset += chunk_len;
         }
-        LOG_WARNING << "Auto-splitting buffer " << addr << " (" << length
+        LOG(WARNING) << "Auto-splitting buffer " << addr << " (" << length
                      << " bytes) into " << chunks.size()
                      << " chunks of <= " << chunk_limit << " bytes each";
     } else {
@@ -324,7 +324,7 @@ int EfaTransport::registerLocalMemoryInternal(void* addr, size_t length,
         }
     } else if (use_full_coverage) {
         // Multi-chunk, PTE budget OK: every chunk on every NIC
-        LOG_WARNING << "Full NIC coverage: " << num_chunks << " chunks × "
+        LOG(WARNING) << "Full NIC coverage: " << num_chunks << " chunks × "
                      << num_nics
                      << " NICs (total PTE/NIC=" << total_pages_per_nic
                      << ", budget=" << getMaxPteEntries() << ")";
@@ -344,7 +344,7 @@ int EfaTransport::registerLocalMemoryInternal(void* addr, size_t length,
                 nic_assignments[ci].push_back(n);
             }
         }
-        LOG_WARNING << "Disjoint NIC partition: PTE/NIC="
+        LOG(WARNING) << "Disjoint NIC partition: PTE/NIC="
                      << total_pages_per_nic
                      << " exceeds budget=" << getMaxPteEntries();
         for (size_t ci = 0; ci < num_chunks; ++ci) {
@@ -353,7 +353,7 @@ int EfaTransport::registerLocalMemoryInternal(void* addr, size_t length,
                 if (j > 0) nic_list += ",";
                 nic_list += std::to_string(nic_assignments[ci][j]);
             }
-            LOG_WARNING << "  chunk " << ci << " -> NICs [" << nic_list << "]";
+            LOG(WARNING) << "  chunk " << ci << " -> NICs [" << nic_list << "]";
         }
     } else {
         // Multi-chunk, PTE exceeded, more chunks than NICs: round-robin
@@ -374,17 +374,17 @@ int EfaTransport::registerLocalMemoryInternal(void* addr, size_t length,
             }
         }
         if (!pte_ok) {
-            LOG_ERROR << "Buffer requires " << num_chunks << " chunks ("
+            LOG(ERROR) << "Buffer requires " << num_chunks << " chunks ("
                        << length << " bytes) but per-NIC PTE budget ("
                        << pte_budget << " entries, page_size=" << page_size
                        << ") is exceeded even with round-robin across "
                        << num_nics << " NICs";
             return ERR_INVALID_ARGUMENT;
         }
-        LOG_WARNING << "Round-robin NIC assignment: " << num_chunks
+        LOG(WARNING) << "Round-robin NIC assignment: " << num_chunks
                      << " chunks across " << num_nics << " NICs";
         for (size_t ci = 0; ci < num_chunks; ++ci) {
-            LOG_WARNING << "  chunk " << ci << " ("
+            LOG(WARNING) << "  chunk " << ci << " ("
                          << chunks[ci].second / (1024 * 1024) << " MB) -> NIC "
                          << nic_assignments[ci][0];
         }
@@ -450,7 +450,7 @@ int EfaTransport::registerLocalMemoryInternal(void* addr, size_t length,
 
             for (size_t j = 0; j < ret_codes.size(); ++j) {
                 if (ret_codes[j] != 0) {
-                    LOG_ERROR
+                    LOG(ERROR)
                         << "Failed to register memory region chunk " << ci
                         << " with EFA context " << assigned_nics[j];
                     rollbackChunks(ci);
@@ -462,7 +462,7 @@ int EfaTransport::registerLocalMemoryInternal(void* addr, size_t length,
                 int ret = context_list_[nic_idx]->registerMemoryRegion(
                     chunk_addr, chunk_len, access_rights);
                 if (ret) {
-                    LOG_ERROR << "Failed to register memory region chunk "
+                    LOG(ERROR) << "Failed to register memory region chunk "
                                << ci << " with EFA context " << nic_idx;
                     rollbackChunks(ci);
                     return ret;
@@ -477,7 +477,7 @@ int EfaTransport::registerLocalMemoryInternal(void* addr, size_t length,
                 .count();
 
         if (globalConfig().trace) {
-            LOG_INFO << "EFA registerMemoryRegion: chunk " << ci
+            LOG(INFO) << "EFA registerMemoryRegion: chunk " << ci
                       << ", addr=" << chunk_addr << ", length=" << chunk_len
                       << ", nics=" << assigned_nics.size() << "/"
                       << context_list_.size()
@@ -485,7 +485,7 @@ int EfaTransport::registerLocalMemoryInternal(void* addr, size_t length,
                       << ", duration=" << reg_duration_ms << "ms";
         }
 
-        LOG_WARNING << "Chunk " << ci << "/" << chunks.size()
+        LOG(WARNING) << "Chunk " << ci << "/" << chunks.size()
                      << " registered on " << assigned_nics.size() << " NICs"
                      << ", addr=" << chunk_addr << ", length=" << chunk_len
                      << ", duration=" << reg_duration_ms << "ms";
@@ -545,14 +545,14 @@ int EfaTransport::unregisterLocalMemoryInternal(void* addr,
             void* ca = (void*)reg.addr;
             int rc = metadata_->removeLocalMemoryBuffer(ca, update_metadata);
             if (rc) {
-                LOG_ERROR << "Failed to remove chunk metadata at " << ca;
+                LOG(ERROR) << "Failed to remove chunk metadata at " << ca;
                 return rc;
             }
 
             for (size_t nic_idx : reg.nic_indices) {
                 int ret = context_list_[nic_idx]->unregisterMemoryRegion(ca);
                 if (ret) {
-                    LOG_ERROR << "Failed to unregister chunk " << ca
+                    LOG(ERROR) << "Failed to unregister chunk " << ca
                                << " with EFA context " << nic_idx;
                     return ret;
                 }
@@ -590,7 +590,7 @@ int EfaTransport::unregisterLocalMemoryInternal(void* addr,
 
         for (size_t i = 0; i < ret_codes.size(); ++i) {
             if (ret_codes[i] != 0) {
-                LOG_ERROR
+                LOG(ERROR)
                     << "Failed to unregister memory region with EFA context "
                     << i;
                 return ret_codes[i];
@@ -600,7 +600,7 @@ int EfaTransport::unregisterLocalMemoryInternal(void* addr,
         for (size_t i = 0; i < context_list_.size(); ++i) {
             int ret = context_list_[i]->unregisterMemoryRegion(addr);
             if (ret) {
-                LOG_ERROR
+                LOG(ERROR)
                     << "Failed to unregister memory region with EFA context "
                     << i;
                 return ret;
@@ -643,7 +643,7 @@ int EfaTransport::registerLocalMemoryBatch(
 
     for (size_t i = 0; i < buffer_list.size(); ++i) {
         if (results[i].get()) {
-            LOG_WARNING << "EfaTransport: Failed to register memory: addr "
+            LOG(WARNING) << "EfaTransport: Failed to register memory: addr "
                          << buffer_list[i].addr << " length "
                          << buffer_list[i].length;
         }
@@ -664,7 +664,7 @@ int EfaTransport::unregisterLocalMemoryBatch(
 
     for (size_t i = 0; i < addr_list.size(); ++i) {
         if (results[i].get())
-            LOG_WARNING << "EfaTransport: Failed to unregister memory: addr "
+            LOG(WARNING) << "EfaTransport: Failed to unregister memory: addr "
                          << addr_list[i];
     }
 
@@ -673,7 +673,7 @@ int EfaTransport::unregisterLocalMemoryBatch(
 
 int EfaTransport::warmupSegment(const std::string& segment_name) {
     if (!metadata_) {
-        LOG_ERROR << "EfaTransport::warmupSegment: metadata_ is null";
+        LOG(ERROR) << "EfaTransport::warmupSegment: metadata_ is null";
         return ERR_INVALID_ARGUMENT;
     }
     if (segment_name.empty() || segment_name == local_server_name_) {
@@ -683,12 +683,12 @@ int EfaTransport::warmupSegment(const std::string& segment_name) {
 
     auto desc = metadata_->getSegmentDescByName(segment_name);
     if (!desc) {
-        LOG_ERROR << "EfaTransport::warmupSegment: segment '" << segment_name
+        LOG(ERROR) << "EfaTransport::warmupSegment: segment '" << segment_name
                    << "' not found in metadata (did you openSegment() first?)";
         return ERR_INVALID_ARGUMENT;
     }
     if (desc->devices.empty()) {
-        LOG_WARNING << "EfaTransport::warmupSegment: segment '" << segment_name
+        LOG(WARNING) << "EfaTransport::warmupSegment: segment '" << segment_name
                      << "' has no devices";
         return 0;
     }
@@ -715,7 +715,7 @@ int EfaTransport::warmupSegment(const std::string& segment_name) {
         }
     }
     if (already_ready == n_pairs) {
-        LOG_INFO << "EfaTransport::warmupSegment('" << segment_name << "'): all "
+        LOG(INFO) << "EfaTransport::warmupSegment('" << segment_name << "'): all "
                 << n_pairs << " endpoints already connected, "
                 << "skipping";
         return 0;
@@ -734,7 +734,7 @@ int EfaTransport::warmupSegment(const std::string& segment_name) {
                 std::async(std::launch::async, [ctx, path]() -> int {
                     auto ep = ctx->endpoint(path);
                     if (!ep) {
-                        LOG_WARNING << "warmupSegment: endpoint() returned "
+                        LOG(WARNING) << "warmupSegment: endpoint() returned "
                                         "null for "
                                      << path;
                         return -1;
@@ -763,7 +763,7 @@ int EfaTransport::warmupSegment(const std::string& segment_name) {
     auto elapsed =
         std::chrono::duration<double>(std::chrono::steady_clock::now() - t0)
             .count();
-    LOG_INFO << "EfaTransport::warmupSegment('" << segment_name << "'): " << ok
+    LOG(INFO) << "EfaTransport::warmupSegment('" << segment_name << "'): " << ok
               << "/" << n_pairs << " endpoints connected (" << fail
               << " failed) in " << elapsed << "s (" << context_list_.size()
               << " local NICs × " << peer_paths.size() << " peer NICs)";
@@ -774,7 +774,7 @@ Status EfaTransport::submitTransfer(
     BatchID batch_id, const std::vector<TransferRequest>& entries) {
     auto& batch_desc = *((BatchDesc*)(batch_id));
     if (batch_desc.task_list.size() + entries.size() > batch_desc.batch_size) {
-        LOG_ERROR << "EfaTransport: Exceed the limitation of current batch's "
+        LOG(ERROR) << "EfaTransport: Exceed the limitation of current batch's "
                       "capacity";
         return Status::InvalidArgument(
             "EfaTransport: Exceed the limitation of capacity, batch id: " +
@@ -818,7 +818,7 @@ Status EfaTransport::submitTransferTask(
             // handled by selectDevice above.
             auto& context = context_list_[request_device_id];
             if (!context || !context->active()) {
-                LOG_ERROR << "EFA Device " << request_device_id
+                LOG(ERROR) << "EFA Device " << request_device_id
                            << " is not active";
                 return Status::InvalidArgument(
                     "EFA Device " + std::to_string(request_device_id) +
@@ -869,7 +869,7 @@ Status EfaTransport::submitTransferTask(
                 }
             }
             if (!found_device) {
-                LOG_ERROR << "Memory region not registered by any active EFA "
+                LOG(ERROR) << "Memory region not registered by any active EFA "
                               "device(s): "
                            << request.source;
                 for (auto& entry : slices_to_post)
@@ -1004,7 +1004,7 @@ int EfaTransport::initializeEfaResources() {
     }
 
     if (efa_devices.empty()) {
-        LOG_WARNING << "EfaTransport: No EFA devices found, falling back to "
+        LOG(WARNING) << "EfaTransport: No EFA devices found, falling back to "
                         "all devices";
         efa_devices = hca_list;
         non_efa_devices.clear();
@@ -1017,7 +1017,7 @@ int EfaTransport::initializeEfaResources() {
     // context_list_ which only contains EFA devices.
     for (auto& device_name : non_efa_devices) {
         local_topology_->disableDevice(device_name);
-        LOG_INFO << "EfaTransport: Disabled non-EFA device " << device_name
+        LOG(INFO) << "EfaTransport: Disabled non-EFA device " << device_name
                   << " in topology";
     }
 
@@ -1028,14 +1028,14 @@ int EfaTransport::initializeEfaResources() {
                                      config.max_ep_per_ctx);
         if (ret) {
             local_topology_->disableDevice(device_name);
-            LOG_WARNING << "EfaTransport: Disable device " << device_name;
+            LOG(WARNING) << "EfaTransport: Disable device " << device_name;
         } else {
             context_list_.push_back(context);
-            LOG_INFO << "EfaTransport: Initialized EFA device " << device_name;
+            LOG(INFO) << "EfaTransport: Initialized EFA device " << device_name;
         }
     }
     if (context_list_.empty()) {
-        LOG_ERROR << "EfaTransport: No available EFA devices";
+        LOG(ERROR) << "EfaTransport: No available EFA devices";
         return ERR_DEVICE_NOT_FOUND;
     }
 
@@ -1057,7 +1057,7 @@ int EfaTransport::initializeEfaResources() {
                             if (config.max_mr_size >
                                 (uint64_t)attr.max_mr_size) {
                                 config.max_mr_size = attr.max_mr_size;
-                                LOG_INFO << "EfaTransport: Clamped "
+                                LOG(INFO) << "EfaTransport: Clamped "
                                              "max_mr_size to device limit: "
                                           << config.max_mr_size;
                             }

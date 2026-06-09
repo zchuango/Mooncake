@@ -80,7 +80,7 @@ uint16_t FindAdxlListenPort(int32_t base_port, int32_t device_id) {
     std::uniform_int_distribution rand_dist;
     const int min_port = base_port + physical_dev_id * kPortRange;
     const int max_port = base_port + (physical_dev_id + 1) * kPortRange;
-    LOG_INFO << "Find available between " << min_port << " and " << max_port;
+    LOG(INFO) << "Find available between " << min_port << " and " << max_port;
     bool use_ipv6 = globalConfig().use_ipv6;
     int sockfd;
     for (int attempt = 0; attempt < kMaxGenPortAttempts; ++attempt) {

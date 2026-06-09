@@ -180,7 +180,7 @@ pybind11::object RpcInterface::sendDataAsync(const std::string& target_address,
     auto lazy = coro_lambda();
     lazy.start([](auto&& result) {
         if (result.hasError()) {
-            LOG_ERROR << "Coroutine completed with error";
+            LOG(ERROR) << "Coroutine completed with error";
         }
     });
 
@@ -205,7 +205,7 @@ int RpcInterface::sendTensor(const std::string& target_address,
                 !pybind11::hasattr(tensor_obj, "element_size") ||
                 !pybind11::hasattr(tensor_obj, "shape") ||
                 !pybind11::hasattr(tensor_obj, "dtype")) {
-                LOG_ERROR << "Input is not a valid tensor object (missing "
+                LOG(ERROR) << "Input is not a valid tensor object (missing "
                               "required attributes)";
                 return -1;
             }
@@ -245,7 +245,7 @@ int RpcInterface::sendTensor(const std::string& target_address,
                 if (i < tensor_info.shape.size() - 1) shape_str += ", ";
             }
             shape_str += "]";
-            LOG_INFO << "Sending tensor with shape: " << shape_str
+            LOG(INFO) << "Sending tensor with shape: " << shape_str
                       << ", dtype: " << tensor_info.dtype
                       << ", tensor size: " << tensor_info.total_bytes
                       << " bytes";
@@ -258,7 +258,7 @@ int RpcInterface::sendTensor(const std::string& target_address,
         return result;
 
     } catch (const std::exception& e) {
-        LOG_ERROR << "Send tensor error: " << e.what();
+        LOG(ERROR) << "Send tensor error: " << e.what();
         return -1;
     }
 }
@@ -356,7 +356,7 @@ pybind11::object RpcInterface::sendTensorAsync(
         // the coroutine itself
         if (result.hasError()) {
             // Log error if needed
-            LOG_ERROR << "Tensor coroutine completed with error";
+            LOG(ERROR) << "Tensor coroutine completed with error";
         }
     });
 
@@ -388,7 +388,7 @@ void RpcInterface::setTensorReceiveCallback(pybind11::function callback) {
 
 void RpcInterface::handleIncomingData(std::string_view source,
                                       std::string_view data) {
-    LOG_INFO << "RpcInterface::handleIncomingData called with " << data.size()
+    LOG(INFO) << "RpcInterface::handleIncomingData called with " << data.size()
               << " bytes";
 
     // C++ tensor rebuilding
@@ -398,12 +398,12 @@ void RpcInterface::handleIncomingData(std::string_view source,
         uint32_t dtype = header[0];
         uint32_t ndim = header[1];
 
-        LOG_INFO << "Checking tensor metadata: dtype=" << dtype
+        LOG(INFO) << "Checking tensor metadata: dtype=" << dtype
                   << ", ndim=" << ndim;
 
         // Basic validation: check if dtype and ndim are in reasonable ranges
         if (dtype > 0 && dtype <= 9 && ndim <= 4) {
-            LOG_INFO
+            LOG(INFO)
                 << "Data recognized as tensor, calling handleIncomingTensor";
 
             // This looks like tensor data, handle it as such
@@ -412,14 +412,14 @@ void RpcInterface::handleIncomingData(std::string_view source,
                 reinterpret_cast<const int64_t*>(data.data() + 8);
             if (data.size() < TENSOR_METADATA_SIZE ||
                 data.size() < 8 + ndim * sizeof(int64_t)) {
-                LOG_WARNING << "Data too small for claimed tensor metadata";
+                LOG(WARNING) << "Data too small for claimed tensor metadata";
                 return;
             }
             for (int i = 0; i < static_cast<int>(ndim); i++) {
                 if (shape_data[i] > 0 && shape_data[i] < (1LL << 48)) {
                     shape.push_back(static_cast<size_t>(shape_data[i]));
                 } else if (shape_data[i] > 0) {
-                    LOG_WARNING << "Shape dimension " << i
+                    LOG(WARNING) << "Shape dimension " << i
                                  << " too large: " << shape_data[i];
                     return;
                 }
@@ -479,7 +479,7 @@ void RpcInterface::handleIncomingData(std::string_view source,
 
         impl_->data_receive_callback(received);
     } catch (const std::exception& e) {
-        LOG_ERROR << "Error in data receive callback: " << e.what();
+        LOG(ERROR) << "Error in data receive callback: " << e.what();
     }
 }
 
@@ -487,16 +487,16 @@ void RpcInterface::handleIncomingTensor(std::string_view source,
                                         std::string_view data,
                                         const std::vector<size_t>& shape,
                                         std::string_view dtype) {
-    LOG_INFO << "RpcInterface::handleIncomingTensor called"
+    LOG(INFO) << "RpcInterface::handleIncomingTensor called"
               << " - source: " << source << ", data size: " << data.size()
               << ", dtype: " << dtype << ", shape size: " << shape.size();
 
     if (!impl_->tensor_receive_callback) {
-        LOG_WARNING << "No tensor receive callback set!";
+        LOG(WARNING) << "No tensor receive callback set!";
         return;
     }
 
-    LOG_INFO << "Calling Python tensor receive callback...";
+    LOG(INFO) << "Calling Python tensor receive callback...";
 
     try {
         pybind11::gil_scoped_acquire acquire;
@@ -509,7 +509,7 @@ void RpcInterface::handleIncomingTensor(std::string_view source,
 
         impl_->tensor_receive_callback(received);
     } catch (const std::exception& e) {
-        LOG_ERROR << "Error in tensor receive callback: " << e.what();
+        LOG(ERROR) << "Error in tensor receive callback: " << e.what();
     }
 }
 

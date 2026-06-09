@@ -70,7 +70,7 @@ const static std::unordered_map<std::string, uint64_t> RATE_UNIT_MP = {
 static inline std::string calculateRate(uint64_t data_bytes,
                                         uint64_t duration) {
     if (!RATE_UNIT_MP.count(FLAGS_report_unit)) {
-        LOG_WARNING << "Invalid flag: report_unit only support "
+        LOG(WARNING) << "Invalid flag: report_unit only support "
                         "GB|GiB|Gb|MB|MiB|Mb|KB|KiB|Kb, not support "
                      << FLAGS_report_unit
                      << " . Now use GB(default) as report_unit";
@@ -88,7 +88,7 @@ int allocateDevMem(void *&devAddr, size_t size) {
     // malloc device mem
     aclError ret = aclrtMalloc(&devAddr, size, ACL_MEM_MALLOC_NORMAL_ONLY);
     if (ret != ACL_ERROR_NONE) {
-        LOG_ERROR << "Failed to allocate device memory, ret:" << ret;
+        LOG(ERROR) << "Failed to allocate device memory, ret:" << ret;
         return ret;
     }
 
@@ -96,7 +96,7 @@ int allocateDevMem(void *&devAddr, size_t size) {
     void *host_addr = nullptr;
     ret = aclrtMallocHost(&host_addr, size);
     if (ret != ACL_ERROR_NONE || host_addr == nullptr) {
-        LOG_ERROR << "Failed to allocate device memory, ret:" << ret;
+        LOG(ERROR) << "Failed to allocate device memory, ret:" << ret;
         return ret;
     }
 
@@ -108,7 +108,7 @@ int allocateDevMem(void *&devAddr, size_t size) {
     ret =
         aclrtMemcpy(devAddr, size, host_addr, size, ACL_MEMCPY_HOST_TO_DEVICE);
     if (ret != ACL_ERROR_NONE) {
-        LOG_ERROR << "Failed to copy data from host to device, ret: " << ret;
+        LOG(ERROR) << "Failed to copy data from host to device, ret: " << ret;
         aclrtFreeHost(host_addr);
         aclrtFree(devAddr);
         return ret;
@@ -117,7 +117,7 @@ int allocateDevMem(void *&devAddr, size_t size) {
     // release resource
     ret = aclrtFreeHost(host_addr);
     if (ret != ACL_ERROR_NONE) {
-        LOG_ERROR << "Failed to aclrtFreeHost, ret: " << ret;
+        LOG(ERROR) << "Failed to aclrtFreeHost, ret: " << ret;
         return ret;
     }
 
@@ -128,7 +128,7 @@ int initiator() {
     aclrtContext context = NULL;
     aclError ret = aclrtCreateContext(&context, g_deviceLogicId);
     if (ret != ACL_ERROR_NONE) {
-        LOG_ERROR << "Failed to create context, ret: " << ret;
+        LOG(ERROR) << "Failed to create context, ret: " << ret;
         return ret;
     }
 
@@ -145,11 +145,11 @@ int initiator() {
     void *tmp_devAddr = NULL;
     ret = allocateDevMem(tmp_devAddr, FLAGS_block_size);
     if (ret) {
-        LOG_ERROR << "Failed to allocateDevMem, ret: " << ret;
+        LOG(ERROR) << "Failed to allocateDevMem, ret: " << ret;
         return ret;
     }
 
-    LOG_INFO << "tmp_devAddr_target: " << tmp_devAddr
+    LOG(INFO) << "tmp_devAddr_target: " << tmp_devAddr
               << ", len: " << FLAGS_block_size;
     ret = engine->registerLocalMemory(tmp_devAddr, FLAGS_block_size,
                                       "npu:" + std::to_string(g_devicePhyId));
@@ -160,16 +160,16 @@ int initiator() {
         uint64_t block_size = FLAGS_block_size * (1 << i);
         ret = allocateDevMem(devAddr, FLAGS_batch_size * block_size * 2);
         if (ret) {
-            LOG_ERROR << "Failed to allocateDevMem, ret: " << ret;
+            LOG(ERROR) << "Failed to allocateDevMem, ret: " << ret;
             return -1;
         }
-        LOG_INFO << "dev_addr_initiator: " << devAddr
+        LOG(INFO) << "dev_addr_initiator: " << devAddr
                   << " len:" << FLAGS_batch_size * block_size * 2;
         ret = engine->registerLocalMemory(
             devAddr, FLAGS_batch_size * block_size * 2,
             "npu:" + std::to_string(g_devicePhyId));
         if (ret) {
-            LOG_ERROR << "Failed to registerLocalMemory, ret: " << ret;
+            LOG(ERROR) << "Failed to registerLocalMemory, ret: " << ret;
             return ret;
         }
 
@@ -184,13 +184,13 @@ int initiator() {
     else if (FLAGS_operation == "write")
         opcode = TransferRequest::WRITE;
     else {
-        LOG_ERROR << "Unsupported operation: must be 'read' or 'write'";
+        LOG(ERROR) << "Unsupported operation: must be 'read' or 'write'";
         return -1;
     }
 
     auto segment_desc = engine->getMetadata()->getSegmentDescByID(segment_id);
     if (!segment_desc) {
-        LOG_ERROR << "Unable to get target segment ID, please recheck";
+        LOG(ERROR) << "Unable to get target segment ID, please recheck";
         return -1;
     }
 
@@ -218,10 +218,10 @@ int initiator() {
         if (status.s == TransferStatusEnum::COMPLETED) {
             completed = true;
         } else if (status.s == TransferStatusEnum::FAILED) {
-            LOG_ERROR << "getTransferStatus FAILED";
+            LOG(ERROR) << "getTransferStatus FAILED";
             completed = true;
         } else if (status.s == TransferStatusEnum::TIMEOUT) {
-            LOG_INFO << "Sync data transfer timeout";
+            LOG(INFO) << "Sync data transfer timeout";
             completed = true;
         }
     }
@@ -256,10 +256,10 @@ int initiator() {
             if (status.s == TransferStatusEnum::COMPLETED) {
                 completed = true;
             } else if (status.s == TransferStatusEnum::FAILED) {
-                LOG_ERROR << "getTransferStatus FAILED";
+                LOG(ERROR) << "getTransferStatus FAILED";
                 completed = true;
             } else if (status.s == TransferStatusEnum::TIMEOUT) {
-                LOG_INFO << "Sync data transfer timeout";
+                LOG(INFO) << "Sync data transfer timeout";
                 completed = true;
             }
         }
@@ -267,7 +267,7 @@ int initiator() {
         uint64_t duration = (stop_tv.tv_sec - start_tv.tv_sec) * 1000000.0 +
                             (stop_tv.tv_usec - start_tv.tv_usec);
 
-        LOG_INFO << "Test completed: duration " << duration
+        LOG(INFO) << "Test completed: duration " << duration
                   << "us, block size " << block_size / 1024 << "KB, total size "
                   << FLAGS_batch_size * block_size / 1024 << "KB , throughput "
                   << calculateRate(FLAGS_batch_size * block_size, duration);
@@ -288,7 +288,7 @@ int target() {
     aclrtContext context = nullptr;
     aclError ret = aclrtCreateContext(&context, g_deviceLogicId);
     if (ret != ACL_ERROR_NONE) {
-        LOG_ERROR << "Failed to create context, ret: " << ret;
+        LOG(ERROR) << "Failed to create context, ret: " << ret;
         return -1;
     }
 
@@ -305,11 +305,11 @@ int target() {
     void *tmp_devAddr = NULL;
     ret = allocateDevMem(tmp_devAddr, FLAGS_block_size);
     if (ret) {
-        LOG_ERROR << "Failed to allocateDevMem, ret: " << ret;
+        LOG(ERROR) << "Failed to allocateDevMem, ret: " << ret;
         return ret;
     }
 
-    LOG_INFO << "tmp_devAddr_target: " << tmp_devAddr
+    LOG(INFO) << "tmp_devAddr_target: " << tmp_devAddr
               << ", len: " << FLAGS_block_size;
     ret = engine->registerLocalMemory(tmp_devAddr, FLAGS_block_size,
                                       "npu:" + std::to_string(g_devicePhyId));
@@ -320,17 +320,17 @@ int target() {
         uint64_t block_size = FLAGS_block_size * (1 << i);
         ret = allocateDevMem(devAddr, FLAGS_batch_size * block_size * 2);
         if (ret) {
-            LOG_ERROR << "Failed to allocateDevMem, ret: " << ret;
+            LOG(ERROR) << "Failed to allocateDevMem, ret: " << ret;
             return ret;
         }
 
-        LOG_INFO << "devAddr_target: " << devAddr
+        LOG(INFO) << "devAddr_target: " << devAddr
                   << ", len: " << FLAGS_batch_size * block_size * 2;
         ret = engine->registerLocalMemory(
             devAddr, FLAGS_batch_size * block_size * 2,
             "npu:" + std::to_string(g_devicePhyId));
         if (ret) {
-            LOG_ERROR << "Failed to registerLocalMemory, ret: " << ret;
+            LOG(ERROR) << "Failed to registerLocalMemory, ret: " << ret;
             return ret;
         }
 
@@ -361,13 +361,13 @@ int main(int argc, char **argv) {
     const char *aclConfigPath = NULL;
     aclError ret = aclInit(aclConfigPath);
     if (ret != ACL_ERROR_NONE) {
-        LOG_ERROR << "Failed to initialize ACL";
+        LOG(ERROR) << "Failed to initialize ACL";
         return ret;
     }
 
     ret = aclrtSetDevice(g_deviceLogicId);
     if (ret != ACL_ERROR_NONE) {
-        LOG_ERROR << "Failed to set device ACL";
+        LOG(ERROR) << "Failed to set device ACL";
         return ret;
     }
 
@@ -377,6 +377,6 @@ int main(int argc, char **argv) {
         return target();
     }
 
-    LOG_ERROR << "Unsupported mode: must be 'initiator' or 'target'";
+    LOG(ERROR) << "Unsupported mode: must be 'initiator' or 'target'";
     exit(EXIT_FAILURE);
 }

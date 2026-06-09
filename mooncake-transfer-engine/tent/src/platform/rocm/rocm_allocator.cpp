@@ -51,7 +51,7 @@ Status RocmPlatform::free(void* ptr, size_t size) {
                attributes.type == hipMemoryTypeUnregistered) {
         numa_free(ptr, size);
     } else {
-        LOG_ERROR << "Unknown memory type, " << ptr << " " << attributes.type;
+        LOG(ERROR) << "Unknown memory type, " << ptr << " " << attributes.type;
     }
     return Status::OK();
 }

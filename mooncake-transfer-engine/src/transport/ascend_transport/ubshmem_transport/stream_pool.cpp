@@ -43,7 +43,7 @@ aclrtStream StreamPool::createStream() {
     aclError err = aclrtCreateStreamWithConfig(
         &stream, 0, ACL_STREAM_FAST_LAUNCH | ACL_STREAM_FAST_SYNC);
     if (err != ACL_ERROR_NONE) {
-        LOG_ERROR << "StreamPool: Failed to create stream: "
+        LOG(ERROR) << "StreamPool: Failed to create stream: "
                    << aclGetRecentErrMsg();
         return nullptr;
     }
@@ -80,7 +80,7 @@ bool StreamPool::tryGetStreamsOnce(size_t stream_num,
            streams_.size() < static_cast<size_t>(max_streams_)) {
         aclrtStream stream = createStream();
         if (stream == nullptr) {
-            LOG_ERROR << "StreamPool: Failed to create new stream";
+            LOG(ERROR) << "StreamPool: Failed to create new stream";
             // Release already allocated streams
             for (auto s : streams) {
                 stream_available_[s] = true;
@@ -109,7 +109,7 @@ bool StreamPool::tryGetStreams(size_t stream_num,
 
         auto elapsed = std::chrono::steady_clock::now() - start;
         if (elapsed >= timeout) {
-            LOG_ERROR << "StreamPool: Timeout waiting for streams (elapsed: "
+            LOG(ERROR) << "StreamPool: Timeout waiting for streams (elapsed: "
                        << std::chrono::duration_cast<std::chrono::milliseconds>(
                               elapsed)
                               .count()

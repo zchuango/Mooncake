@@ -331,7 +331,7 @@ TEST_F(EtcdOpLogStoreTest, TestCleanupOpLogBefore_Empty) {
 // ========== 3.1.7 Cluster ID validation tests ==========
 
 TEST_F(EtcdOpLogStoreTest, TestInvalidClusterId_Rejected) {
-    // Invalid cluster_id (containing slashes) should trigger LOG_FATAL and
+    // Invalid cluster_id (containing slashes) should trigger LOG(FATAL) and
     // terminate
     EXPECT_DEATH(
         {

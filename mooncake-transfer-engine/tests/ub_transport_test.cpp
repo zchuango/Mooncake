@@ -171,7 +171,7 @@ TEST_F(UBTransportTest, MultiWrite) {
             if (status.s == TransferStatusEnum::COMPLETED)
                 completed = true;
             else if (status.s == TransferStatusEnum::FAILED) {
-                LOG_INFO << "FAILED";
+                LOG(INFO) << "FAILED";
                 completed = true;
             }
         }
@@ -205,7 +205,7 @@ TEST_F(UBTransportTest, MultipleRead) {
             if (status.s == TransferStatusEnum::COMPLETED)
                 completed = true;
             else if (status.s == TransferStatusEnum::FAILED) {
-                LOG_INFO << "FAILED";
+                LOG(INFO) << "FAILED";
                 completed = true;
             }
         }

@@ -49,7 +49,7 @@ static std::string g_protocol;
 //  Handle allocateMemory function pointer based on protocol
 void initMemoryAllocator(const char* protocol) {
     if (allocateMemory != nullptr) {
-        LOG_WARNING << "Memory allocator already initialized with: "
+        LOG(WARNING) << "Memory allocator already initialized with: "
                      << g_protocol;
         return;
     }
@@ -62,9 +62,9 @@ void initMemoryAllocator(const char* protocol) {
         freeMemory = [](void* p) {
             mooncake::NvlinkTransport::freePinnedLocalMemory(p);
         };
-        LOG_INFO << "Selected MNNVL (NVLink) memory allocator";
+        LOG(INFO) << "Selected MNNVL (NVLink) memory allocator";
 #else
-        LOG_ERROR << "Protocol 'nvlink' requires -DUSE_MNNVL=ON";
+        LOG(ERROR) << "Protocol 'nvlink' requires -DUSE_MNNVL=ON";
 #endif
     } else if (strcmp(protocol, "hip") == 0) {
 #ifdef USE_HIP
@@ -74,9 +74,9 @@ void initMemoryAllocator(const char* protocol) {
         freeMemory = [](void* p) {
             mooncake::HipTransport::freePinnedLocalMemory(p);
         };
-        LOG_INFO << "Selected HIP memory allocator";
+        LOG(INFO) << "Selected HIP memory allocator";
 #else
-        LOG_ERROR << "Protocol 'hip' requires -DUSE_HIP=ON";
+        LOG(ERROR) << "Protocol 'hip' requires -DUSE_HIP=ON";
 #endif
     } else if (strcmp(protocol, "nvlink_intra") == 0) {
 #ifdef USE_INTRA_NVLINK
@@ -87,14 +87,14 @@ void initMemoryAllocator(const char* protocol) {
         freeMemory = [](void* p) {
             mooncake::IntraNodeNvlinkTransport::freePinnedLocalMemory(p);
         };
-        LOG_INFO << "Selected Intra-NVLink memory allocator";
+        LOG(INFO) << "Selected Intra-NVLink memory allocator";
 #else
-        LOG_ERROR << "Protocol 'nvlink_intra' requires -DUSE_INTRA_NVLINK=ON";
+        LOG(ERROR) << "Protocol 'nvlink_intra' requires -DUSE_INTRA_NVLINK=ON";
 #endif
     } else {
         allocateMemory = malloc;
         freeMemory = free;
-        LOG_WARNING << "Using default malloc/free for protocol: " << protocol;
+        LOG(WARNING) << "Using default malloc/free for protocol: " << protocol;
     }
 }
 
@@ -179,7 +179,7 @@ int TransferEnginePy::initializeExt(const char* local_hostname,
                                     const char* device_name,
                                     const char* metadata_type) {
     if (strcmp(protocol, "xgmi") == 0) {
-        LOG_ERROR << "Protocol 'xgmi' is not exposed in the Python API. "
+        LOG(ERROR) << "Protocol 'xgmi' is not exposed in the Python API. "
                    << "Use 'hip' instead.";
         return -1;
     }
@@ -200,7 +200,7 @@ int TransferEnginePy::initializeExt(const char* local_hostname,
     // Manually discover topology for EFA to populate device list
     if (use_efa) {
         engine_->getLocalTopology()->discover(device_filter);
-        LOG_INFO << "Topology discovery complete for EFA. Found "
+        LOG(INFO) << "Topology discovery complete for EFA. Found "
                   << engine_->getLocalTopology()->getHcaList().size()
                   << " devices.";
     }
@@ -223,26 +223,26 @@ int TransferEnginePy::initializeExt(const char* local_hostname,
 #ifdef USE_EFA
     // Install EFA transport when protocol is "efa"
     if (use_efa) {
-        LOG_INFO
+        LOG(INFO)
             << "Installing EFA transport as requested by protocol parameter";
         auto transport = engine_->installTransport("efa", nullptr);
         if (!transport) {
-            LOG_ERROR << "Failed to install EFA transport";
+            LOG(ERROR) << "Failed to install EFA transport";
             return -1;
         }
-        LOG_INFO << "EFA transport installed successfully";
+        LOG(INFO) << "EFA transport installed successfully";
     } else {
         // For non-EFA protocols (e.g. TCP), manually install TCP transport
         // since auto_discover is disabled to prevent RDMA installation
         // (RDMA QP creation fails on EFA devices).
-        LOG_INFO
+        LOG(INFO)
             << "Installing TCP transport (auto_discover disabled in EFA build)";
         auto transport = engine_->installTransport("tcp", nullptr);
         if (!transport) {
-            LOG_ERROR << "Failed to install TCP transport";
+            LOG(ERROR) << "Failed to install TCP transport";
             return -1;
         }
-        LOG_INFO << "TCP transport installed successfully";
+        LOG(INFO) << "TCP transport installed successfully";
     }
 #endif
 
@@ -379,7 +379,7 @@ int TransferEnginePy::transferSync(const char* target_hostname,
         if (handle_map_.count(target_hostname)) {
             handle = handle_map_[target_hostname];
         } else {
-            LOG_INFO
+            LOG(INFO)
                 << "transferSync, cache not found, openSegment with target "
                 << target_hostname;
             handle = engine_->openSegment(target_hostname);
@@ -419,7 +419,7 @@ int TransferEnginePy::transferSync(const char* target_hostname,
         if (!s.ok()) {
             Status segment_status = engine_->CheckSegmentStatus(handle);
             if (!segment_status.ok()) {
-                LOG_WARNING
+                LOG(WARNING)
                     << "submitTransfer failed with target " << target_hostname
                     << ", CheckSegmentStatus not ok, ready to closeSegment";
                 std::lock_guard<std::mutex> guard(mutex_);
@@ -442,14 +442,14 @@ int TransferEnginePy::transferSync(const char* target_hostname,
                 engine_->freeBatchID(batch_id);
                 completed = true;
             } else if (status.s == TransferStatusEnum::TIMEOUT) {
-                LOG_INFO << "Sync data transfer timeout";
+                LOG(INFO) << "Sync data transfer timeout";
                 completed = true;
             }
             auto current_ts = getCurrentTimeInNano();
             const int64_t timeout =
                 transfer_timeout_nsec_ + length;  // 1GiB per second
             if (current_ts - start_ts > timeout) {
-                LOG_INFO << "Sync data transfer timeout after "
+                LOG(INFO) << "Sync data transfer timeout after "
                           << current_ts - start_ts << "ns, local buffer "
                           << (void*)buffer << " remote buffer "
                           << (void*)peer_buffer_address << " length " << length;
@@ -479,7 +479,7 @@ int TransferEnginePy::batchTransferSync(
 
     if (buffers.size() != peer_buffer_addresses.size() ||
         buffers.size() != lengths.size()) {
-        LOG_ERROR
+        LOG(ERROR)
             << "buffers, peer_buffer_addresses and lengths have different size";
         return -1;
     }
@@ -516,7 +516,7 @@ int TransferEnginePy::batchTransferSync(
             engine_->freeBatchID(batch_id);
             Status segment_status = engine_->CheckSegmentStatus(handle);
             if (!segment_status.ok()) {
-                LOG_WARNING
+                LOG(WARNING)
                     << "submitTransfer failed with target " << target_hostname
                     << ", CheckSegmentStatus not ok, ready to closeSegment";
                 std::lock_guard<std::mutex> guard(mutex_);
@@ -541,14 +541,14 @@ int TransferEnginePy::batchTransferSync(
                 already_freed = true;
                 completed = true;
             } else if (status.s == TransferStatusEnum::TIMEOUT) {
-                LOG_INFO << "Sync data transfer timeout";
+                LOG(INFO) << "Sync data transfer timeout";
                 completed = true;
             }
             auto current_ts = getCurrentTimeInNano();
             const int64_t timeout =
                 transfer_timeout_nsec_ + total_length;  // 1GiB per second
             if (current_ts - start_ts > timeout) {
-                LOG_INFO << "Sync batch data transfer timeout after "
+                LOG(INFO) << "Sync batch data transfer timeout after "
                           << current_ts - start_ts << "ns";
                 // TODO: as @doujiang24 mentioned, early free(while there are
                 // still waiting tasks) the batch_id may fail and cause memory
@@ -582,7 +582,7 @@ batch_id_t TransferEnginePy::batchTransferAsync(
 
     if (buffers.size() != peer_buffer_addresses.size() ||
         buffers.size() != lengths.size()) {
-        LOG_ERROR
+        LOG(ERROR)
             << "buffers, peer_buffer_addresses and lengths have different size";
         return 0;
     }
@@ -655,16 +655,16 @@ int TransferEnginePy::getBatchTransferStatus(
             LOG_ASSERT(s.ok());
             if (status.s == TransferStatusEnum::COMPLETED) {
                 engine_->freeBatchID(entry.first);
-                LOG_INFO << "Batch Transfer completed!";
+                LOG(INFO) << "Batch Transfer completed!";
                 remove_ids.insert(entry.first);
             } else if (status.s == TransferStatusEnum::FAILED) {
                 failed_or_timeout = true;
             } else if (status.s == TransferStatusEnum::TIMEOUT) {
-                LOG_INFO << "Sync data transfer timeout";
+                LOG(INFO) << "Sync data transfer timeout";
             }
             auto current_ts = getCurrentTimeInNano();
             if (current_ts - start_timestamp > entry.second) {
-                LOG_INFO << "Sync batch data transfer timeout after "
+                LOG(INFO) << "Sync batch data transfer timeout after "
                           << current_ts - start_timestamp << "ns";
                 failed_or_timeout = true;
             }
@@ -799,7 +799,7 @@ void CUDART_CB transfer_on_cuda_callback(void* data) {
 
     auto status = ctx->engine->submitTransfer(ctx->batch_id, ctx->requests);
     if (!status.ok()) {
-        LOG_ERROR << "[Mooncake Cuda] Submit failed: " << status.ToString()
+        LOG(ERROR) << "[Mooncake Cuda] Submit failed: " << status.ToString()
                    << " | BatchID: " << ctx->batch_id;
         goto error_exit;
     }
@@ -808,7 +808,7 @@ void CUDART_CB transfer_on_cuda_callback(void* data) {
     while (true) {
         auto ret = ctx->engine->getBatchTransferStatus(ctx->batch_id, t_status);
         if (!ret.ok()) {
-            LOG_ERROR << "[Mooncake Cuda] Failed to get status for BatchID: "
+            LOG(ERROR) << "[Mooncake Cuda] Failed to get status for BatchID: "
                        << ctx->batch_id;
             goto error_exit;
         }
@@ -816,11 +816,11 @@ void CUDART_CB transfer_on_cuda_callback(void* data) {
         if (t_status.s == Transport::TransferStatusEnum::COMPLETED) {
             break;
         } else if (t_status.s == Transport::TransferStatusEnum::FAILED) {
-            LOG_ERROR << "[Mooncake Cuda] Transfer failed | BatchID: "
+            LOG(ERROR) << "[Mooncake Cuda] Transfer failed | BatchID: "
                        << ctx->batch_id << " | Bytes: " << ctx->total_bytes;
             goto error_exit;
         } else if (t_status.s == Transport::TransferStatusEnum::TIMEOUT) {
-            LOG_ERROR << "[Mooncake Cuda] Transfer timeout | BatchID: "
+            LOG(ERROR) << "[Mooncake Cuda] Transfer timeout | BatchID: "
                        << ctx->batch_id;
             goto error_exit;
         }
@@ -875,7 +875,7 @@ void TransferEnginePy::batchTransferOnCuda(
 
     if (buffers.size() != peer_buffer_addresses.size() ||
         buffers.size() != lengths.size()) {
-        LOG_ERROR
+        LOG(ERROR)
             << "buffers, peer_buffer_addresses and lengths have different size";
         throw std::runtime_error(
             "buffers, peer_buffer_addresses and lengths have different size");
@@ -1002,7 +1002,7 @@ std::vector<TransferEnginePy::TransferNotify> TransferEnginePy::getNotifies() {
 
     int ret = engine_->getNotifies(notifies);
     if (ret != 0) {
-        LOG_ERROR << "Failed to get notifies: " << ret;
+        LOG(ERROR) << "Failed to get notifies: " << ret;
         return result;
     }
 

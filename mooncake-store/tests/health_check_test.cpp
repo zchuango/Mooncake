@@ -213,8 +213,8 @@ TEST_F(HealthCheckTest, MetricsEndpointsReturnCorrectData) {
 
     // Verify /metrics now reports transfer metrics
     auto resp = fetch_url(http_port, "/metrics");
-    LOG_INFO << "=== /metrics output ===\n" << resp.body;
-    LOG_INFO << "=== end /metrics ===";
+    LOG(INFO) << "=== /metrics output ===\n" << resp.body;
+    LOG(INFO) << "=== end /metrics ===";
     EXPECT_EQ(resp.http_status, 200);
     EXPECT_NE(resp.body.find("mooncake_transfer_write_bytes"),
               std::string::npos)
@@ -230,8 +230,8 @@ TEST_F(HealthCheckTest, MetricsEndpointsReturnCorrectData) {
 
     // Verify /metrics/summary shows Put/Get data
     summary_resp = fetch_url(http_port, "/metrics/summary");
-    LOG_INFO << "=== /metrics/summary output ===\n" << summary_resp.body;
-    LOG_INFO << "=== end /metrics/summary ===";
+    LOG(INFO) << "=== /metrics/summary output ===\n" << summary_resp.body;
+    LOG(INFO) << "=== end /metrics/summary ===";
     EXPECT_EQ(summary_resp.http_status, 200);
     EXPECT_NE(summary_resp.body.find("Put:"), std::string::npos)
         << "Put summary missing";

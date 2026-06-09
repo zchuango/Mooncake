@@ -29,14 +29,14 @@ Status RailMonitor::load(const Topology* local, const Topology* remote,
             conf->get(kCfgErrorWindowSecs, (int)error_window_.count()));
         cooldown_ = std::chrono::seconds(
             conf->get(kCfgCooldownSecs, (int)cooldown_.count()));
-        LOG_INFO << "RailMonitor: error_threshold=" << error_threshold_
+        LOG(INFO) << "RailMonitor: error_threshold=" << error_threshold_
                   << " error_window=" << error_window_.count() << "s"
                   << " cooldown=" << cooldown_.count() << "s";
     }
     if (!rail_topo_json.empty()) {
         auto status = loadFromJson(rail_topo_json);
         if (status.ok()) return status;
-        LOG_WARNING << "Failed to parse rail topo json: " << status.ToString();
+        LOG(WARNING) << "Failed to parse rail topo json: " << status.ToString();
     }
     return loadDefault();
 }
@@ -53,7 +53,7 @@ bool RailMonitor::available(int local_nic, int remote_nic) {
     st.error_count = 0;
     st.cooldown = std::chrono::seconds(0);
     updateBestMapping();
-    LOG_INFO << "Rail recovered: local_nic=" << local_nic
+    LOG(INFO) << "Rail recovered: local_nic=" << local_nic
               << " remote_nic=" << remote_nic << " (cooldown expired)";
     return true;
 }
@@ -96,7 +96,7 @@ void RailMonitor::markRecovered(int local_nic, int remote_nic) {
     st.resume_time = {};
     st.cooldown = std::chrono::seconds(0);
     if (was_paused) {
-        LOG_INFO << "Rail recovered: local_nic=" << local_nic
+        LOG(INFO) << "Rail recovered: local_nic=" << local_nic
                   << " remote_nic=" << remote_nic
                   << " (un-paused by successful transfer)";
         updateBestMapping();
@@ -147,7 +147,7 @@ Status RailMonitor::loadFromJson(const std::string& rail_topo_json) {
                 if (local_nic_id >= 0 && remote_nic_id >= 0) {
                     rail_states_[{local_nic_id, remote_nic_id}] = RailState{};
                 } else {
-                    LOG_WARNING << "Ignore invalid path " << local_nic_name
+                    LOG(WARNING) << "Ignore invalid path " << local_nic_name
                                  << " -> " << remote_nic_name;
                 }
             }
@@ -163,13 +163,13 @@ Status RailMonitor::loadFromJson(const std::string& rail_topo_json) {
                 if (local_nic_id >= 0 && remote_nic_id >= 0) {
                     direct_rails_[local_nic_id] = remote_nic_id;
                 } else {
-                    LOG_WARNING << "Ignore invalid direct path "
+                    LOG(WARNING) << "Ignore invalid direct path "
                                  << local_nic_name << " -> " << remote_nic_name;
                 }
             }
         }
     } catch (const std::exception& ex) {
-        LOG_ERROR << "Failed to parse rail_topo_json: " << ex.what();
+        LOG(ERROR) << "Failed to parse rail_topo_json: " << ex.what();
         return Status::InvalidArgument("Failed to parse JSON" LOC_MARK);
     }
 

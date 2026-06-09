@@ -75,7 +75,7 @@ void AssignBoolFromEnv(const char *env_name, bool &target) {
             target = parsed;
             return;
         }
-        LOG_WARNING << "Invalid " << env_name << " value: " << env_value;
+        LOG(WARNING) << "Invalid " << env_name << " value: " << env_value;
     }
 }
 
@@ -88,7 +88,7 @@ void AssignTimeoutFromEnv(const char *env_name, int64_t default_value,
             target = parsed;
             return;
         }
-        LOG_WARNING << "Invalid " << env_name << " value: " << env_value;
+        LOG(WARNING) << "Invalid " << env_name << " value: " << env_value;
     }
     target = default_value;
 }

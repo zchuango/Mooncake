@@ -66,7 +66,7 @@ static bool supportFabricMem() {
     int num_devices = 0;
     cudaError_t err = cudaGetDeviceCount(&num_devices);
     if (err != cudaSuccess || num_devices == 0) {
-        LOG_ERROR << "Unable to find CUDA devices: "
+        LOG(ERROR) << "Unable to find CUDA devices: "
                    << cudaGetErrorString(err);
         return false;
     }
@@ -77,7 +77,7 @@ static bool supportFabricMem() {
             &device_support_fabric_mem,
             CU_DEVICE_ATTRIBUTE_HANDLE_TYPE_FABRIC_SUPPORTED, device_id);
         if (result != CUDA_SUCCESS || !device_support_fabric_mem) {
-            LOG_ERROR << "Some CUDA devices does not support FABRIC mode";
+            LOG(ERROR) << "Some CUDA devices does not support FABRIC mode";
             return false;
         }
     }
@@ -178,7 +178,7 @@ Status MnnvlTransport::submitTransferTasks(
             auto status = relocateSharedMemoryAddress(
                 target_addr, request.length, request.target_id);
             if (!status.ok()) {
-                LOG_FATAL << status;
+                LOG(FATAL) << status;
                 task.status_word = TransferStatusEnum::FAILED;
                 return status;
             }
@@ -232,7 +232,7 @@ void MnnvlTransport::startTransfer(std::vector<MnnvlTask *> &tasks,
                                srcs.size(), &attr, &attrs_idx, 1, &fail_idx,
                                batch->async_stream.get());
     if (err != cudaSuccess && fail_idx < tasks.size()) {
-        LOG_ERROR << "MnnvlTransport::startTransfer internal error: "
+        LOG(ERROR) << "MnnvlTransport::startTransfer internal error: "
                    << "cudaMemcpyBatchAsync failed at task index " << fail_idx
                    << " (src=" << srcs[fail_idx] << ", dst=" << dsts[fail_idx]
                    << ", size=" << sizes[fail_idx]
@@ -302,7 +302,7 @@ Status MnnvlTransport::addMemoryBuffer(BufferDesc &desc,
     CUmemGenericAllocationHandle handle;
     auto result = cuMemRetainAllocationHandle(&handle, (void *)desc.addr);
     if (result != CUDA_SUCCESS) {
-        LOG_INFO << "Memory region " << (void *)desc.addr
+        LOG(INFO) << "Memory region " << (void *)desc.addr
                   << "  will not be registered for MNNVL transport.";
         return Status::OK();
     }
@@ -332,7 +332,7 @@ Status MnnvlTransport::addMemoryBuffer(BufferDesc &desc,
     result = cuMemGetAddressRange((CUdeviceptr *)&real_addr, &real_size,
                                   (CUdeviceptr)desc.addr);
     if (result != CUDA_SUCCESS) {
-        LOG_WARNING << "NvlinkTransport: cuMemGetAddressRange failed: "
+        LOG(WARNING) << "NvlinkTransport: cuMemGetAddressRange failed: "
                      << result;
         const uint64_t granularity = 2 * 1024 * 1024;
         real_addr = (void *)desc.addr;
@@ -373,7 +373,7 @@ Status MnnvlTransport::allocateLocalMemory(void **addr, size_t size,
     if (result != CUDA_SUCCESS) {
         // return Status::InternalError(std::string("cuMemCreate: ") +
         //                              std::to_string(result) + LOC_MARK);
-        LOG_WARNING << "Fallback to cudaMalloc because the platform does not "
+        LOG(WARNING) << "Fallback to cudaMalloc because the platform does not "
                         "support fabric";
         return Platform::getLoader().allocate(addr, size, options);
     }

@@ -74,7 +74,7 @@ hipEvent_t EventPool::createEvent() {
     hipEvent_t event;
     hipError_t err = hipEventCreateWithFlags(&event, hipEventDisableTiming);
     if (err != hipSuccess) {
-        LOG_ERROR << "EventPool: Failed to create event: "
+        LOG(ERROR) << "EventPool: Failed to create event: "
                    << hipGetErrorString(err);
         return nullptr;
     }
@@ -84,7 +84,7 @@ hipEvent_t EventPool::createEvent() {
 hipEvent_t EventPool::createEventForDevice(int device_id) {
     hipError_t err = hipSetDevice(device_id);
     if (err != hipSuccess) {
-        LOG_ERROR << "EventPool: Failed to set device " << device_id << ": "
+        LOG(ERROR) << "EventPool: Failed to set device " << device_id << ": "
                    << hipGetErrorString(err);
         return nullptr;
     }
@@ -95,7 +95,7 @@ hipEvent_t EventPool::createEventForDevice(int device_id) {
 bool EventPool::initializeEventsForDevice(int device_id) {
     hipError_t err = hipSetDevice(device_id);
     if (err != hipSuccess) {
-        LOG_ERROR << "EventPool: Failed to set device " << device_id << ": "
+        LOG(ERROR) << "EventPool: Failed to set device " << device_id << ": "
                    << hipGetErrorString(err);
         return false;
     }

@@ -254,7 +254,7 @@ RedisLeaderCoordinator::RedisLeaderCoordinator(const HABackendSpec& spec)
 RedisLeaderCoordinator::~RedisLeaderCoordinator() {
     auto err = ShutdownRenewThread();
     if (err != ErrorCode::OK) {
-        LOG_WARNING << "Failed to shutdown Redis renew thread: "
+        LOG(WARNING) << "Failed to shutdown Redis renew thread: "
                      << toString(err);
     }
 
@@ -281,7 +281,7 @@ RedisLeaderCoordinator::ReadCurrentView() {
                      kViewVersionField, kOwnerTokenField));
     RedisReplyPtr reply(raw_reply);
     if (reply == nullptr) {
-        LOG_WARNING << "Redis HMGET failed for key=" << master_view_key_
+        LOG(WARNING) << "Redis HMGET failed for key=" << master_view_key_
                      << ", error="
                      << (context_ != nullptr && context_->err != 0
                              ? context_->errstr
@@ -290,13 +290,13 @@ RedisLeaderCoordinator::ReadCurrentView() {
         return tl::make_unexpected(ErrorCode::INTERNAL_ERROR);
     }
     if (reply->type == REDIS_REPLY_ERROR) {
-        LOG_WARNING << "Redis HMGET returned error for key="
+        LOG(WARNING) << "Redis HMGET returned error for key="
                      << master_view_key_ << ": "
                      << (reply->str != nullptr ? reply->str : "unknown");
         return tl::make_unexpected(ErrorCode::INTERNAL_ERROR);
     }
     if (reply->type != REDIS_REPLY_ARRAY || reply->elements != 3) {
-        LOG_WARNING << "Redis HMGET returned unexpected reply for key="
+        LOG(WARNING) << "Redis HMGET returned unexpected reply for key="
                      << master_view_key_;
         return tl::make_unexpected(ErrorCode::INTERNAL_ERROR);
     }
@@ -312,7 +312,7 @@ RedisLeaderCoordinator::ReadCurrentView() {
     if (leader_reply->type == REDIS_REPLY_NIL ||
         version_reply->type == REDIS_REPLY_NIL ||
         owner_reply->type == REDIS_REPLY_NIL) {
-        LOG_WARNING << "Redis master view is partially populated for key="
+        LOG(WARNING) << "Redis master view is partially populated for key="
                      << master_view_key_;
         return tl::make_unexpected(ErrorCode::INTERNAL_ERROR);
     }
@@ -363,7 +363,7 @@ RedisLeaderCoordinator::TryAcquireLeadership(
                          owner_token.data(), owner_token.size()));
         RedisReplyPtr reply(raw_reply);
         if (reply == nullptr) {
-            LOG_WARNING << "Redis acquire leadership failed, error="
+            LOG(WARNING) << "Redis acquire leadership failed, error="
                          << (context_ != nullptr && context_->err != 0
                                  ? context_->errstr
                                  : "connection error");
@@ -371,7 +371,7 @@ RedisLeaderCoordinator::TryAcquireLeadership(
             return tl::make_unexpected(ErrorCode::INTERNAL_ERROR);
         }
         if (reply->type == REDIS_REPLY_ERROR) {
-            LOG_WARNING << "Redis acquire leadership returned error: "
+            LOG(WARNING) << "Redis acquire leadership returned error: "
                          << (reply->str != nullptr ? reply->str : "unknown");
             return tl::make_unexpected(ErrorCode::INTERNAL_ERROR);
         }
@@ -701,9 +701,9 @@ ErrorCode RedisLeaderCoordinator::ConnectLocked() {
     auto context = ConnectRedis(spec_.connstring, ErrorCode::INTERNAL_ERROR);
     if (!context) {
         if (context.error() == ErrorCode::INVALID_PARAMS) {
-            LOG_ERROR << "Invalid Redis HA backend configuration";
+            LOG(ERROR) << "Invalid Redis HA backend configuration";
         } else {
-            LOG_WARNING << "Failed to connect Redis HA backend";
+            LOG(WARNING) << "Failed to connect Redis HA backend";
         }
         DisconnectLocked();
         return context.error();
@@ -740,7 +740,7 @@ ErrorCode RedisLeaderCoordinator::RenewLeadershipOnceLocked(
                      static_cast<long long>(ttl_ms)));
     RedisReplyPtr reply(raw_reply);
     if (reply == nullptr) {
-        LOG_WARNING << "Redis renew leadership failed, error="
+        LOG(WARNING) << "Redis renew leadership failed, error="
                      << (context_ != nullptr && context_->err != 0
                              ? context_->errstr
                              : "connection error");
@@ -748,7 +748,7 @@ ErrorCode RedisLeaderCoordinator::RenewLeadershipOnceLocked(
         return ErrorCode::INTERNAL_ERROR;
     }
     if (reply->type == REDIS_REPLY_ERROR) {
-        LOG_WARNING << "Redis renew leadership returned error: "
+        LOG(WARNING) << "Redis renew leadership returned error: "
                      << (reply->str != nullptr ? reply->str : "unknown");
         return ErrorCode::INTERNAL_ERROR;
     }
@@ -782,7 +782,7 @@ ErrorCode RedisLeaderCoordinator::ReleaseLeadershipOnceLocked(
                      owner_token.data(), owner_token.size()));
     RedisReplyPtr reply(raw_reply);
     if (reply == nullptr) {
-        LOG_WARNING << "Redis release leadership failed, error="
+        LOG(WARNING) << "Redis release leadership failed, error="
                      << (context_ != nullptr && context_->err != 0
                              ? context_->errstr
                              : "connection error");
@@ -790,7 +790,7 @@ ErrorCode RedisLeaderCoordinator::ReleaseLeadershipOnceLocked(
         return ErrorCode::INTERNAL_ERROR;
     }
     if (reply->type == REDIS_REPLY_ERROR) {
-        LOG_WARNING << "Redis release leadership returned error: "
+        LOG(WARNING) << "Redis release leadership returned error: "
                      << (reply->str != nullptr ? reply->str : "unknown");
         return ErrorCode::INTERNAL_ERROR;
     }

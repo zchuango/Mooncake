@@ -57,7 +57,7 @@ TransportType TransportSelector::parseTransportType(const std::string& str) {
     if (it != kTransportNameMap.end()) {
         return it->second;
     }
-    LOG_WARNING << "Unknown transport type: " << str;
+    LOG(WARNING) << "Unknown transport type: " << str;
     return UNSPEC;
 }
 
@@ -98,13 +98,13 @@ void TransportSelector::loadPolicies() {
     auto policies_array = config_->getArray<json>("policy");
 
     if (policies_array.empty()) {
-        LOG_INFO
+        LOG(INFO)
             << "No 'policy' configured, using default transport selection";
         policies_ = getDefaultPolicies();
         return;
     }
 
-    LOG_INFO << "Loading transport selection policies from config";
+    LOG(INFO) << "Loading transport selection policies from config";
 
     for (const auto& policy_json : policies_array) {
         if (!policy_json.is_object()) continue;
@@ -119,7 +119,7 @@ void TransportSelector::loadPolicies() {
         } else if (segment_type_str == "memory") {
             policy.segment_type = SegmentType::Memory;
         } else {
-            LOG_WARNING << "Invalid segment_type in policy " << policy.name;
+            LOG(WARNING) << "Invalid segment_type in policy " << policy.name;
             continue;
         }
 
@@ -164,7 +164,7 @@ void TransportSelector::loadPolicies() {
                 } else if (prio_str == "low" || prio_str == "2") {
                     policy.priority = PRIO_LOW;
                 } else {
-                    LOG_WARNING << "Invalid priority string: " << prio_str
+                    LOG(WARNING) << "Invalid priority string: " << prio_str
                                  << ", using PRIO_LOW";
                     policy.priority = PRIO_LOW;
                 }
@@ -199,7 +199,7 @@ void TransportSelector::loadPolicies() {
         }
 
         policies_.push_back(std::move(policy));
-        LOG_INFO << "Loaded transport policy: " << policy.name
+        LOG(INFO) << "Loaded transport policy: " << policy.name
                   << " (segment_type=" << segment_type_str
                   << ", transports_count=" << policy.transports.size() << ")";
     }
@@ -361,7 +361,7 @@ SelectionResult TransportSelector::select(
     }
 
     if (!matching_policy) {
-        LOG_WARNING << "No matching transport policy for segment_type="
+        LOG(WARNING) << "No matching transport policy for segment_type="
                      << (context.segment_type == SegmentType::File ? "file"
                                                                    : "memory")
                      << ", size=" << context.transfer_size
@@ -378,7 +378,7 @@ SelectionResult TransportSelector::select(
             if (dev_id >= 0 && dev_id < 64) {
                 result.device_mask |= (1ULL << dev_id);
             } else {
-                LOG_WARNING << "RDMA device not found or ID >= 64: " << name;
+                LOG(WARNING) << "RDMA device not found or ID >= 64: " << name;
             }
         }
         if (result.device_mask == 0) {
@@ -394,7 +394,7 @@ SelectionResult TransportSelector::select(
             if (isTransportAvailable(type, context, available_transports)) {
                 if (priority_index-- <= 0) {
                     result.transport = type;
-                    LOG_INFO << "Selected transport " << transportTypeName(type)
+                    LOG(INFO) << "Selected transport " << transportTypeName(type)
                             << " for policy " << matching_policy->name
                             << ", device_mask=0x" << std::hex
                             << result.device_mask << std::dec;
@@ -411,7 +411,7 @@ SelectionResult TransportSelector::select(
             if (isTransportAvailable(type, context, available_transports)) {
                 if (transport_index-- <= 0) {
                     result.transport = type;
-                    LOG_INFO << "Selected transport " << transportTypeName(type)
+                    LOG(INFO) << "Selected transport " << transportTypeName(type)
                             << " from buffer_transports"
                             << ", device_mask=0x" << std::hex
                             << result.device_mask << std::dec;

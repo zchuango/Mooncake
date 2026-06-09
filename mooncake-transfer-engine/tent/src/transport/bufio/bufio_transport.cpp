@@ -38,7 +38,7 @@ class BufIoFileContext {
         : fd_(-1), ready_(false) {
         fd_ = ::open(path.c_str(), O_RDWR);
         if (fd_ < 0) {
-            PLOG_ERROR << "BufIoTransport: failed to open file " << path;
+            PLOG(ERROR) << "BufIoTransport: failed to open file " << path;
             return;
         }
         ready_ = true;
@@ -194,7 +194,7 @@ Status BufIoTransport::submitTransferTasks(
         BufIoFileContext* ctx = findFileContext(req.target_id);
         if (!ctx || !ctx->ready()) {
             task.status_word = TransferStatusEnum::FAILED;
-            LOG_WARNING << "BufIoTransport: invalid remote segment for id "
+            LOG(WARNING) << "BufIoTransport: invalid remote segment for id "
                          << req.target_id;
             continue;
         }
@@ -202,7 +202,7 @@ Status BufIoTransport::submitTransferTasks(
         int fd = ctx->getHandle();
         if (fd < 0) {
             task.status_word = TransferStatusEnum::FAILED;
-            LOG_WARNING << "BufIoTransport: invalid file descriptor";
+            LOG(WARNING) << "BufIoTransport: invalid file descriptor";
             continue;
         }
 
@@ -221,7 +221,7 @@ Status BufIoTransport::submitTransferTasks(
                 io_ret = ::pread(fd, host_buf.get(), req.length,
                                  static_cast<off_t>(req.target_offset));
                 if (io_ret < 0) {
-                    PLOG_WARNING << "BufIoTransport: pread failed";
+                    PLOG(WARNING) << "BufIoTransport: pread failed";
                     task.status_word = TransferStatusEnum::FAILED;
                     continue;
                 }
@@ -232,7 +232,7 @@ Status BufIoTransport::submitTransferTasks(
                 io_ret = ::pread(fd, req.source, req.length,
                                  static_cast<off_t>(req.target_offset));
                 if (io_ret < 0) {
-                    PLOG_WARNING << "BufIoTransport: pread failed";
+                    PLOG(WARNING) << "BufIoTransport: pread failed";
                     task.status_word = TransferStatusEnum::FAILED;
                     continue;
                 }
@@ -251,7 +251,7 @@ Status BufIoTransport::submitTransferTasks(
                 io_ret = ::pwrite(fd, host_buf.get(), req.length,
                                   static_cast<off_t>(req.target_offset));
                 if (io_ret < 0) {
-                    PLOG_WARNING << "BufIoTransport: pwrite failed";
+                    PLOG(WARNING) << "BufIoTransport: pwrite failed";
                     task.status_word = TransferStatusEnum::FAILED;
                     continue;
                 }
@@ -259,14 +259,14 @@ Status BufIoTransport::submitTransferTasks(
                 io_ret = ::pwrite(fd, req.source, req.length,
                                   static_cast<off_t>(req.target_offset));
                 if (io_ret < 0) {
-                    PLOG_WARNING << "BufIoTransport: pwrite failed";
+                    PLOG(WARNING) << "BufIoTransport: pwrite failed";
                     task.status_word = TransferStatusEnum::FAILED;
                     continue;
                 }
             }
         } else {
             task.status_word = TransferStatusEnum::FAILED;
-            LOG_WARNING << "BufIoTransport: unknown opcode " << req.opcode;
+            LOG(WARNING) << "BufIoTransport: unknown opcode " << req.opcode;
             continue;
         }
 

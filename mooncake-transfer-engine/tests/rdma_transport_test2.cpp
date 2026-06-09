@@ -117,7 +117,7 @@ class RDMATransportTest : public ::testing::Test {
    protected:
     void SetUp() override {
         static int offset = 0;
-        LOG_INFO << "HERE \n";
+        LOG(INFO) << "HERE \n";
         google::InitGoogleLogging("RDMATransportTest");
         FLAGS_logtostderr = 1;
         // disable topology auto discovery for testing.
@@ -173,7 +173,7 @@ TEST_F(RDMATransportTest, MultiWrite) {
             if (status.s == TransferStatusEnum::COMPLETED)
                 completed = true;
             else if (status.s == TransferStatusEnum::FAILED) {
-                LOG_INFO << "FAILED";
+                LOG(INFO) << "FAILED";
                 completed = true;
             }
         }
@@ -207,7 +207,7 @@ TEST_F(RDMATransportTest, MultipleRead) {
             if (status.s == TransferStatusEnum::COMPLETED)
                 completed = true;
             else if (status.s == TransferStatusEnum::FAILED) {
-                LOG_INFO << "FAILED";
+                LOG(INFO) << "FAILED";
                 completed = true;
             }
         }

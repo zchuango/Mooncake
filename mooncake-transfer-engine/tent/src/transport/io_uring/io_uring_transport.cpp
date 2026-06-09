@@ -42,11 +42,11 @@ class IOUringFileContext {
 
         fd_ = open(path.c_str(), O_RDWR);
         if (fd_ < 0) {
-            PLOG_ERROR << "Failed to open file " << path;
+            PLOG(ERROR) << "Failed to open file " << path;
             return;
         }
 
-        LOG_WARNING << "File " << path << " opened in Buffered I/O mode";
+        LOG(WARNING) << "File " << path << " opened in Buffered I/O mode";
         ready_ = true;
     }
 
@@ -98,7 +98,7 @@ Status IOUringTransport::probeCapabilities() {
     struct io_uring probe_ring;
     int rc = io_uring_queue_init(2, &probe_ring, 0);
     if (rc < 0) {
-        LOG_INFO << "IOUringTransport: io_uring_queue_init failed: "
+        LOG(INFO) << "IOUringTransport: io_uring_queue_init failed: "
                   << strerror(-rc);
         return Status::InternalError("io_uring not supported on this kernel");
     }
@@ -249,7 +249,7 @@ Status IOUringTransport::getTransferStatus(SubBatchRef batch, int task_id,
         auto task = (IOUringTask*)cqe->user_data;
         if (task) {
             if (cqe->res < 0) {
-                LOG_INFO << "Received an event with error code " << cqe->res;
+                LOG(INFO) << "Received an event with error code " << cqe->res;
                 task->status_word = TransferStatusEnum::FAILED;
             } else {
                 if (task->buffer) {

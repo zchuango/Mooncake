@@ -110,7 +110,7 @@ class CapabilityDrivenStandbyController final : public StandbyController {
                 CreateCatalogBackedSnapshotProvider(config_);
             if (!snapshot_provider) {
                 dependency_init_error_ = snapshot_provider.error();
-                LOG_ERROR << "Failed to initialize standby snapshot provider, "
+                LOG(ERROR) << "Failed to initialize standby snapshot provider, "
                            << "backend=" << HABackendTypeToString(spec_.type)
                            << ", error=" << toString(dependency_init_error_);
             } else {
@@ -294,7 +294,7 @@ std::unique_ptr<StandbyController> CreateStandbyController(
                                                                    config);
     }
 
-    LOG_INFO << "HA standby controller falls back to noop, backend_type="
+    LOG(INFO) << "HA standby controller falls back to noop, backend_type="
               << HABackendTypeToString(spec.type);
     return std::make_unique<NoopStandbyController>();
 }

@@ -141,7 +141,7 @@ CUDAStreamPool::DevicePool* CUDAStreamPool::getDevicePool(int deviceId) {
     int actualDeviceCount = 0;
     if (cudaGetDeviceCount(&actualDeviceCount) != cudaSuccess ||
         deviceId >= actualDeviceCount) {
-        LOG_ERROR << "Invalid cuda device id " << deviceId;
+        LOG(ERROR) << "Invalid cuda device id " << deviceId;
         return nullptr;
     }
 

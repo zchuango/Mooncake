@@ -60,7 +60,7 @@
 static void checkAclError(aclError result, const char* message) {
     if (result != ACL_ERROR_NONE) {
         const char* errMsg = aclGetRecentErrMsg();
-        LOG_ERROR << message << " (Error code: " << result << " - " << errMsg
+        LOG(ERROR) << message << " (Error code: " << result << " - " << errMsg
                    << ")";
         exit(EXIT_FAILURE);
     }
@@ -68,7 +68,7 @@ static void checkAclError(aclError result, const char* message) {
 #else
 static void checkCudaError(cudaError_t result, const char* message) {
     if (result != cudaSuccess) {
-        LOG_ERROR << message << " (Error code: " << result << " - "
+        LOG(ERROR) << message << " (Error code: " << result << " - "
                    << cudaGetErrorString(result) << ")" << std::endl;
         exit(EXIT_FAILURE);
     }
@@ -134,36 +134,36 @@ static void* allocateMemoryPool(size_t size, int buffer_id,
         }
         void* d_buf;
 #if defined(USE_UBSHMEM)
-        LOG_INFO << "Allocating memory on NPU " << gpu_id;
+        LOG(INFO) << "Allocating memory on NPU " << gpu_id;
         checkAclError(aclrtSetDevice(gpu_id), "Failed to set device");
 #else
-        LOG_INFO << "Allocating memory on GPU " << gpu_id;
+        LOG(INFO) << "Allocating memory on GPU " << gpu_id;
         checkCudaError(cudaSetDevice(gpu_id), "Failed to set device");
 #endif
         if (FLAGS_protocol == "nvlink" || FLAGS_protocol == "hip") {
 #ifdef USE_MNNVL
             d_buf = allocateFabricMemory(size);
-            LOG_INFO << "Using MNNVL fabric memory allocation";
+            LOG(INFO) << "Using MNNVL fabric memory allocation";
 #else
-            LOG_ERROR
+            LOG(ERROR)
                 << "--protocol=nvlink or --protocol=hip requires USE_MNNVL=ON";
             return nullptr;
 #endif
         } else if (FLAGS_protocol == "nvlink_intra") {
 #ifdef USE_INTRA_NVLINK
             d_buf = allocateFabricMemory_intra(size);
-            LOG_INFO << "Using intra-NVLink memory allocation";
+            LOG(INFO) << "Using intra-NVLink memory allocation";
 #else
-            LOG_ERROR
+            LOG(ERROR)
                 << "--protocol=nvlink_intra requires USE_INTRA_NVLINK=ON";
             return nullptr;
 #endif
         } else if (FLAGS_protocol == "ubshmem") {
 #ifdef USE_UBSHMEM
             d_buf = allocateFabricMemory(size);
-            LOG_INFO << "Using UBShmem fabric memory allocation";
+            LOG(INFO) << "Using UBShmem fabric memory allocation";
 #else
-            LOG_ERROR << "--protocol=ubshmem requires USE_UBSHMEM=ON";
+            LOG(ERROR) << "--protocol=ubshmem requires USE_UBSHMEM=ON";
             return nullptr;
 #endif
         } else {
@@ -235,7 +235,7 @@ static void freeMemoryPool(void* addr, size_t size) {
             if (result != cudaSuccess) {
                 // CUDA call failed when FLAGS_use_vram is true - this is an
                 // error
-                LOG_ERROR << "cudaPointerGetAttributes failed (Error code: "
+                LOG(ERROR) << "cudaPointerGetAttributes failed (Error code: "
                            << result << " - " << cudaGetErrorString(result)
                            << ")";
                 numa_free(addr, size);
@@ -245,7 +245,7 @@ static void freeMemoryPool(void* addr, size_t size) {
                        attributes.type == cudaMemoryTypeUnregistered) {
                 numa_free(addr, size);
             } else {
-                LOG_ERROR << "Unknown memory type, " << addr << " "
+                LOG(ERROR) << "Unknown memory type, " << addr << " "
                            << attributes.type << ", assuming CPU memory";
                 numa_free(addr, size);
             }
@@ -273,11 +273,11 @@ const static std::unordered_map<std::string, uint64_t> RATE_UNIT_MP = {
 
 static inline std::string calculateRate(uint64_t data_bytes, double duration) {
     if (std::fabs(duration) < 1e-10) {
-        LOG_ERROR << "Invalid args: duration shouldn't be 0";
+        LOG(ERROR) << "Invalid args: duration shouldn't be 0";
         return "";
     }
     if (!RATE_UNIT_MP.count(FLAGS_report_unit)) {
-        LOG_WARNING << "Invalid flag: report_unit only support "
+        LOG(WARNING) << "Invalid flag: report_unit only support "
                         "GB|GiB|Gb|MB|MiB|Mb|KB|KiB|Kb, not support "
                      << FLAGS_report_unit
                      << " . Now use GB(default) as report_unit";
@@ -312,13 +312,13 @@ static int determineBufferCount() {
     defined(USE_SUNRISE)
     if (FLAGS_use_vram) {
         int gpu_num;
-        LOG_INFO << "VRAM is used";
+        LOG(INFO) << "VRAM is used";
         if (FLAGS_gpu_id == -1 && cudaGetDeviceCount(&gpu_num) == cudaSuccess) {
-            LOG_INFO << "GPU ID is not specified, found " << gpu_num
+            LOG(INFO) << "GPU ID is not specified, found " << gpu_num
                       << " GPUs to use";
             return gpu_num;
         } else {
-            LOG_INFO << "GPU ID is specified or failed to get GPU count, use "
+            LOG(INFO) << "GPU ID is specified or failed to get GPU count, use "
                       << FLAGS_gpu_id << " GPU";
             return 1;
         }
@@ -326,12 +326,12 @@ static int determineBufferCount() {
 #endif
 #if defined(USE_UBSHMEM)
     if (FLAGS_use_vram) {
-        LOG_INFO << "VRAM is used";
-        LOG_INFO << "NPU ID is specified, use NPU:" << FLAGS_gpu_id;
+        LOG(INFO) << "VRAM is used";
+        LOG(INFO) << "NPU ID is specified, use NPU:" << FLAGS_gpu_id;
         return 1;
     }
 #endif
-    LOG_INFO << "DRAM is used, numa node num: " << NR_SOCKETS;
+    LOG(INFO) << "DRAM is used, numa node num: " << NR_SOCKETS;
     return NR_SOCKETS;
 }
 
@@ -383,13 +383,13 @@ Status initiatorWorker(TransferEngine* engine, SegmentID segment_id,
     else if (FLAGS_operation == "write")
         opcode = TransferRequest::WRITE;
     else {
-        LOG_ERROR << "Unsupported operation: must be 'read' or 'write'";
+        LOG(ERROR) << "Unsupported operation: must be 'read' or 'write'";
         exit(EXIT_FAILURE);
     }
 
     auto segment_desc = engine->getMetadata()->getSegmentDescByID(segment_id);
     if (!segment_desc) {
-        LOG_ERROR << "Unable to get target segment ID, please recheck";
+        LOG(ERROR) << "Unable to get target segment ID, please recheck";
         exit(EXIT_FAILURE);
     }
     uint64_t remote_base =
@@ -414,7 +414,7 @@ Status initiatorWorker(TransferEngine* engine, SegmentID segment_id,
         }
 
         s = engine->submitTransfer(batch_id, requests);
-        if (!s.ok()) LOG_ERROR << s.ToString();
+        if (!s.ok()) LOG(ERROR) << s.ToString();
         LOG_ASSERT(s.ok());
         for (int task_id = 0; task_id < FLAGS_batch_size; ++task_id) {
             bool completed = false;
@@ -425,7 +425,7 @@ Status initiatorWorker(TransferEngine* engine, SegmentID segment_id,
                 if (status.s == TransferStatusEnum::COMPLETED)
                     completed = true;
                 else if (status.s == TransferStatusEnum::FAILED) {
-                    LOG_INFO << "FAILED";
+                    LOG(INFO) << "FAILED";
                     completed = true;
                     exit(EXIT_FAILURE);
                 }
@@ -436,7 +436,7 @@ Status initiatorWorker(TransferEngine* engine, SegmentID segment_id,
         LOG_ASSERT(s.ok());
         batch_count++;
     }
-    LOG_INFO << "Worker " << thread_id << " stopped!";
+    LOG(INFO) << "Worker " << thread_id << " stopped!";
     total_batch_count.fetch_add(batch_count);
     return Status::OK();
 }
@@ -517,7 +517,7 @@ static Transport* installTransportFromFlags(TransferEngine* engine) {
                FLAGS_protocol == "sunrise_link") {
         xport = engine->installTransport(FLAGS_protocol.c_str(), nullptr);
     } else {
-        LOG_ERROR << "Unsupported protocol: " << FLAGS_protocol;
+        LOG(ERROR) << "Unsupported protocol: " << FLAGS_protocol;
     }
 
     return xport;
@@ -564,7 +564,7 @@ int initiator() {
                     (stop_tv.tv_usec - start_tv.tv_usec) / 1000000.0;
     auto batch_count = total_batch_count.load();
 
-    LOG_INFO << "Test completed: duration " << std::fixed
+    LOG(INFO) << "Test completed: duration " << std::fixed
               << std::setprecision(2) << duration << ", batch count "
               << batch_count << ", throughput "
               << calculateRate(
@@ -689,14 +689,14 @@ void initiatorWorker(mooncake::tent::TransferEngine* engine,
     else if (FLAGS_operation == "write")
         opcode = mooncake::tent::Request::WRITE;
     else {
-        LOG_ERROR << "Unsupported operation: must be 'read' or 'write'";
+        LOG(ERROR) << "Unsupported operation: must be 'read' or 'write'";
         exit(EXIT_FAILURE);
     }
 
     // Buffer boundary check
     size_t buffer_index = thread_id % buffer_num;
     if (buffer_index >= segment_info.buffers.size()) {
-        LOG_ERROR << "Remote segment has fewer buffers ("
+        LOG(ERROR) << "Remote segment has fewer buffers ("
                    << segment_info.buffers.size() << ") than expected ("
                    << buffer_num << ")";
         exit(EXIT_FAILURE);
@@ -732,7 +732,7 @@ void initiatorWorker(mooncake::tent::TransferEngine* engine,
                 break;
             } else if (overall_status.s ==
                        mooncake::tent::TransferStatusEnum::FAILED) {
-                LOG_ERROR << "Transfer failed";
+                LOG(ERROR) << "Transfer failed";
                 exit(EXIT_FAILURE);
             }
         }
@@ -741,7 +741,7 @@ void initiatorWorker(mooncake::tent::TransferEngine* engine,
         LOG_ASSERT(s.ok()) << "freeBatch failed: " << s.ToString();
         batch_count++;
     }
-    LOG_INFO << "Worker " << thread_id << " stopped!";
+    LOG(INFO) << "Worker " << thread_id << " stopped!";
     total_batch_count.fetch_add(batch_count);
 }
 
@@ -750,7 +750,7 @@ int initiator() {
     auto engine = std::make_unique<mooncake::tent::TransferEngine>(config);
 
     if (!engine->available()) {
-        LOG_ERROR << "Failed to initialize TENT TransferEngine";
+        LOG(ERROR) << "Failed to initialize TENT TransferEngine";
         return EXIT_FAILURE;
     }
 
@@ -760,7 +760,7 @@ int initiator() {
     mooncake::tent::SegmentID segment_id;
     auto status = engine->openSegment(segment_id, FLAGS_segment_id);
     if (!status.ok()) {
-        LOG_ERROR << "Failed to open segment: " << status.ToString();
+        LOG(ERROR) << "Failed to open segment: " << status.ToString();
         unregisterBuffers(engine.get(), addr);
         freeBuffers(addr);
         return EXIT_FAILURE;
@@ -769,7 +769,7 @@ int initiator() {
     mooncake::tent::SegmentInfo segment_info;
     status = engine->getSegmentInfo(segment_id, segment_info);
     if (!status.ok()) {
-        LOG_ERROR << "Failed to get segment info: " << status.ToString();
+        LOG(ERROR) << "Failed to get segment info: " << status.ToString();
         unregisterBuffers(engine.get(), addr);
         freeBuffers(addr);
         return EXIT_FAILURE;
@@ -794,7 +794,7 @@ int initiator() {
                     (stop_tv.tv_usec - start_tv.tv_usec) / 1000000.0;
     auto batch_count = total_batch_count.load();
 
-    LOG_INFO << "Test completed: duration " << std::fixed
+    LOG(INFO) << "Test completed: duration " << std::fixed
               << std::setprecision(2) << duration << ", batch count "
               << batch_count << ", throughput "
               << calculateRate(
@@ -814,11 +814,11 @@ int target() {
     auto engine = std::make_unique<mooncake::tent::TransferEngine>(config);
 
     if (!engine->available()) {
-        LOG_ERROR << "Failed to initialize TENT TransferEngine";
+        LOG(ERROR) << "Failed to initialize TENT TransferEngine";
         return EXIT_FAILURE;
     }
 
-    LOG_INFO << "TENT target started, segment name: "
+    LOG(INFO) << "TENT target started, segment name: "
               << engine->getSegmentName();
 
     auto addr = allocateBuffers();
@@ -839,7 +839,7 @@ void check_total_buffer_size() {
     uint64_t require_size = FLAGS_block_size * FLAGS_batch_size * FLAGS_threads;
     if (FLAGS_buffer_size < require_size) {
         FLAGS_buffer_size = require_size;
-        LOG_WARNING << "Invalid flag: buffer size is smaller than "
+        LOG(WARNING) << "Invalid flag: buffer size is smaller than "
                         "require_size, adjust to "
                      << require_size;
     }
@@ -852,12 +852,12 @@ int main(int argc, char** argv) {
 #if defined(USE_UBSHMEM)
     if (FLAGS_gpu_id != -1) {
         checkAclError(aclrtSetDevice(FLAGS_gpu_id), "Failed to set device");
-        LOG_INFO << "Set device to " << FLAGS_gpu_id;
+        LOG(INFO) << "Set device to " << FLAGS_gpu_id;
     } else {
-        LOG_ERROR << "-1 is not supported for NPUs";
+        LOG(ERROR) << "-1 is not supported for NPUs";
     }
     if (FLAGS_use_vram == false) {
-        LOG_ERROR << "UBShmem transport only supports vram.";
+        LOG(ERROR) << "UBShmem transport only supports vram.";
     }
 #endif
     if (FLAGS_backend == "classic") {
@@ -872,15 +872,15 @@ int main(int argc, char** argv) {
         else if (FLAGS_mode == "target")
             return tent_backend::target();
 #else
-        LOG_ERROR
+        LOG(ERROR)
             << "TENT backend is not enabled. Please rebuild with -DUSE_TENT=ON";
         exit(EXIT_FAILURE);
 #endif
     } else {
-        LOG_ERROR << "Unsupported backend: must be 'classic' or 'tent'";
+        LOG(ERROR) << "Unsupported backend: must be 'classic' or 'tent'";
         exit(EXIT_FAILURE);
     }
 
-    LOG_ERROR << "Unsupported mode: must be 'initiator' or 'target'";
+    LOG(ERROR) << "Unsupported mode: must be 'initiator' or 'target'";
     exit(EXIT_FAILURE);
 }

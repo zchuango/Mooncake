@@ -61,7 +61,7 @@ MasterProcessHandler::~MasterProcessHandler() {
 
 bool MasterProcessHandler::start() {
     if (master_pid_ != 0) {
-        LOG_ERROR << "[m" << index_
+        LOG(ERROR) << "[m" << index_
                    << "] Master process already running with PID: "
                    << master_pid_;
         return false;
@@ -69,7 +69,7 @@ bool MasterProcessHandler::start() {
 
     // Create output directory if it doesn't exist
     if (mkdir(out_dir_.c_str(), 0755) != 0 && errno != EEXIST) {
-        LOG_ERROR << "[m" << index_
+        LOG(ERROR) << "[m" << index_
                    << "] Failed to create output directory: " << out_dir_
                    << ", error: " << strerror(errno);
         return false;
@@ -82,7 +82,7 @@ bool MasterProcessHandler::start() {
     pid_t pid = fork();
 
     if (pid == -1) {
-        LOG_ERROR << "[m" << index_ << "] Failed to fork process for master: "
+        LOG(ERROR) << "[m" << index_ << "] Failed to fork process for master: "
                    << strerror(errno);
         return false;
     }
@@ -101,7 +101,7 @@ bool MasterProcessHandler::start() {
         // Open stdout file
         int stdout_fd = open(stdout_file.str().c_str(), open_flags, 0644);
         if (stdout_fd == -1) {
-            LOG_ERROR << "[m" << index_
+            LOG(ERROR) << "[m" << index_
                        << "] Failed to open stdout file: " << stdout_file.str()
                        << ", error: " << strerror(errno);
             exit(1);
@@ -110,7 +110,7 @@ bool MasterProcessHandler::start() {
         // Open stderr file
         int stderr_fd = open(stderr_file.str().c_str(), open_flags, 0644);
         if (stderr_fd == -1) {
-            LOG_ERROR << "[m" << index_
+            LOG(ERROR) << "[m" << index_
                        << "] Failed to open stderr file: " << stderr_file.str()
                        << ", error: " << strerror(errno);
             close(stdout_fd);
@@ -119,7 +119,7 @@ bool MasterProcessHandler::start() {
 
         // Redirect stdout and stderr
         if (dup2(stdout_fd, STDOUT_FILENO) == -1) {
-            LOG_ERROR << "[m" << index_
+            LOG(ERROR) << "[m" << index_
                        << "] Failed to redirect stdout: " << strerror(errno);
             close(stdout_fd);
             close(stderr_fd);
@@ -127,7 +127,7 @@ bool MasterProcessHandler::start() {
         }
 
         if (dup2(stderr_fd, STDERR_FILENO) == -1) {
-            LOG_ERROR << "[m" << index_
+            LOG(ERROR) << "[m" << index_
                        << "] Failed to redirect stderr: " << strerror(errno);
             close(stdout_fd);
             close(stderr_fd);
@@ -171,18 +171,18 @@ bool MasterProcessHandler::start() {
             }
             cmdline += arg;
         }
-        LOG_INFO << "[m" << index_ << "] Executing: " << cmdline;
+        LOG(INFO) << "[m" << index_ << "] Executing: " << cmdline;
         execv(master_path_.c_str(), argv.data());
 
         // If execv returns, it means there was an error.
-        LOG_ERROR << "[m" << index_
+        LOG(ERROR) << "[m" << index_
                    << "] Master process terminated with error: "
                    << strerror(errno);
         exit(1);
     } else {
         // Parent process - store the PID
         master_pid_ = pid;
-        LOG_INFO << "[m" << index_
+        LOG(INFO) << "[m" << index_
                   << "] Started master process with PID: " << pid;
 
         // Mark that this is no longer the first start
@@ -194,14 +194,14 @@ bool MasterProcessHandler::start() {
 
 bool MasterProcessHandler::kill() {
     if (master_pid_ == 0) {
-        LOG_ERROR << "[m" << index_ << "] Master process not running";
+        LOG(ERROR) << "[m" << index_ << "] Master process not running";
         return false;
     }
 
     bool success = false;
     // Kill the process forcefully to simulate a crash
     if (::kill(master_pid_, SIGKILL) == 0) {
-        LOG_INFO << "[m" << index_
+        LOG(INFO) << "[m" << index_
                   << "] Force killed master process with PID: " << master_pid_
                   << " (simulating crash)";
 
@@ -210,7 +210,7 @@ bool MasterProcessHandler::kill() {
         waitpid(master_pid_, &status, 0);
         success = true;
     } else {
-        LOG_ERROR << TEST_ERROR_STR << " [m" << index_
+        LOG(ERROR) << TEST_ERROR_STR << " [m" << index_
                    << "] Failed to kill master process with PID: "
                    << master_pid_ << ": " << strerror(errno);
         success = false;
@@ -236,7 +236,7 @@ ClientProcessHandler::~ClientProcessHandler() {
 
 bool ClientProcessHandler::start() {
     if (client_pid_ != 0) {
-        LOG_ERROR << "[c" << index_
+        LOG(ERROR) << "[c" << index_
                    << "] Client process already running with PID: "
                    << client_pid_;
         return false;
@@ -244,7 +244,7 @@ bool ClientProcessHandler::start() {
 
     // Create output directory if it doesn't exist
     if (mkdir(out_dir_.c_str(), 0755) != 0 && errno != EEXIST) {
-        LOG_ERROR << "[c" << index_
+        LOG(ERROR) << "[c" << index_
                    << "] Failed to create output directory: " << out_dir_
                    << ", error: " << strerror(errno);
         return false;
@@ -257,7 +257,7 @@ bool ClientProcessHandler::start() {
     pid_t pid = fork();
 
     if (pid == -1) {
-        LOG_ERROR << "[c" << index_ << "] Failed to fork process for client: "
+        LOG(ERROR) << "[c" << index_ << "] Failed to fork process for client: "
                    << strerror(errno);
         return false;
     }
@@ -276,7 +276,7 @@ bool ClientProcessHandler::start() {
         // Open stdout file
         int stdout_fd = open(stdout_file.str().c_str(), open_flags, 0644);
         if (stdout_fd == -1) {
-            LOG_ERROR << "[c" << index_
+            LOG(ERROR) << "[c" << index_
                        << "] Failed to open stdout file: " << stdout_file.str()
                        << ", error: " << strerror(errno);
             exit(1);
@@ -285,7 +285,7 @@ bool ClientProcessHandler::start() {
         // Open stderr file
         int stderr_fd = open(stderr_file.str().c_str(), open_flags, 0644);
         if (stderr_fd == -1) {
-            LOG_ERROR << "[c" << index_
+            LOG(ERROR) << "[c" << index_
                        << "] Failed to open stderr file: " << stderr_file.str()
                        << ", error: " << strerror(errno);
             close(stdout_fd);
@@ -294,7 +294,7 @@ bool ClientProcessHandler::start() {
 
         // Redirect stdout and stderr
         if (dup2(stdout_fd, STDOUT_FILENO) == -1) {
-            LOG_ERROR << "[c" << index_
+            LOG(ERROR) << "[c" << index_
                        << "] Failed to redirect stdout: " << strerror(errno);
             close(stdout_fd);
             close(stderr_fd);
@@ -302,7 +302,7 @@ bool ClientProcessHandler::start() {
         }
 
         if (dup2(stderr_fd, STDERR_FILENO) == -1) {
-            LOG_ERROR << "[c" << index_
+            LOG(ERROR) << "[c" << index_
                        << "] Failed to redirect stderr: " << strerror(errno);
             close(stdout_fd);
             close(stderr_fd);
@@ -364,20 +364,20 @@ bool ClientProcessHandler::start() {
         for (const auto& arg : args) {
             cmd_str += arg + " ";
         }
-        LOG_INFO << "[c" << index_ << "] Executing: " << cmd_str;
+        LOG(INFO) << "[c" << index_ << "] Executing: " << cmd_str;
 
         // Execute the client using execv
         execv(client_path_.c_str(), argv.data());
 
         // If execv returns, it means there was an error
-        LOG_ERROR << "[c" << index_
+        LOG(ERROR) << "[c" << index_
                    << "] Client process terminated with error: "
                    << strerror(errno);
         exit(1);
     } else {
         // Parent process - store the PID
         client_pid_ = pid;
-        LOG_INFO << "[c" << index_
+        LOG(INFO) << "[c" << index_
                   << "] Started client process with PID: " << pid;
         // Mark that this is no longer the first start
         first_start_ = false;
@@ -388,14 +388,14 @@ bool ClientProcessHandler::start() {
 
 bool ClientProcessHandler::kill() {
     if (client_pid_ == 0) {
-        LOG_ERROR << "[c" << index_ << "] Client process not running";
+        LOG(ERROR) << "[c" << index_ << "] Client process not running";
         return false;
     }
 
     bool success = false;
     // Kill the process forcefully to simulate a crash
     if (::kill(client_pid_, SIGKILL) == 0) {
-        LOG_INFO << "[c" << index_
+        LOG(INFO) << "[c" << index_
                   << "] Force killed client process with PID: " << client_pid_
                   << " (simulating crash)";
 
@@ -404,7 +404,7 @@ bool ClientProcessHandler::kill() {
         waitpid(client_pid_, &status, 0);
         success = true;
     } else {
-        LOG_ERROR << TEST_ERROR_STR << " [c" << index_
+        LOG(ERROR) << TEST_ERROR_STR << " [c" << index_
                    << "] Failed to kill client process with PID: "
                    << client_pid_ << ": " << strerror(errno);
         success = false;

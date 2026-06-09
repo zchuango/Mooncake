@@ -25,7 +25,7 @@ size_t remove_store_memory_range(void* ptr) {
         [ptr](const UbStoreMemRange& range) { return range.base == ptr; });
 
     if (it == g_ub_store_mem_ranges.end()) {
-        LOG_ERROR << "failed for UB protocol, addr at " << ptr;
+        LOG(ERROR) << "failed for UB protocol, addr at " << ptr;
         return 0;
     }
 
@@ -37,11 +37,11 @@ size_t remove_store_memory_range(void* ptr) {
 void* ub_allocate_memory(size_t alignment, size_t total_size) {
     void* ptr = numa_alloc_onnode(total_size, 0);
     if (!ptr) {
-        LOG_ERROR << "failed for UB protocol, size=" << total_size
+        LOG(ERROR) << "failed for UB protocol, size=" << total_size
                    << ", alignment : " << alignment;
         return nullptr;
     }
-    LOG_INFO << "UB:  allocated total size : " << total_size
+    LOG(INFO) << "UB:  allocated total size : " << total_size
               << ", alignment : " << alignment << " addr at " << ptr;
 
     std::lock_guard<std::mutex> store_lock(g_ub_store_mem_mutex);
@@ -56,7 +56,7 @@ void ub_free_memory(void* ptr) {
     }
     auto size = remove_store_memory_range(ptr);
     numa_free(ptr, size);
-    LOG_INFO << "UB: freed  bytes at " << ptr;
+    LOG(INFO) << "UB: freed  bytes at " << ptr;
 }
 
 bool ub_is_store_memory(void* addr, size_t length) {

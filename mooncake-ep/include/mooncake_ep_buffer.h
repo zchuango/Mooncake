@@ -161,7 +161,7 @@ struct MooncakeEpBuffer {
         // IBGDA disabled: only allow fast-path if we can rely on NVLink
         // P2P+IPC.
         if (!p2p_ipc_all_enabled_) {
-            LOG_WARNING << "Failed to initialize IBGDA. "
+            LOG(WARNING) << "Failed to initialize IBGDA. "
                          << "Using fallback implementation. "
                          << "Performance will be degraded.";
         }

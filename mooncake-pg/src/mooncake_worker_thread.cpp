@@ -46,7 +46,7 @@ bool MooncakeWorker::waitUntilTasksSubmitted(
     auto submitted = [this, &tasks] {
         for (const auto& task : tasks) {
             if (task.task_id >= kNumTasks_) {
-                LOG_ERROR << "Invalid task id.";
+                LOG(ERROR) << "Invalid task id.";
                 return true;
             }
             if (submitted_task_sequence_[task.task_id].load(
@@ -197,7 +197,7 @@ void MooncakeWorker::startWorker() {
                                      group->engine->probePeerAliveByID(
                                          group->segmentIDs[j]) !=
                                          PeerLiveness::Alive)) {
-                                    LOG_ERROR
+                                    LOG(ERROR)
                                         << "Rank " << group->rank
                                         << " marking peer " << j
                                         << " as broken during transferring op "
@@ -223,7 +223,7 @@ void MooncakeWorker::startWorker() {
                     if (!skipTransfer) {
                         auto s = group->engine->freeBatchID(task.batchID);
                         if (!s.ok()) {
-                            LOG_WARNING
+                            LOG(WARNING)
                                 << "BatchID leaked due to freeBatchID "
                                    "failure (likely caused by a timeout): "
                                 << s.message();
@@ -287,7 +287,7 @@ void MooncakeWorker::startWorker() {
                                  group->engine->probePeerAliveByID(
                                      group->segmentIDs[j]) !=
                                      PeerLiveness::Alive)) {
-                                LOG_ERROR << "Rank " << group->rank
+                                LOG(ERROR) << "Rank " << group->rank
                                            << " marking peer " << j
                                            << " as broken during syncing op "
                                            << (int)task.opType;
@@ -322,7 +322,7 @@ void MooncakeWorker::startWorker() {
                         }
                         auto s = group->engine->freeBatchID(task.batchID);
                         if (!s.ok()) {
-                            LOG_WARNING
+                            LOG(WARNING)
                                 << "BatchID leaked due to freeBatchID "
                                    "failure (likely caused by a timeout): "
                                 << s.message();

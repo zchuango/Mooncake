@@ -120,6 +120,10 @@ LogStream MakeLogStream(LogLevel level, const char *file, int line,
 
 #define LOG(severity) LOG_##severity
 #define PLOG(severity) PLOG_##severity
+#define MC_LOG(severity) LOG(severity)
+#define MC_PLOG(severity) PLOG(severity)
+#define VLOG(level) LOG(INFO)
+#define MC_VLOG(level) VLOG(level)
 
 // Conditional logging
 #define LOG_IF(severity, condition)                                        \
@@ -131,6 +135,11 @@ LogStream MakeLogStream(LogLevel level, const char *file, int line,
     if (!(condition)) {                                                    \
     } else                                                                 \
         PLOG(severity)
+
+#define MC_LOG_IF(severity, condition) LOG_IF(severity, condition)
+#define MC_PLOG_IF(severity, condition) PLOG_IF(severity, condition)
+#define VLOG_IF(level, condition) LOG_IF(INFO, condition)
+#define MC_VLOG_IF(level, condition) VLOG_IF(level, condition)
 
 #define MOONCAKE_CONCAT_INNER(x, y) x##y
 #define MOONCAKE_CONCAT(x, y) MOONCAKE_CONCAT_INNER(x, y)

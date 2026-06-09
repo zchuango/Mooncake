@@ -66,11 +66,11 @@ class ChaosRandTest : public ::testing::Test {
 
         FLAGS_logtostderr = 1;
 
-        LOG_INFO << "Protocol: " << FLAGS_protocol
+        LOG(INFO) << "Protocol: " << FLAGS_protocol
                   << ", Device name: " << FLAGS_device_name
                   << ", Metadata URL: " << FLAGS_engine_meta_url;
 
-        LOG_INFO << "Random seed: " << FLAGS_rand_seed;
+        LOG(INFO) << "Random seed: " << FLAGS_rand_seed;
         srand(FLAGS_rand_seed);
 
         auto backend_type = ParseConfiguredHABackendType();

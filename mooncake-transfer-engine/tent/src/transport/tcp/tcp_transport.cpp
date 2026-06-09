@@ -102,7 +102,7 @@ Status TcpTransport::install(std::string &local_segment_name,
         caps.gpu_to_gpu = true;
     }
 
-    LOG_INFO << "TCP transport installed: max_retry_count="
+    LOG(INFO) << "TCP transport installed: max_retry_count="
               << params_.max_retry_count
               << " max_concurrent_tasks=" << params_.max_concurrent_tasks;
     return Status::OK();
@@ -190,7 +190,7 @@ Status TcpTransport::removeMemoryBuffer(BufferDesc &desc) {
 void TcpTransport::startTransfer(TcpTask *task) {
     if (task->request.target_id == LOCAL_SEGMENT_ID &&
         IsLoopbackEndpoint(local_segment_name_)) {
-        LOG_WARNING
+        LOG(WARNING)
             << "TCP transfer targets LOCAL_SEGMENT_ID on loopback endpoint "
             << local_segment_name_
             << ". When running multiple store instances on the same host with "
@@ -207,7 +207,7 @@ void TcpTransport::startTransfer(TcpTask *task) {
         task->status_word.store(TransferStatusEnum::COMPLETED,
                                 std::memory_order_release);
     } else {
-        LOG_WARNING << "TCP transfer failed after " << params_.max_retry_count
+        LOG(WARNING) << "TCP transfer failed after " << params_.max_retry_count
                      << " retries: " << status.ToString();
         task->status_word.store(TransferStatusEnum::FAILED,
                                 std::memory_order_release);
@@ -229,7 +229,7 @@ Status TcpTransport::doTransferWithRetry(TcpTask *task) {
             return Status::InternalError("Transport shutting down");
 
         if (attempt > 0) {
-            LOG_INFO << "TCP transfer retry attempt " << attempt << "/"
+            LOG(INFO) << "TCP transfer retry attempt " << attempt << "/"
                       << params_.max_retry_count << ", backoff " << delay_ms
                       << "ms";
             // Sleep in small increments so shutdown is not delayed
@@ -255,7 +255,7 @@ Status TcpTransport::doTransferWithRetry(TcpTask *task) {
         if (status.ok()) return Status::OK();
 
         last_error = status;
-        LOG_WARNING << "TCP transfer attempt " << attempt
+        LOG(WARNING) << "TCP transfer attempt " << attempt
                      << " failed: " << status.ToString();
 
         if (!status.IsRpcServiceError() && !status.IsInternalError()) {

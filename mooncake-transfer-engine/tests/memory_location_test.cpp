@@ -37,7 +37,7 @@ TEST(MemoryLocationTest, MallocSimpleNode0) {
 
 TEST(MemoryLocationTest, MallocSimpleNodeLargest) {
     int node = numa_max_node();
-    LOG_INFO << "node: " << node;
+    LOG(INFO) << "node: " << node;
 
     std::string location = "cpu:" + std::to_string(node);
 
@@ -64,7 +64,7 @@ TEST(MemoryLocationTest, MallocSimpleNodeLargest) {
 TEST(MemoryLocationTest, MallocMultipleNodes) {
     int nodea = 0;
     int nodeb = numa_max_node();
-    LOG_INFO << "node a: " << nodea << " node b: " << nodeb;
+    LOG(INFO) << "node a: " << nodea << " node b: " << nodeb;
 
     std::string locationa = "cpu:" + std::to_string(nodea);
     std::string locationb = "cpu:" + std::to_string(nodeb);
@@ -88,7 +88,7 @@ TEST(MemoryLocationTest, MallocMultipleNodes) {
     int status[3];
     rc = numa_move_pages(0, 3, pages, nodes, status, MPOL_MF_MOVE);
     if (rc != 0) {
-        PLOG_ERROR << "numa_move_pages failed, rc: " << rc;
+        PLOG(ERROR) << "numa_move_pages failed, rc: " << rc;
     }
     ASSERT_EQ(rc, 0);
 

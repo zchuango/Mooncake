@@ -96,7 +96,7 @@ class HeterogeneousRdmaTransport : public Transport {
                 block_queue_.pop();
                 return block;
             } else {
-                LOG_INFO
+                LOG(INFO)
                     << "HeterogeneousRdmaTransport: acquireBlock time out, idx:"
                     << i;
             }
@@ -125,7 +125,7 @@ class HeterogeneousRdmaTransport : public Transport {
                 transfer_queue_.pop();
                 return info;
             } else {
-                // LOG_INFO << "HeterogeneousRdmaTransport: getTransfer time
+                // LOG(INFO) << "HeterogeneousRdmaTransport: getTransfer time
                 // out, idx:" << i;
             }
         }

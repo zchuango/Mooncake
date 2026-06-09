@@ -94,7 +94,7 @@ class FileStorageTest : public ::testing::Test {
 
     void TearDown() override {
         google::ShutdownGoogleLogging();
-        LOG_INFO << "Clear test data...";
+        LOG(INFO) << "Clear test data...";
         for (const auto& entry : fs::directory_iterator(data_path)) {
             if (entry.is_regular_file()) {
                 fs::remove(entry.path());
@@ -160,7 +160,7 @@ TEST_F(FileStorageTest, BatchLoad) {
     for (auto& slice_it : batch_slice) {
         std::string data(static_cast<char*>(slice_it.second.ptr),
                          slice_it.second.size);
-        LOG_INFO << "key: " << slice_it.first;
+        LOG(INFO) << "key: " << slice_it.first;
         ASSERT_EQ(data, batch_data.at(slice_it.first));
     }
 }
@@ -479,7 +479,7 @@ TEST_F(FileStorageTest, BatchLoadRecordsSsdMetrics) {
     EXPECT_EQ(ssd_metric.ssd_write_ops.value(), 0);
     EXPECT_EQ(ssd_metric.ssd_write_bytes.value(), 0);
 
-    LOG_INFO << "SSD read metrics after BatchLoad: ops="
+    LOG(INFO) << "SSD read metrics after BatchLoad: ops="
               << ssd_metric.ssd_read_ops.value()
               << ", bytes=" << ssd_metric.ssd_read_bytes.value();
 }
@@ -514,7 +514,7 @@ TEST_F(FileStorageTest, BatchLoadFailureDoesNotRecordSsdMetrics) {
     }
     EXPECT_EQ(total_observations, 0);
 
-    LOG_INFO << "SSD metrics after failed BatchLoad: ops="
+    LOG(INFO) << "SSD metrics after failed BatchLoad: ops="
               << ssd_metric.ssd_read_ops.value()
               << ", bytes=" << ssd_metric.ssd_read_bytes.value();
 }

@@ -79,7 +79,7 @@ class LocalFsHotStandbyIntegrationTest : public ::testing::Test {
         std::error_code ec;
         std::filesystem::remove_all(test_dir_, ec);
         if (ec) {
-            LOG_WARNING << "Failed to remove test dir " << test_dir_ << ": "
+            LOG(WARNING) << "Failed to remove test dir " << test_dir_ << ": "
                          << ec.message();
         }
     }
@@ -112,7 +112,7 @@ class LocalFsHotStandbyIntegrationTest : public ::testing::Test {
                         std::chrono::seconds(timeout_sec);
         while (std::chrono::steady_clock::now() < deadline) {
             auto status = standby.GetSyncStatus();
-            LOG_INFO << "Standby: state=" << StandbyStateToString(status.state)
+            LOG(INFO) << "Standby: state=" << StandbyStateToString(status.state)
                       << ", applied_seq_id=" << status.applied_seq_id
                       << ", primary_seq_id=" << status.primary_seq_id
                       << ", lag_entries=" << status.lag_entries;
@@ -158,7 +158,7 @@ TEST_F(LocalFsHotStandbyIntegrationTest, TestPrimaryStandbySync) {
     }
 
     uint64_t last_seq_id = primary->GetLastSequenceId();
-    LOG_INFO << "Primary wrote " << last_seq_id << " OpLog entries";
+    LOG(INFO) << "Primary wrote " << last_seq_id << " OpLog entries";
 
     // 2. Start the standby
     HotStandbyService standby(MakeHotStandbyConfig());
@@ -174,7 +174,7 @@ TEST_F(LocalFsHotStandbyIntegrationTest, TestPrimaryStandbySync) {
     // 4. Verify metadata snapshot
     std::vector<std::pair<std::string, StandbyObjectMetadata>> snapshot;
     ASSERT_TRUE(standby.ExportMetadataSnapshot(snapshot));
-    LOG_INFO << "Standby metadata snapshot size: " << snapshot.size();
+    LOG(INFO) << "Standby metadata snapshot size: " << snapshot.size();
 
     std::set<std::string> snapshot_keys;
     for (const auto& kv : snapshot) {
@@ -338,7 +338,7 @@ TEST_F(LocalFsHotStandbyIntegrationTest, TestDataConsistency) {
     }
 
     uint64_t last_seq_id = primary->GetLastSequenceId();
-    LOG_INFO << "Primary wrote " << last_seq_id << " OpLog entries";
+    LOG(INFO) << "Primary wrote " << last_seq_id << " OpLog entries";
 
     // 2. Start standby
     HotStandbyService standby(MakeHotStandbyConfig());
@@ -420,7 +420,7 @@ TEST_F(LocalFsHotStandbyIntegrationTest, TestHighThroughputSync) {
         write_end - write_start);
 
     uint64_t last_seq_id = primary->GetLastSequenceId();
-    LOG_INFO << "Wrote " << num_writes << " entries in "
+    LOG(INFO) << "Wrote " << num_writes << " entries in "
               << write_duration.count() << "ms, last_seq_id=" << last_seq_id;
 
     // 3. Monitor lag
@@ -432,7 +432,7 @@ TEST_F(LocalFsHotStandbyIntegrationTest, TestHighThroughputSync) {
         if (status.lag_entries > max_lag) {
             max_lag = status.lag_entries;
         }
-        LOG_INFO << "Standby lag: " << status.lag_entries
+        LOG(INFO) << "Standby lag: " << status.lag_entries
                   << " entries, applied_seq_id=" << status.applied_seq_id
                   << ", primary_seq_id=" << status.primary_seq_id;
         if (status.applied_seq_id >= last_seq_id && status.lag_entries == 0) {
@@ -448,7 +448,7 @@ TEST_F(LocalFsHotStandbyIntegrationTest, TestHighThroughputSync) {
     EXPECT_EQ(0u, final_status.lag_entries)
         << "Standby lag should be zero after sync";
 
-    LOG_INFO << "Max lag observed: " << max_lag << " entries";
+    LOG(INFO) << "Max lag observed: " << max_lag << " entries";
 }
 
 }  // namespace testing

@@ -32,7 +32,7 @@ void ApplyRpcProtocolToServer(coro_rpc::coro_rpc_server& server) {
 #ifdef YLT_ENABLE_URMA
             server.init_urma();
 #else
-            LOG_WARNING
+            LOG(WARNING)
                 << "MC_RPC_PROTOCOL=urma requested but yalantinglibs was not "
                    "built with YLT_ENABLE_URMA; using TCP";
 #endif
@@ -41,11 +41,11 @@ void ApplyRpcProtocolToServer(coro_rpc::coro_rpc_server& server) {
 #ifdef YLT_ENABLE_IBV
             server.init_ibv();
 #elif defined(YLT_ENABLE_URMA)
-            LOG_WARNING << "MC_RPC_PROTOCOL=rdma requested but YLT_ENABLE_IBV "
+            LOG(WARNING) << "MC_RPC_PROTOCOL=rdma requested but YLT_ENABLE_IBV "
                            "is unavailable; using URMA";
             server.init_urma();
 #else
-            LOG_WARNING << "MC_RPC_PROTOCOL=rdma requested but no RDMA RPC "
+            LOG(WARNING) << "MC_RPC_PROTOCOL=rdma requested but no RDMA RPC "
                            "transport is enabled; using TCP";
 #endif
             break;
@@ -94,19 +94,19 @@ void LogLeadershipReleaseWarning(std::string_view context, ErrorCode err) {
     if (err == ErrorCode::OK) {
         return;
     }
-    LOG_WARNING << "Failed to release leadership after " << context << ": "
+    LOG(WARNING) << "Failed to release leadership after " << context << ": "
                  << toString(err);
 }
 
 bool HandleSupervisorError(std::string_view action, ErrorCode err,
                            HABackendType backend_type) {
     if (IsFatalHABackendError(err)) {
-        LOG_ERROR << "Failed to " << action << ": " << toString(err)
+        LOG(ERROR) << "Failed to " << action << ": " << toString(err)
                    << ", backend_type=" << HABackendTypeToString(backend_type);
         return true;
     }
 
-    LOG_WARNING << "Failed to " << action << ": " << toString(err)
+    LOG(WARNING) << "Failed to " << action << ": " << toString(err)
                  << ", backend_type=" << HABackendTypeToString(backend_type)
                  << ", retrying in " << kSupervisorRetryInterval.count() << "s";
     std::this_thread::sleep_for(kSupervisorRetryInterval);
@@ -156,7 +156,7 @@ tl::expected<bool, ErrorCode> WarmupLeadership(
 void SetRuntimeState(MasterAdminServer& admin_server,
                      MasterRuntimeState state) {
     admin_server.SetRuntimeState(state);
-    LOG_INFO << "Master runtime state -> " << MasterRuntimeStateToString(state)
+    LOG(INFO) << "Master runtime state -> " << MasterRuntimeStateToString(state)
               << ", role=" << MasterRuntimeRoleToString(state);
 }
 
@@ -208,7 +208,7 @@ void EnterStandbyMode(MasterAdminServer& admin_server,
 
     auto err = standby_controller.StartStandby(leader_view);
     if (err != ErrorCode::OK) {
-        LOG_WARNING << "Failed to start standby replication: "
+        LOG(WARNING) << "Failed to start standby replication: "
                      << toString(err);
         SetRuntimeState(admin_server, MasterRuntimeState::kStandby);
         return;
@@ -343,7 +343,7 @@ int RunSupervisorLoop(const HABackendSpec& spec,
             continue;
         }
 
-        LOG_INFO << "Entering warmup phase...";
+        LOG(INFO) << "Entering warmup phase...";
         SetRuntimeState(admin_server, MasterRuntimeState::kLeaderWarmup);
         auto warmup_result =
             WarmupLeadership(leader_coordinator, *leadership_session);
@@ -365,12 +365,12 @@ int RunSupervisorLoop(const HABackendSpec& spec,
             LogLeadershipReleaseWarning(
                 "warmup expiration",
                 leader_coordinator.ReleaseLeadership(*leadership_session));
-            LOG_WARNING << "Leadership expired during warmup phase";
+            LOG(WARNING) << "Leadership expired during warmup phase";
             admin_server.SetObservedLeader(std::nullopt);
             continue;
         }
 
-        LOG_INFO << "Starting serve phase...";
+        LOG(INFO) << "Starting serve phase...";
         coro_rpc::coro_rpc_server server(
             config.rpc_thread_num, config.rpc_port, config.rpc_address,
             config.rpc_conn_timeout, config.rpc_enable_tcp_no_delay);
@@ -403,7 +403,7 @@ int RunSupervisorLoop(const HABackendSpec& spec,
             LogLeadershipReleaseWarning(
                 "serve preflight expiration",
                 leader_coordinator.ReleaseLeadership(*leadership_session));
-            LOG_WARNING << "Leadership expired before entering serve phase";
+            LOG(WARNING) << "Leadership expired before entering serve phase";
             admin_server.SetObservedLeader(std::nullopt);
             continue;
         }
@@ -415,7 +415,7 @@ int RunSupervisorLoop(const HABackendSpec& spec,
                 serve_shutdown_requested.store(true, std::memory_order_release);
                 admin_server.SetServiceAvailable(false);
                 SetRuntimeState(admin_server, MasterRuntimeState::kStandby);
-                LOG_INFO << "Trying to stop server, reason="
+                LOG(INFO) << "Trying to stop server, reason="
                           << LeadershipLossReasonToString(reason);
                 server.stop();
             });
@@ -436,7 +436,7 @@ int RunSupervisorLoop(const HABackendSpec& spec,
 
         async_simple::Future<coro_rpc::err_code> ec = server.async_start();
         if (ec.hasResult()) {
-            LOG_ERROR << "Failed to start master service: "
+            LOG(ERROR) << "Failed to start master service: "
                        << ec.result().value();
             StopLeadershipMonitor(leadership_monitor_handle);
             DeactivateServingState(admin_server);
@@ -446,7 +446,7 @@ int RunSupervisorLoop(const HABackendSpec& spec,
             auto err =
                 leader_coordinator.ReleaseLeadership(*leadership_session);
             if (err != ErrorCode::OK) {
-                LOG_ERROR << "Failed to release leadership: " << toString(err);
+                LOG(ERROR) << "Failed to release leadership: " << toString(err);
             }
             return -1;
         }
@@ -456,12 +456,12 @@ int RunSupervisorLoop(const HABackendSpec& spec,
         }
 
         auto server_err = std::move(ec).get();
-        LOG_ERROR << "Master service stopped: " << server_err;
+        LOG(ERROR) << "Master service stopped: " << server_err;
 
         StopLeadershipMonitor(leadership_monitor_handle);
         DeactivateServingState(admin_server);
         auto err = leader_coordinator.ReleaseLeadership(*leadership_session);
-        LOG_INFO << "Release leadership: " << toString(err);
+        LOG(INFO) << "Release leadership: " << toString(err);
         auto current_view = leader_coordinator.ReadCurrentView();
         if (current_view) {
             EnterStandbyMode(admin_server, *standby_controller,
@@ -485,7 +485,7 @@ MasterServiceSupervisor::MasterServiceSupervisor(
 int MasterServiceSupervisor::Start() {
     auto spec = BuildHABackendSpec(config_);
     if (!spec) {
-        LOG_ERROR << "Failed to parse HA backend config: "
+        LOG(ERROR) << "Failed to parse HA backend config: "
                    << toString(spec.error())
                    << ", backend_type=" << config_.ha_backend_type;
         return -1;
@@ -495,7 +495,7 @@ int MasterServiceSupervisor::Start() {
         static_cast<uint16_t>(config_.metrics_port),
         config_.enable_metric_reporting);
     if (!admin_server.Start()) {
-        LOG_ERROR << "Failed to start master admin server, metrics_port="
+        LOG(ERROR) << "Failed to start master admin server, metrics_port="
                    << config_.metrics_port;
         return -1;
     }

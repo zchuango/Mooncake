@@ -88,7 +88,7 @@ struct ServerSession : public std::enable_shared_from_this<ServerSession> {
                     // If client closed connection (EOF), this is normal - don't
                     // log
                     if (ec.value() != asio::error::eof) {
-                        LOG_WARNING
+                        LOG(WARNING)
                             << "ServerSession::readHeader failed. Error: "
                             << ec.message() << " (value: " << ec.value() << ")"
                             << ", bytes read: " << len;
@@ -130,7 +130,7 @@ struct ServerSession : public std::enable_shared_from_this<ServerSession> {
                 cudaMemcpy(dram_buffer, addr + total_transferred_bytes_,
                            buffer_size, cudaMemcpyDefault);
             if (cuda_status != cudaSuccess) {
-                LOG_ERROR << "ServerSession::writeBody failed to copy from "
+                LOG(ERROR) << "ServerSession::writeBody failed to copy from "
                               "CUDA memory. "
                            << "Error: " << cudaGetErrorString(cuda_status);
                 session_mutex_.unlock();
@@ -152,7 +152,7 @@ struct ServerSession : public std::enable_shared_from_this<ServerSession> {
                 }
 #endif
                 if (ec) {
-                    LOG_ERROR
+                    LOG(ERROR)
                         << "ServerSession::writeBody failed. "
                         << "Attempt to write data " << static_cast<void*>(addr)
                         << " using buffer " << static_cast<void*>(dram_buffer)
@@ -201,7 +201,7 @@ struct ServerSession : public std::enable_shared_from_this<ServerSession> {
                     // If client closed connection (EOF), this is normal - don't
                     // log
                     if (ec.value() != asio::error::eof) {
-                        LOG_WARNING
+                        LOG(WARNING)
                             << "ServerSession::readBody failed. "
                             << "Attempt to read data "
                             << static_cast<void*>(addr) << " using buffer "
@@ -226,7 +226,7 @@ struct ServerSession : public std::enable_shared_from_this<ServerSession> {
                         cudaMemcpy(addr + total_transferred_bytes_, dram_buffer,
                                    transferred_bytes, cudaMemcpyDefault);
                     if (cuda_status != cudaSuccess) {
-                        LOG_ERROR
+                        LOG(ERROR)
                             << "ServerSession::readBody failed to copy to CUDA "
                                "memory. "
                             << "Error: " << cudaGetErrorString(cuda_status);
@@ -275,7 +275,7 @@ struct ClientSession : public std::enable_shared_from_this<ClientSession> {
             *socket_, asio::buffer(&header_, sizeof(SessionHeader)),
             [this, self](const asio::error_code& ec, std::size_t len) {
                 if (ec || len != sizeof(SessionHeader)) {
-                    LOG_ERROR
+                    LOG(ERROR)
                         << "ClientSession::writeHeader failed. Error: "
                         << ec.message() << " (value: " << ec.value() << ")"
                         << ", bytes written: " << len;
@@ -323,7 +323,7 @@ struct ClientSession : public std::enable_shared_from_this<ClientSession> {
             [this, addr, dram_buffer, is_cuda_memory, self](
                 const asio::error_code& ec, std::size_t transferred_bytes) {
                 if (ec) {
-                    LOG_ERROR
+                    LOG(ERROR)
                         << "ClientSession::readBody failed. "
                         << "Attempt to read data " << static_cast<void*>(addr)
                         << " using buffer " << static_cast<void*>(dram_buffer)
@@ -348,7 +348,7 @@ struct ClientSession : public std::enable_shared_from_this<ClientSession> {
                         cudaMemcpy(addr + total_transferred_bytes_, dram_buffer,
                                    transferred_bytes, cudaMemcpyDefault);
                     if (cuda_status != cudaSuccess) {
-                        LOG_ERROR
+                        LOG(ERROR)
                             << "ClientSession::readBody failed to copy to CUDA "
                                "memory. "
                             << "Error: " << cudaGetErrorString(cuda_status);
@@ -392,7 +392,7 @@ struct ClientSession : public std::enable_shared_from_this<ClientSession> {
                 cudaMemcpy(dram_buffer, addr + total_transferred_bytes_,
                            buffer_size, cudaMemcpyDefault);
             if (cuda_status != cudaSuccess) {
-                LOG_ERROR << "ClientSession::writeBody failed to copy from "
+                LOG(ERROR) << "ClientSession::writeBody failed to copy from "
                               "CUDA memory. "
                            << "Error: " << cudaGetErrorString(cuda_status);
                 if (on_finalize_) on_finalize_(TransferStatusEnum::FAILED);
@@ -416,7 +416,7 @@ struct ClientSession : public std::enable_shared_from_this<ClientSession> {
                 }
 #endif
                 if (ec) {
-                    LOG_ERROR
+                    LOG(ERROR)
                         << "ClientSession::writeBody failed. "
                         << "Attempt to write data " << static_cast<void*>(addr)
                         << " using buffer " << static_cast<void*>(dram_buffer)
@@ -452,7 +452,7 @@ struct TcpContext {
             }
             acceptor.close();
         }
-        LOG_ERROR << "Failed to set up IPv6 dual-stack listener: "
+        LOG(ERROR) << "Failed to set up IPv6 dual-stack listener: "
                    << ec.message() << " (error code: " << ec.value() << ")";
         asio::ip::tcp::endpoint endpoint_v4(asio::ip::tcp::v4(), port);
         acceptor.open(endpoint_v4.protocol());
@@ -526,32 +526,32 @@ int TcpTransport::install(std::string& local_server_name,
     int sockfd = -1;
     int tcp_port = findAvailableTcpPort(sockfd);
     if (tcp_port == 0) {
-        LOG_ERROR << "TcpTransport: unable to find available tcp port for "
+        LOG(ERROR) << "TcpTransport: unable to find available tcp port for "
                       "data transmission";
         return -1;
     }
 
     int ret = allocateLocalSegmentID(tcp_port);
     if (ret) {
-        LOG_ERROR << "TcpTransport: cannot allocate local segment";
+        LOG(ERROR) << "TcpTransport: cannot allocate local segment";
         return -1;
     }
 
     ret = startHandshakeDaemon();
     if (ret) {
-        LOG_ERROR << "TcpTransport: cannot start handshake daemon";
+        LOG(ERROR) << "TcpTransport: cannot start handshake daemon";
         return -1;
     }
 
     ret = metadata_->updateLocalSegmentDesc();
     if (ret) {
-        LOG_ERROR << "TcpTransport: cannot publish segments, "
+        LOG(ERROR) << "TcpTransport: cannot publish segments, "
                       "check the availability of metadata storage";
         return -1;
     }
 
     close(sockfd);  // the above function has opened a socket
-    LOG_INFO << "TcpTransport: listen on port " << tcp_port;
+    LOG(INFO) << "TcpTransport: listen on port " << tcp_port;
     context_ = new TcpContext(tcp_port);
     running_ = true;
     thread_ = std::thread(&TcpTransport::worker, this);
@@ -637,7 +637,7 @@ Status TcpTransport::submitTransfer(
     BatchID batch_id, const std::vector<TransferRequest>& entries) {
     auto& batch_desc = *((BatchDesc*)(batch_id));
     if (batch_desc.task_list.size() + entries.size() > batch_desc.batch_size) {
-        LOG_ERROR << "TcpTransport: Exceed the limitation of current batch's "
+        LOG(ERROR) << "TcpTransport: Exceed the limitation of current batch's "
                       "capacity";
         return Status::InvalidArgument(
             "TcpTransport: Exceed the limitation of capacity, batch id: " +
@@ -698,7 +698,7 @@ void TcpTransport::worker() {
             context_->doAccept();
             context_->io_context.run();
         } catch (std::exception& e) {
-            LOG_ERROR << "TcpTransport::worker encountered an exception "
+            LOG(ERROR) << "TcpTransport::worker encountered an exception "
                           "during doAccept/run: "
                        << e.what();
         }
@@ -718,7 +718,7 @@ std::shared_ptr<asio::ip::tcp::socket> TcpTransport::getConnection(
             asio::connect(*socket_ptr, endpoint_iterator);
             return socket_ptr;
         } catch (std::exception& e) {
-            LOG_ERROR
+            LOG(ERROR)
                 << "TcpTransport::getConnection failed to create connection to "
                 << host << ":" << port << ". Error: " << e.what();
             return nullptr;
@@ -769,7 +769,7 @@ std::shared_ptr<asio::ip::tcp::socket> TcpTransport::getConnection(
             std::make_shared<asio::ip::tcp::socket>(context_->io_context);
         asio::connect(*new_socket, endpoint_iterator);
     } catch (std::exception& e) {
-        LOG_ERROR
+        LOG(ERROR)
             << "TcpTransport::getConnection failed to create connection to "
             << host << ":" << port << ". Error: " << e.what();
         return nullptr;
@@ -876,7 +876,7 @@ void TcpTransport::cleanupIdleConnections() {
 void TcpTransport::startTransfer(Slice* slice) {
     auto desc = metadata_->getSegmentDescByID(slice->target_id);
     if (!desc) {
-        LOG_ERROR << "TcpTransport::startTransfer failed to get segment "
+        LOG(ERROR) << "TcpTransport::startTransfer failed to get segment "
                       "description for target_id: "
                    << slice->target_id;
         slice->markFailed();
@@ -885,7 +885,7 @@ void TcpTransport::startTransfer(Slice* slice) {
 
     TransferMetadata::RpcMetaDesc meta_entry;
     if (metadata_->getRpcMetaEntry(desc->name, meta_entry)) {
-        LOG_ERROR << "TcpTransport::startTransfer failed to get RPC meta "
+        LOG(ERROR) << "TcpTransport::startTransfer failed to get RPC meta "
                       "entry for segment name: "
                    << desc->name;
         slice->markFailed();
@@ -896,7 +896,7 @@ void TcpTransport::startTransfer(Slice* slice) {
     auto socket =
         getConnection(meta_entry.ip_or_host_name, desc->tcp_data_port);
     if (!socket) {
-        LOG_ERROR << "TcpTransport::startTransfer failed to get connection to "
+        LOG(ERROR) << "TcpTransport::startTransfer failed to get connection to "
                    << meta_entry.ip_or_host_name << ":" << desc->tcp_data_port;
         slice->markFailed();
         return;
@@ -932,7 +932,7 @@ void TcpTransport::startTransfer(Slice* slice) {
         session->initiate(slice->source_addr, slice->tcp.dest_addr,
                           slice->length, slice->opcode);
     } catch (std::exception& e) {
-        LOG_ERROR << "TcpTransport::startTransfer encountered an exception. "
+        LOG(ERROR) << "TcpTransport::startTransfer encountered an exception. "
                       "Slice details - source_addr: "
                    << slice->source_addr << ", length: " << slice->length
                    << ", opcode: " << (int)slice->opcode

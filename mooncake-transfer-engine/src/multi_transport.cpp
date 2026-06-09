@@ -138,7 +138,7 @@ Status MultiTransport::submitTransfer(
     for (auto& entry : submit_tasks) {
         auto status = entry.first->submitTransferTask(entry.second);
         if (!status.ok()) {
-            // LOG_ERROR << "Failed to submit transfer task to "
+            // LOG(ERROR) << "Failed to submit transfer task to "
             //            << entry.first->getName();
             overall_status = status;
         }
@@ -180,7 +180,7 @@ Status MultiTransport::mp_submitTransfer(
     for (auto& entry : submit_tasks) {
         auto status = entry.first->submitTransferTask(entry.second);
         if (!status.ok()) {
-            // LOG_ERROR << "Failed to submit transfer task to "
+            // LOG(ERROR) << "Failed to submit transfer task to "
             //            << entry.first->getName();
             overall_status = status;
         }
@@ -209,7 +209,7 @@ Status MultiTransport::getTransferStatus(BatchID batch_id, size_t task_id,
             auto ts = slice->ts;
             if (ts > 0 && current_ts > ts &&
                 current_ts - ts > kPacketDeliveryTimeout) {
-                LOG_INFO << "Slice timeout detected";
+                LOG(INFO) << "Slice timeout detected";
                 return true;
             }
         }
@@ -383,7 +383,7 @@ Transport* MultiTransport::installTransport(const std::string& proto,
 #endif
 
     if (!transport) {
-        LOG_ERROR << "Unsupported transport " << proto
+        LOG(ERROR) << "Unsupported transport " << proto
                    << ", please rebuild Mooncake";
         return nullptr;
     }
@@ -417,7 +417,7 @@ Transport* MultiTransport::installTransport(const std::string& proto,
         }
 
         if (!nics.empty()) {
-            LOG_INFO << "ACCL_USE_NICS is set to " << nics;
+            LOG(INFO) << "ACCL_USE_NICS is set to " << nics;
             setenv("ACCL_USE_NICS", nics.c_str(), 1);
         }
     }

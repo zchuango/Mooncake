@@ -34,7 +34,7 @@ namespace mooncake {
     do {                                                      \
         auto err = (call);                                    \
         if (err != ACL_ERROR_NONE) {                          \
-            LOG_ERROR << "Call acl failed, "                 \
+            LOG(ERROR) << "Call acl failed, "                 \
                        << "detail: " << aclGetRecentErrMsg(); \
             return -1;                                        \
         }                                                     \

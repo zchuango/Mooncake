@@ -44,7 +44,7 @@ static std::vector<Topology::NicEntry> listInfiniBandDevices() {
 
     struct ibv_device** device_list = ibv_get_device_list(&num_devices);
     if (!device_list || num_devices <= 0) {
-        LOG_WARNING << "No RDMA devices found, check your device installation";
+        LOG(WARNING) << "No RDMA devices found, check your device installation";
         return {};
     }
 
@@ -58,7 +58,7 @@ static std::vector<Topology::NicEntry> listInfiniBandDevices() {
         snprintf(path, sizeof(path), "/sys/class/infiniband/%s/../..",
                  device_name.c_str());
         if (realpath(path, resolved_path) == NULL) {
-            PLOG_ERROR << "realpath " << path << ":";
+            PLOG(ERROR) << "realpath " << path << ":";
             continue;
         }
         std::string pci_bus_id = basename(resolved_path);
@@ -106,7 +106,7 @@ static void discoverAscendTopology(std::vector<Topology::NicEntry>& nic_list,
     DIR* dir = opendir("/sys/devices/system/node");
     struct dirent* entry;
     if (dir == NULL) {
-        PLOG_WARNING << "open /sys/devices/system/node failed";
+        PLOG(WARNING) << "open /sys/devices/system/node failed";
         return;
     }
     while ((entry = readdir(dir))) {
@@ -181,7 +181,7 @@ const std::vector<RangeLocation> AscendPlatform::getLocation(
     aclrtPtrAttributes attributes;
     auto ret = aclrtPointerGetAttributes(start, &attributes);
     if (ret != ACL_SUCCESS) {
-        LOG_ERROR << "aclrtPointerGetAttributes failed, ret:" << ret;
+        LOG(ERROR) << "aclrtPointerGetAttributes failed, ret:" << ret;
         entries.push_back({(uint64_t)start, len, kWildcardLocation});
         return entries;
     }
@@ -210,7 +210,7 @@ const std::vector<RangeLocation> AscendPlatform::getLocation(
 
     int rc = numa_move_pages(0, n, pages, nullptr, status, 0);
     if (rc != 0) {
-        // PLOG_WARNING << "Failed to get NUMA node, addr: " << start
+        // PLOG(WARNING) << "Failed to get NUMA node, addr: " << start
         //               << ", len: " << len;
         entries.push_back({(uint64_t)start, len, kWildcardLocation});
         ::free(pages);

@@ -159,7 +159,7 @@ struct StageBufferCache {
         uint64_t addr = 0;
         auto status = mgr.pinStageBuffer(location, addr);
         if (!status.ok()) {
-            LOG_FATAL << "Failed to pin local stage buffer: " << status
+            LOG(FATAL) << "Failed to pin local stage buffer: " << status
                        << ", location " << location;
             return 0;
         }
@@ -177,7 +177,7 @@ struct StageBufferCache {
         auto status =
             ControlClient::pinStageBuffer(server_addr, location, addr);
         if (!status.ok()) {
-            LOG_FATAL << "Failed to pin remote stage buffer: " << status
+            LOG(FATAL) << "Failed to pin remote stage buffer: " << status
                        << ", location " << location;
             return 0;
         }

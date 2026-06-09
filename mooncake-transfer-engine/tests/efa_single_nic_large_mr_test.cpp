@@ -64,21 +64,21 @@ int main(int argc, char** argv) {
     std::string nic = FLAGS_nic;
 
     size_t size_bytes = static_cast<size_t>(FLAGS_size_gb * 1024 * 1024 * 1024);
-    LOG_INFO << "Buffer size: " << FLAGS_size_gb << " GB (" << size_bytes
+    LOG(INFO) << "Buffer size: " << FLAGS_size_gb << " GB (" << size_bytes
               << " bytes)";
 
     // Create engine
     transfer_engine_t engine = createTransferEngine(
         "P2PHANDSHAKE", FLAGS_server.c_str(), "127.0.0.1", 12345, 0);
     if (!engine) {
-        LOG_ERROR << "createTransferEngine failed";
+        LOG(ERROR) << "createTransferEngine failed";
         return 1;
     }
 
     // discoverTopology to populate device list
     int ret = discoverTopology(engine);
     if (ret != 0) {
-        LOG_ERROR << "discoverTopology failed: " << ret;
+        LOG(ERROR) << "discoverTopology failed: " << ret;
         destroyTransferEngine(engine);
         return 1;
     }
@@ -87,16 +87,16 @@ int main(int argc, char** argv) {
     transport_t xport = nullptr;
     if (!nic.empty()) {
         std::string matrix = "{\"cpu:0\": [[\"" + nic + "\"], []]}";
-        LOG_INFO << "nic_priority_matrix: " << matrix;
+        LOG(INFO) << "nic_priority_matrix: " << matrix;
         char* matrix_cstr = const_cast<char*>(matrix.c_str());
         void* args[] = {matrix_cstr};
         xport = installTransport(engine, "efa", args);
     } else {
-        LOG_INFO << "Using all available NICs (no nic restriction)";
+        LOG(INFO) << "Using all available NICs (no nic restriction)";
         xport = installTransport(engine, "efa", nullptr);
     }
     if (!xport) {
-        LOG_ERROR << "installTransport(efa) failed";
+        LOG(ERROR) << "installTransport(efa) failed";
         destroyTransferEngine(engine);
         return 1;
     }
@@ -110,7 +110,7 @@ int main(int argc, char** argv) {
     } else {
         chunk_bytes = size_bytes;
     }
-    LOG_INFO << "Plan: " << num_bufs << " buffers × "
+    LOG(INFO) << "Plan: " << num_bufs << " buffers × "
               << chunk_bytes / (1024 * 1024)
               << " MB = " << (num_bufs * chunk_bytes) / (1024ULL * 1024 * 1024)
               << " GB";
@@ -118,12 +118,12 @@ int main(int argc, char** argv) {
     // Allocate all buffers with hugepages
     std::vector<void*> bufs;
     bufs.reserve(num_bufs);
-    LOG_INFO << "Allocating " << num_bufs << " buffers...";
+    LOG(INFO) << "Allocating " << num_bufs << " buffers...";
     for (int i = 0; i < num_bufs; ++i) {
         void* buf = mmap(nullptr, chunk_bytes, PROT_READ | PROT_WRITE,
                          MAP_PRIVATE | MAP_ANONYMOUS | MAP_HUGETLB, -1, 0);
         if (buf == MAP_FAILED) {
-            LOG_ERROR << "mmap failed at buffer " << i << "/" << num_bufs
+            LOG(ERROR) << "mmap failed at buffer " << i << "/" << num_bufs
                        << ": " << strerror(errno);
             for (auto* p : bufs) munmap(p, chunk_bytes);
             destroyTransferEngine(engine);
@@ -131,20 +131,20 @@ int main(int argc, char** argv) {
         }
         bufs.push_back(buf);
         if ((i + 1) % 50 == 0 || i == num_bufs - 1) {
-            LOG_INFO << "  allocated " << (i + 1) << "/" << num_bufs;
+            LOG(INFO) << "  allocated " << (i + 1) << "/" << num_bufs;
         }
     }
-    LOG_INFO << "All buffers allocated";
+    LOG(INFO) << "All buffers allocated";
 
     // Register each buffer
-    LOG_INFO << "Registering " << num_bufs << " × "
+    LOG(INFO) << "Registering " << num_bufs << " × "
               << chunk_bytes / (1024 * 1024) << " MB on single NIC...";
     auto t0 = std::chrono::steady_clock::now();
     int failures = 0;
     for (int i = 0; i < num_bufs; ++i) {
         ret = registerLocalMemory(engine, bufs[i], chunk_bytes, "cpu:0", 1);
         if (ret != 0) {
-            LOG_ERROR << "FAILED at buffer " << i << "/" << num_bufs
+            LOG(ERROR) << "FAILED at buffer " << i << "/" << num_bufs
                        << " (addr=" << bufs[i] << "): ret=" << ret;
             failures++;
             break;
@@ -152,7 +152,7 @@ int main(int argc, char** argv) {
         if ((i + 1) % 50 == 0 || i == num_bufs - 1) {
             auto now = std::chrono::steady_clock::now();
             double elapsed = std::chrono::duration<double>(now - t0).count();
-            LOG_INFO << "  registered " << (i + 1) << "/" << num_bufs << " ("
+            LOG(INFO) << "  registered " << (i + 1) << "/" << num_bufs << " ("
                       << elapsed << "s)";
         }
     }
@@ -160,12 +160,12 @@ int main(int argc, char** argv) {
     double total_time = std::chrono::duration<double>(t1 - t0).count();
 
     if (failures == 0) {
-        LOG_INFO << "SUCCESS: registered " << num_bufs << " × "
+        LOG(INFO) << "SUCCESS: registered " << num_bufs << " × "
                   << chunk_bytes / (1024 * 1024) << " MB ("
                   << (num_bufs * chunk_bytes) / (1024ULL * 1024 * 1024)
                   << " GB) in " << total_time << "s";
     } else {
-        LOG_ERROR << "FAILED after " << total_time << "s";
+        LOG(ERROR) << "FAILED after " << total_time << "s";
     }
 
     // Cleanup

@@ -691,19 +691,19 @@ int main(int argc, char **argv) {
 
         BenchOp op_mode = ParseBenchOp(FLAGS_op);
         if (FLAGS_endpoints.empty()) {
-            LOG_ERROR << "--endpoints is required";
+            LOG(ERROR) << "--endpoints is required";
             return 1;
         }
         if (FLAGS_iodepth == 0) {
-            LOG_ERROR << "--iodepth must be greater than 0";
+            LOG(ERROR) << "--iodepth must be greater than 0";
             return 1;
         }
         if (FLAGS_submit_threads == 0) {
-            LOG_ERROR << "--submit_threads must be greater than 0";
+            LOG(ERROR) << "--submit_threads must be greater than 0";
             return 1;
         }
         if (FLAGS_duration_sec == 0) {
-            LOG_ERROR << "--duration_sec must be greater than 0";
+            LOG(ERROR) << "--duration_sec must be greater than 0";
             return 1;
         }
 
@@ -715,13 +715,13 @@ int main(int argc, char **argv) {
 
         auto endpoint_strings = mooncake::splitString(FLAGS_endpoints);
         if (endpoint_strings.empty()) {
-            LOG_ERROR << "No valid endpoints parsed from --endpoints";
+            LOG(ERROR) << "No valid endpoints parsed from --endpoints";
             return 1;
         }
 
         auto &wrapper = mooncake::SpdkWrapper::GetInstance();
         if (!wrapper.InitializeEnv()) {
-            LOG_ERROR << "Failed to initialize SPDK environment";
+            LOG(ERROR) << "Failed to initialize SPDK environment";
             return 1;
         }
 
@@ -732,26 +732,26 @@ int main(int argc, char **argv) {
             EndpointContext endpoint(endpoint_strings[i], FLAGS_seed + i);
             endpoint.seg_handle = wrapper.OpenNofSegment(endpoint.endpoint);
             if (!endpoint.seg_handle) {
-                LOG_ERROR << "Failed to open NoF endpoint: "
+                LOG(ERROR) << "Failed to open NoF endpoint: "
                            << endpoint.endpoint;
                 return 1;
             }
             endpoint.block_size = wrapper.GetBlockSize(endpoint.seg_handle);
             if (endpoint.block_size == INVALID_BLOCK_SIZE ||
                 endpoint.block_size == 0) {
-                LOG_ERROR << "Invalid block size for endpoint: "
+                LOG(ERROR) << "Invalid block size for endpoint: "
                            << endpoint.endpoint;
                 return 1;
             }
             if (FLAGS_io_size % endpoint.block_size != 0) {
-                LOG_ERROR << "--io_size=" << FLAGS_io_size
+                LOG(ERROR) << "--io_size=" << FLAGS_io_size
                            << " is not aligned to block size "
                            << endpoint.block_size << " for endpoint "
                            << endpoint.endpoint;
                 return 1;
             }
             if (FLAGS_range_bytes % endpoint.block_size != 0) {
-                LOG_ERROR << "--range_bytes=" << FLAGS_range_bytes
+                LOG(ERROR) << "--range_bytes=" << FLAGS_range_bytes
                            << " is not aligned to block size "
                            << endpoint.block_size;
                 return 1;
@@ -759,7 +759,7 @@ int main(int argc, char **argv) {
             endpoint.io_blocks = FLAGS_io_size / endpoint.block_size;
             endpoint.range_blocks = FLAGS_range_bytes / endpoint.block_size;
             if (endpoint.range_blocks < endpoint.io_blocks) {
-                LOG_ERROR
+                LOG(ERROR)
                     << "--range_bytes is smaller than one I/O for endpoint "
                     << endpoint.endpoint;
                 return 1;
@@ -773,7 +773,7 @@ int main(int argc, char **argv) {
         const uint64_t total_iodepth =
             static_cast<uint64_t>(endpoints.size()) * FLAGS_iodepth;
 
-        LOG_INFO << "Bench config: endpoints=" << endpoints.size()
+        LOG(INFO) << "Bench config: endpoints=" << endpoints.size()
                   << ", unique_handles=" << unique_handles.size()
                   << ", configured_nof_workers="
                   << (FLAGS_nof_workers == 0 ? mooncake::kDefaultSpdkNofWorkers
@@ -790,7 +790,7 @@ int main(int argc, char **argv) {
                   << ", warmup_sec=" << FLAGS_warmup_sec
                   << ", duration_sec=" << FLAGS_duration_sec;
         if (unique_handles.size() < endpoints.size()) {
-            LOG_WARNING
+            LOG(WARNING)
                 << "Some endpoints resolved to the same nof_seg_handle. In the "
                    "current SpdkNofWorkerPool implementation, the same handle "
                    "binds to a single worker thread, so duplicate endpoints "
@@ -821,7 +821,7 @@ int main(int argc, char **argv) {
                     slot.buffer = wrapper.Alloc(slot.buffer_size, 0x1000,
                                                 FLAGS_socket_id);
                     if (!slot.buffer) {
-                        LOG_ERROR << "Failed to allocate DMA buffer of size "
+                        LOG(ERROR) << "Failed to allocate DMA buffer of size "
                                    << slot.buffer_size;
                         FreeThreadSlots(wrapper, thread_contexts);
                         return 1;
@@ -884,7 +884,7 @@ int main(int argc, char **argv) {
                     DeltaCounters(total_current, total_last);
                 ThroughputView total_view =
                     ComputeThroughput(delta_total, report_window_sec);
-                LOG_INFO << "interval bw="
+                LOG(INFO) << "interval bw="
                           << FormatBytesPerSecond(
                                  total_view.bandwidth_bytes_per_sec)
                           << ", iops=" << std::fixed << std::setprecision(2)
@@ -902,7 +902,7 @@ int main(int argc, char **argv) {
                         current, last_endpoint_snapshots[endpoint_index]);
                     ThroughputView endpoint_view =
                         ComputeThroughput(delta, report_window_sec);
-                    LOG_INFO
+                    LOG(INFO)
                         << "interval endpoint[" << endpoint_index << "] bw="
                         << FormatBytesPerSecond(
                                endpoint_view.bandwidth_bytes_per_sec)
@@ -1009,7 +1009,7 @@ int main(int argc, char **argv) {
         std::cout << "==========================================\n"; 
         return 0;
     } catch (const std::exception &e) {
-        LOG_ERROR << "Benchmark failed: " << e.what(); 
+        LOG(ERROR) << "Benchmark failed: " << e.what(); 
         return 1;
     }
 }

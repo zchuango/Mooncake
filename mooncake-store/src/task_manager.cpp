@@ -30,7 +30,7 @@ size_t ScopedTaskReadAccess::size() const {
 tl::expected<UUID, ErrorCode> ScopedTaskWriteAccess::submit_task(
     const UUID& client_id, TaskType type, const std::string& payload) {
     if (manager_->total_pending_tasks_ >= manager_->max_total_pending_tasks_) {
-        LOG_ERROR << "Cannot submit new task: pending task limit reached ("
+        LOG(ERROR) << "Cannot submit new task: pending task limit reached ("
                    << manager_->total_pending_tasks_ << "/"
                    << manager_->max_total_pending_tasks_ << ")";
         return tl::make_unexpected(ErrorCode::TASK_PENDING_LIMIT_EXCEEDED);
@@ -83,7 +83,7 @@ std::vector<Task> ScopedTaskWriteAccess::pop_tasks(const UUID& client_id,
 
         auto it = manager_->all_tasks_.find(task_id);
         if (it == manager_->all_tasks_.end()) {
-            LOG_ERROR << "Task " << task_id
+            LOG(ERROR) << "Task " << task_id
                        << " not found in all_tasks_ while popping";
             continue;
         }
@@ -93,7 +93,7 @@ std::vector<Task> ScopedTaskWriteAccess::pop_tasks(const UUID& client_id,
 
         const auto [_, inserted] = processing_set.insert(task_id);
         if (!inserted) {
-            LOG_WARNING << "Task " << task_id
+            LOG(WARNING) << "Task " << task_id
                          << " is already in processing set for client "
                          << client_id;
         } else {
@@ -111,27 +111,27 @@ ErrorCode ScopedTaskWriteAccess::complete_task(const UUID& client_id,
                                                TaskStatus status,
                                                const std::string& message) {
     if (!is_finished_status(status)) {
-        LOG_ERROR << "complete_task: invalid completion status=" << status
+        LOG(ERROR) << "complete_task: invalid completion status=" << status
                    << ", task_id=" << task_id;
         return ErrorCode::INVALID_PARAMS;
     }
 
     auto it = manager_->all_tasks_.find(task_id);
     if (it == manager_->all_tasks_.end()) {
-        LOG_ERROR << "Task " << task_id << " not found for update";
+        LOG(ERROR) << "Task " << task_id << " not found for update";
         return ErrorCode::TASK_NOT_FOUND;
     }
 
     Task& task = it->second;
 
     if (task.assigned_client != client_id) {
-        LOG_ERROR << "Client " << client_id << " is not assigned to task "
+        LOG(ERROR) << "Client " << client_id << " is not assigned to task "
                    << task_id;
         return ErrorCode::ILLEGAL_CLIENT;
     }
 
     if (task.is_finished()) {
-        LOG_WARNING << "Task " << task_id
+        LOG(WARNING) << "Task " << task_id
                      << " is already finished with status " << task.status;
         return ErrorCode::OK;
     }
@@ -393,7 +393,7 @@ tl::expected<void, SerializationError> TaskManagerSerializer::Deserialize(
         if (task_obj.type != msgpack::type::ARRAY ||
             task_obj.via.array.size !=
                 TaskManagerSerializer::kTaskSerializedFields) {
-            LOG_WARNING << "Invalid task format for task index " << i
+            LOG(WARNING) << "Invalid task format for task index " << i
                          << ", skipping deserialization";
             continue;
         }
@@ -403,7 +403,7 @@ tl::expected<void, SerializationError> TaskManagerSerializer::Deserialize(
         Task task;
         std::string id_str = arr[0].as<std::string>();
         if (!StringToUuid(id_str, task.id)) {
-            LOG_WARNING << "Invalid UUID format for task id " << id_str
+            LOG(WARNING) << "Invalid UUID format for task id " << id_str
                          << ", skipping deserialization";
             continue;
         }
@@ -417,14 +417,14 @@ tl::expected<void, SerializationError> TaskManagerSerializer::Deserialize(
                 std::chrono::milliseconds(arr[5].as<int64_t>()));
             task.message = arr[6].as<std::string>();
         } catch (const std::exception& e) {
-            LOG_WARNING << "Invalid task field types for task index " << i
+            LOG(WARNING) << "Invalid task field types for task index " << i
                          << ": " << e.what() << ", skipping deserialization";
             continue;
         }
 
         std::string assigned_str = arr[7].as<std::string>();
         if (!StringToUuid(assigned_str, task.assigned_client)) {
-            LOG_WARNING << "Invalid UUID format for assigned_client "
+            LOG(WARNING) << "Invalid UUID format for assigned_client "
                          << assigned_str << ", skipping deserialization";
             continue;
         }

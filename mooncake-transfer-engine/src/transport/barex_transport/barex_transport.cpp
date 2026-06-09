@@ -52,11 +52,11 @@ BarexTransport::~BarexTransport() {
         for (auto ch : chs) {
             BarexResult ret =
                 connector_->CloseChannel(ch, [&, ch](accl::barex::Status s) {
-                    LOG_INFO << "CloseChannel() finished, s.IsOk=" << s.IsOk();
+                    LOG(INFO) << "CloseChannel() finished, s.IsOk=" << s.IsOk();
                     ch->Destroy();
                 });
             if (ret != accl::barex::BAREX_SUCCESS) {
-                LOG_ERROR << "CloseChannel() failed, ret " << ret;
+                LOG(ERROR) << "CloseChannel() failed, ret " << ret;
             }
         }
     }
@@ -80,7 +80,7 @@ int BarexTransport::install(std::string &local_server_name,
                             std::shared_ptr<TransferMetadata> meta,
                             std::shared_ptr<Topology> topo) {
     if (topo == nullptr) {
-        LOG_ERROR << "BarexTransport: missing topology";
+        LOG(ERROR) << "BarexTransport: missing topology";
         return ERR_INVALID_ARGUMENT;
     }
 
@@ -92,7 +92,7 @@ int BarexTransport::install(std::string &local_server_name,
     if (barex_random_dev_env) {
         int val = atoi(barex_random_dev_env);
         if (val != 0) {
-            LOG_INFO << "BarexTransport: use random rdma device";
+            LOG(INFO) << "BarexTransport: use random rdma device";
             use_random_dev_ = true;
         }
     }
@@ -101,7 +101,7 @@ int BarexTransport::install(std::string &local_server_name,
     if (barex_use_cpu_env) {
         int val = atoi(barex_use_cpu_env);
         if (val != 0) {
-            LOG_INFO << "BarexTransport: use_cpu";
+            LOG(INFO) << "BarexTransport: use_cpu";
             barex_use_cpu_ = true;
         }
     }
@@ -109,32 +109,32 @@ int BarexTransport::install(std::string &local_server_name,
     const char *barex_local_device_env = std::getenv("ACCL_LOCAL_DEVICE");
     if (barex_local_device_env) {
         int val = atoi(barex_local_device_env);
-        LOG_INFO << "BarexTransport: set local device id " << val;
+        LOG(INFO) << "BarexTransport: set local device id " << val;
         barex_local_device_ = val;
     }
 
     auto ret = initializeRdmaResources();
     if (ret) {
-        LOG_ERROR << "BarexTransport: cannot initialize RDMA resources";
+        LOG(ERROR) << "BarexTransport: cannot initialize RDMA resources";
         return ret;
     }
 
     ret = allocateLocalSegmentID();
     if (ret) {
-        LOG_ERROR << "Transfer engine cannot be initialized: cannot "
+        LOG(ERROR) << "Transfer engine cannot be initialized: cannot "
                       "allocate local segment";
         return ret;
     }
 
     ret = startHandshakeDaemon(local_server_name);
     if (ret) {
-        LOG_ERROR << "BarexTransport: cannot start handshake daemon";
+        LOG(ERROR) << "BarexTransport: cannot start handshake daemon";
         return ret;
     }
 
     ret = metadata_->updateLocalSegmentDesc();
     if (ret) {
-        LOG_ERROR << "BarexTransport: cannot publish segments";
+        LOG(ERROR) << "BarexTransport: cannot publish segments";
         return ret;
     }
 
@@ -156,7 +156,7 @@ int BarexTransport::registerLocalMemory(void *addr, size_t length,
     } else if (name.find("cpu") != std::string::npos) {
         dtype = CPU;
     } else {
-        LOG_ERROR
+        LOG(ERROR)
             << "BarexTransport: registerLocalMemory, cannot recognize: name "
             << name << ", need include cpu or cuda in name";
         return ERR_INVALID_ARGUMENT;
@@ -170,7 +170,7 @@ int BarexTransport::registerLocalMemory(void *addr, size_t length,
             registerLocalMemoryBase(current_ptr, buffer_len, name,
                                     remote_accessible, update_metadata, is_gpu);
         if (ret) {
-            LOG_ERROR << "registerLocalMemoryBase failed, ret " << ret;
+            LOG(ERROR) << "registerLocalMemoryBase failed, ret " << ret;
             return -1;
         }
         current_ptr = static_cast<char *>(current_ptr) + buffer_len;
@@ -198,7 +198,7 @@ int BarexTransport::registerLocalMemoryBase(void *addr, size_t length,
     device_type dtype = is_gpu ? GPU : CPU;
     result = mempool_->RegUserMr(mem, addr, length, dtype);
     if (result != BAREX_SUCCESS) {
-        LOG_ERROR << "BarexTransport: registerLocalMemory failed"
+        LOG(ERROR) << "BarexTransport: registerLocalMemory failed"
                    << ", result " << result << ", addr " << addr << ", length "
                    << length << ", name " << name;
         return ERR_ADDRESS_NOT_REGISTERED;
@@ -261,14 +261,14 @@ int BarexTransport::unregisterLocalMemory(void *addr, bool update_metadata) {
             int rc = metadata_->removeLocalMemoryBuffer(current_ptr,
                                                         update_metadata);
             if (rc) {
-                LOG_WARNING << "unregisterLocalMemory, "
+                LOG(WARNING) << "unregisterLocalMemory, "
                                 "removeLocalMemoryBuffer failed, addr "
                              << addr;
             }
         }
         result = mempool_->DeregUserMr(current_ptr, dtype);
         if (result != BAREX_SUCCESS) {
-            LOG_ERROR << "unregisterLocalMemory, DeregUserMr, failed, ret "
+            LOG(ERROR) << "unregisterLocalMemory, DeregUserMr, failed, ret "
                        << result << ", addr " << current_ptr;
             return -1;
         }
@@ -305,7 +305,7 @@ int BarexTransport::registerLocalMemoryBatch(
         int ret = registerLocalMemory(buffer.addr, buffer.length, location,
                                       true, false);
         if (ret) {
-            LOG_ERROR << "BarexTransport: Failed to register memory: addr "
+            LOG(ERROR) << "BarexTransport: Failed to register memory: addr "
                        << buffer.addr << " length " << buffer.length;
             return ERR_ADDRESS_NOT_REGISTERED;
         }
@@ -326,7 +326,7 @@ int BarexTransport::unregisterLocalMemoryBatch(
 
     for (size_t i = 0; i < addr_list.size(); ++i) {
         if (results[i].get())
-            LOG_WARNING << "BarexTransport: Failed to unregister memory: addr "
+            LOG(WARNING) << "BarexTransport: Failed to unregister memory: addr "
                          << addr_list[i];
     }
 
@@ -337,7 +337,7 @@ Status BarexTransport::submitTransfer(
     BatchID batch_id, const std::vector<TransferRequest> &entries) {
     auto &batch_desc = *((BatchDesc *)(batch_id));
     if (batch_desc.task_list.size() + entries.size() > batch_desc.batch_size) {
-        LOG_ERROR
+        LOG(ERROR)
             << "BarexTransport: Exceed the limitation of current batch's "
                "capacity";
         return Status::InvalidArgument(
@@ -367,7 +367,7 @@ Status BarexTransport::submitTransfer(
         SegmentID target_id = request.target_id;
         auto peer_segment_desc = segment_desc_map[target_id];
         if (!peer_segment_desc) {
-            LOG_ERROR << "peer_segment_desc not found for target_id "
+            LOG(ERROR) << "peer_segment_desc not found for target_id "
                        << target_id;
             return Status::InvalidArgument(
                 "BarexTransport: peer_segment_desc not found, batch id: " +
@@ -399,7 +399,7 @@ Status BarexTransport::submitTransfer(
                     slice->length, local_buffer_id, device_id, retry_cnt++);
                 if (ret) {
                     if (ret == ERR_ADDRESS_NOT_REGISTERED) {
-                        LOG_WARNING
+                        LOG(WARNING)
                             << "local_segment_desc selectDevice failed";
                         continue;
                     } else {
@@ -413,7 +413,7 @@ Status BarexTransport::submitTransfer(
                                  slice->rdma.retry_cnt);
                 if (ret) {
                     if (ret == ERR_ADDRESS_NOT_REGISTERED) {
-                        LOG_WARNING << "peer_segment_desc selectDevice failed";
+                        LOG(WARNING) << "peer_segment_desc selectDevice failed";
                         continue;
                     } else {
                         // need 2 blocks
@@ -741,7 +741,7 @@ Status BarexTransport::submitTransfer(
                 auto source_addr = slice->source_addr;
                 for (auto &entry : slices_to_post)
                     for (auto s : entry.second) delete s;
-                LOG_ERROR << "BarexTransport: Address not registered by any "
+                LOG(ERROR) << "BarexTransport: Address not registered by any "
                               "device(s) "
                            << source_addr;
                 return Status::AddressNotRegistered(
@@ -787,7 +787,7 @@ Status BarexTransport::submitTransferTask(
         SegmentID target_id = request.target_id;
         auto peer_segment_desc = segment_desc_map[target_id];
         if (!peer_segment_desc) {
-            LOG_ERROR << "peer_segment_desc not found for target_id "
+            LOG(ERROR) << "peer_segment_desc not found for target_id "
                        << target_id;
             return Status::InvalidArgument(
                 "BarexTransport: peer_segment_desc not found");
@@ -820,7 +820,7 @@ Status BarexTransport::submitTransferTask(
                     slice->length, local_buffer_id, device_id, retry_cnt++);
                 if (ret) {
                     if (ret == ERR_ADDRESS_NOT_REGISTERED) {
-                        LOG_WARNING
+                        LOG(WARNING)
                             << "local_segment_desc selectDevice failed";
                         continue;
                     } else {
@@ -834,7 +834,7 @@ Status BarexTransport::submitTransferTask(
                                  slice->rdma.retry_cnt);
                 if (ret) {
                     if (ret == ERR_ADDRESS_NOT_REGISTERED) {
-                        LOG_WARNING << "peer_segment_desc selectDevice failed";
+                        LOG(WARNING) << "peer_segment_desc selectDevice failed";
                         continue;
                     } else {
                         // need 2 blocks
@@ -1172,7 +1172,7 @@ Status BarexTransport::submitTransferTask(
                 auto source_addr = slice->source_addr;
                 for (auto &entry : slices_to_post)
                     for (auto s : entry.second) getSliceCache().deallocate(s);
-                LOG_ERROR
+                LOG(ERROR)
                     << "Memory region not registered by any active device(s): "
                     << source_addr;
                 return Status::AddressNotRegistered(
@@ -1257,10 +1257,10 @@ Status BarexTransport::OpenChannel(const std::string &segment_name,
     if (rc) return Status::Socket("sendHandshake failed");
     ;
     if (!peer_desc.reply_msg.empty()) {
-        LOG_ERROR << "Reject the handshake request by peer " << segment_name;
+        LOG(ERROR) << "Reject the handshake request by peer " << segment_name;
         return Status::Socket("empty peer_desc");
     } else {
-        LOG_INFO << "Handshake finish, get peer_server " << segment_name << ":"
+        LOG(INFO) << "Handshake finish, get peer_server " << segment_name << ":"
 #ifdef USE_BAREX
                   << peer_desc.barex_port;
         setPeerPort(peer_desc.barex_port);
@@ -1278,25 +1278,25 @@ Status BarexTransport::OpenChannel(const std::string &segment_name,
             [=, &channels, &connect_latch](XChannel *channel,
                                            accl::barex::Status s) {
                 if (!s.IsOk()) {
-                    LOG_ERROR
+                    LOG(ERROR)
                         << "BarexTransport::OpenChannel failed, " << s.ErrMsg();
                 } else {
                     std::unique_lock<std::mutex> lk(push_channel_mtx);
                     channels.push_back(channel);
-                    LOG_INFO
+                    LOG(INFO)
                         << "Open channel " << i + 1 << "/" << total_channels;
                 }
                 connect_latch.CountDown();
             });
         if (result != BAREX_SUCCESS) {
-            LOG_ERROR << "BarexTransport::OpenChannel failed, result="
+            LOG(ERROR) << "BarexTransport::OpenChannel failed, result="
                        << result;
             connect_latch.CountDown();
         }
     }
     connect_latch.Wait();
     if ((int)channels.size() != total_channels) {
-        LOG_ERROR << "open channel failed, need " << total_channels
+        LOG(ERROR) << "open channel failed, need " << total_channels
                    << " but got " << channels.size();
         return Status::InvalidArgument("connect failed");
     }
@@ -1314,13 +1314,13 @@ Status BarexTransport::CheckStatus(SegmentID sid) {
     for (auto ctx : client_context_list_) {
         int ret = ctx->checkStatus(sid);
         if (ret) {
-            LOG_INFO << "checkStatus failed in ctx" << ctx
+            LOG(INFO) << "checkStatus failed in ctx" << ctx
                       << ", bad channel cnt=" << ret;
             status = 1;
         }
     }
     if (!status) {
-        LOG_ERROR << "CheckStatus for sid " << sid << " failed";
+        LOG(ERROR) << "CheckStatus for sid " << sid << " failed";
         return Status::InvalidArgument("sid status error");
     }
     return Status::OK();
@@ -1343,33 +1343,33 @@ int BarexTransport::initializeRdmaResources() {
     XSimpleMempool *mempool = nullptr;
     result = XDeviceManager::Singleton(manager);
     if (result != BAREX_SUCCESS) {
-        LOG_ERROR << "BarexTransport: Create XDeviceManager failed";
+        LOG(ERROR) << "BarexTransport: Create XDeviceManager failed";
         return ERR_DEVICE_NOT_FOUND;
     }
     std::vector<XDevice *> devices = manager->AllDevices();
     if (devices.size() <= 0) {
-        LOG_ERROR << "BarexTransport: No available RNIC";
+        LOG(ERROR) << "BarexTransport: No available RNIC";
         return ERR_DEVICE_NOT_FOUND;
     } else {
-        LOG_INFO << devices.size() << " rdma devices found";
+        LOG(INFO) << devices.size() << " rdma devices found";
     }
     result = XSimpleMempool::NewInstance(mempool, "barex-mempool", devices);
     if (result != BAREX_SUCCESS) {
-        LOG_ERROR << "BarexTransport: Create XSimpleMempool failed";
+        LOG(ERROR) << "BarexTransport: Create XSimpleMempool failed";
         return ERR_INVALID_ARGUMENT;
     }
     mempool_ = std::shared_ptr<XSimpleMempool>(mempool);
     result = XThreadpool::NewInstance(server_threadpool, 10,
                                       "barex-server-threadpool");
     if (result != BAREX_SUCCESS) {
-        LOG_ERROR << "BarexTransport: Create Server XThreadpool failed";
+        LOG(ERROR) << "BarexTransport: Create Server XThreadpool failed";
         return ERR_INVALID_ARGUMENT;
     }
     server_threadpool_ = std::shared_ptr<XThreadpool>(server_threadpool);
     result = XThreadpool::NewInstance(client_threadpool, 10,
                                       "barex-client-threadpool");
     if (result != BAREX_SUCCESS) {
-        LOG_ERROR << "BarexTransport: Create Client XThreadpool failed";
+        LOG(ERROR) << "BarexTransport: Create Client XThreadpool failed";
         return ERR_INVALID_ARGUMENT;
     }
     client_threadpool_ = std::shared_ptr<XThreadpool>(client_threadpool);
@@ -1377,7 +1377,7 @@ int BarexTransport::initializeRdmaResources() {
     for (auto &dev : devices) {
         if (std::find(hca_list.begin(), hca_list.end(), dev->GetName()) ==
             hca_list.end()) {
-            LOG_WARNING << "BarexTransport: device " << dev->GetName()
+            LOG(WARNING) << "BarexTransport: device " << dev->GetName()
                          << " not found in hca_list, ignore ";
             continue;
         }
@@ -1388,7 +1388,7 @@ int BarexTransport::initializeRdmaResources() {
                                        server_threadpool);
         if (result != BAREX_SUCCESS) {
             local_topology_->disableDevice(dev->GetName());
-            LOG_WARNING
+            LOG(WARNING)
                 << "BarexTransport: Create XContext failed, Disable device "
                 << dev->GetName();
         } else {
@@ -1405,7 +1405,7 @@ int BarexTransport::initializeRdmaResources() {
                                        client_threadpool);
         if (result != BAREX_SUCCESS) {
             local_topology_->disableDevice(dev->GetName());
-            LOG_WARNING
+            LOG(WARNING)
                 << "BarexTransport: Create XContext failed, Disable device "
                 << dev->GetName();
         } else {
@@ -1418,7 +1418,7 @@ int BarexTransport::initializeRdmaResources() {
     }
 
     if (local_topology_->empty()) {
-        LOG_ERROR << "BarexTransport: No available RNIC";
+        LOG(ERROR) << "BarexTransport: No available RNIC";
         return ERR_DEVICE_NOT_FOUND;
     }
     return 0;
@@ -1442,14 +1442,14 @@ int BarexTransport::startHandshakeDaemon(std::string &local_server_name) {
     BarexResult result = XListener::NewInstance(listener, 2, getLocalPort(),
                                                 TIMER_3S, raw_server_contexts);
     if (result != BAREX_SUCCESS) {
-        LOG_ERROR << "BarexTransport: startHandshakeDaemon, create listener "
+        LOG(ERROR) << "BarexTransport: startHandshakeDaemon, create listener "
                       "failed, result "
                    << result;
         return ERR_INVALID_ARGUMENT;
     }
     result = listener->Listen();
     if (result != BAREX_SUCCESS) {
-        LOG_ERROR
+        LOG(ERROR)
             << "BarexTransport: startHandshakeDaemon, Listen failed, result "
             << result;
         return ERR_INVALID_ARGUMENT;
@@ -1459,7 +1459,7 @@ int BarexTransport::startHandshakeDaemon(std::string &local_server_name) {
     result =
         XConnector::NewInstance(connector, 2, TIMER_3S, raw_client_contexts);
     if (result != BAREX_SUCCESS) {
-        LOG_ERROR << "BarexTransport: startHandshakeDaemon, create connector "
+        LOG(ERROR) << "BarexTransport: startHandshakeDaemon, create connector "
                       "failed, result "
                    << result;
         return ERR_INVALID_ARGUMENT;
@@ -1494,7 +1494,7 @@ int BarexTransport::selectDevice(SegmentDesc *desc, uint64_t offset,
                             next_buffer_desc.addr + next_buffer_desc.length) {
                         ret = 1;
                     } else {
-                        LOG_ERROR << "selectDevice failed, 2 buffers in need "
+                        LOG(ERROR) << "selectDevice failed, 2 buffers in need "
                                       "but next buffer not fit,"
                                    << " offset " << offset << " length "
                                    << length << " buffer_id " << buffer_id
@@ -1508,7 +1508,7 @@ int BarexTransport::selectDevice(SegmentDesc *desc, uint64_t offset,
                         return ERR_ADDRESS_NOT_REGISTERED;
                     }
                 } else {
-                    LOG_ERROR << "selectDevice failed, last buffer overflow,"
+                    LOG(ERROR) << "selectDevice failed, last buffer overflow,"
                                << " offset " << offset << " length " << length
                                << " buffer_id " << buffer_id
                                << " buffer_desc.addr " << buffer_desc.addr

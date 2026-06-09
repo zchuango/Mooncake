@@ -111,7 +111,7 @@ void *allocate_buffer_allocator_memory(size_t total_size,
     const size_t default_alignment = facebook::cachelib::Slab::kSize;
     // Ensure total_size is a multiple of alignment
     if (alignment == default_alignment && total_size < alignment) {
-        LOG_ERROR << "Total size must be at least " << alignment;
+        LOG(ERROR) << "Total size must be at least " << alignment;
         return nullptr;
     }
 #if defined(USE_ASCEND_DIRECT) || defined(USE_UBSHMEM)
@@ -149,7 +149,7 @@ static void initializeGlobalArena() {
     const std::string env_disable = GetEnvStringOr("MC_DISABLE_MMAP_ARENA", "");
     const std::optional<bool> disable_override = string_to_bool(env_disable);
     if (!env_disable.empty() && !disable_override.has_value()) {
-        LOG_WARNING << "Ignoring invalid MC_DISABLE_MMAP_ARENA='"
+        LOG(WARNING) << "Ignoring invalid MC_DISABLE_MMAP_ARENA='"
                      << env_disable
                      << "'; accepted values: 1/0, true/false, yes/no, on/off";
     }
@@ -157,12 +157,12 @@ static void initializeGlobalArena() {
         FLAGS_use_mmap_arena_allocator || !env_pool_size.empty();
     const bool arena_disabled = disable_override.value_or(false);
     if (!arena_requested || arena_disabled) {
-        LOG_INFO << "=== ARENA ALLOCATOR DISABLED ===";
+        LOG(INFO) << "=== ARENA ALLOCATOR DISABLED ===";
         if (arena_disabled) {
-            LOG_INFO << "MC_DISABLE_MMAP_ARENA=" << env_disable
+            LOG(INFO) << "MC_DISABLE_MMAP_ARENA=" << env_disable
                       << " forces direct mmap()";
         } else {
-            LOG_INFO << "Arena is opt-in; set --use_mmap_arena_allocator or "
+            LOG(INFO) << "Arena is opt-in; set --use_mmap_arena_allocator or "
                          "MC_MMAP_ARENA_POOL_SIZE to enable it";
         }
         return;
@@ -186,10 +186,10 @@ static void initializeGlobalArena() {
         const uint64_t parsed = string_to_byte_size(env_pool_size);
         if (parsed > 0) {
             arena_pool_size = parsed;
-            LOG_INFO << "MC_MMAP_ARENA_POOL_SIZE override: " << env_pool_size
+            LOG(INFO) << "MC_MMAP_ARENA_POOL_SIZE override: " << env_pool_size
                       << " (" << byte_size_to_string(arena_pool_size) << ")";
         } else {
-            LOG_WARNING << "Invalid MC_MMAP_ARENA_POOL_SIZE='" << env_pool_size
+            LOG(WARNING) << "Invalid MC_MMAP_ARENA_POOL_SIZE='" << env_pool_size
                          << "', using default "
                          << byte_size_to_string(FLAGS_mmap_arena_pool_size);
         }
@@ -201,18 +201,18 @@ static void initializeGlobalArena() {
 
     if (success) {
         auto stats = g_mmap_arena->getStats();
-        LOG_INFO << "=== ARENA ALLOCATOR ENABLED ===";
-        LOG_INFO << "Arena pool size: " << (stats.pool_size / BYTES_PER_GIB)
+        LOG(INFO) << "=== ARENA ALLOCATOR ENABLED ===";
+        LOG(INFO) << "Arena pool size: " << (stats.pool_size / BYTES_PER_GIB)
                   << " GiB";
-        LOG_INFO << "Using lock-free atomic bump allocation";
+        LOG(INFO) << "Using lock-free atomic bump allocation";
     } else {
-        LOG_ERROR << "=== ARENA INITIALIZATION FAILED ===";
-        LOG_ERROR << "Falling back to traditional mmap()";
+        LOG(ERROR) << "=== ARENA INITIALIZATION FAILED ===";
+        LOG(ERROR) << "Falling back to traditional mmap()";
         if (hugepages_explicitly_requested) {
-            LOG_ERROR << "MC_STORE_USE_HUGEPAGE is set, so the fallback path "
+            LOG(ERROR) << "MC_STORE_USE_HUGEPAGE is set, so the fallback path "
                           "will also require hugepages";
         }
-        LOG_ERROR << "Arena initialization is only attempted once per "
+        LOG(ERROR) << "Arena initialization is only attempted once per "
                       "process; restart after fixing the environment if you "
                       "want to retry arena bring-up";
         g_mmap_arena.reset();
@@ -230,7 +230,7 @@ static inline size_t mmap_map_size(size_t total_size, size_t hugepage_size) {
 
 void *allocate_buffer_mmap_memory(size_t total_size, size_t alignment) {
     if (total_size == 0) {
-        LOG_ERROR << "Total size must be greater than 0 for mmap";
+        LOG(ERROR) << "Total size must be greater than 0 for mmap";
         return nullptr;
     }
 
@@ -242,7 +242,7 @@ void *allocate_buffer_mmap_memory(size_t total_size, size_t alignment) {
     if (g_mmap_arena && g_mmap_arena->isInitialized()) {
         void *ptr = g_mmap_arena->allocate(total_size, alignment);
         if (ptr != nullptr) {
-            LOG_INFO << "Allocated " << total_size << " bytes from arena at "
+            LOG(INFO) << "Allocated " << total_size << " bytes from arena at "
                     << ptr;
             return ptr;
         }
@@ -250,7 +250,7 @@ void *allocate_buffer_mmap_memory(size_t total_size, size_t alignment) {
         const uint64_t fallback_count =
             g_arena_oom_fallback_count.fetch_add(1, std::memory_order_relaxed) +
             1;
-        LOG_WARNING
+        LOG(WARNING)
             << "Arena OOM, falling back to mmap() for size=" << total_size
             << " (count=" << fallback_count << ")"
             << " (further warnings suppressed)";
@@ -263,7 +263,7 @@ void *allocate_buffer_mmap_memory(size_t total_size, size_t alignment) {
     const size_t guaranteed_alignment =
         hugepage_size > 0 ? hugepage_size : static_cast<size_t>(getpagesize());
     if (alignment > guaranteed_alignment) {
-        LOG_WARNING
+        LOG(WARNING)
             << "Fallback mmap cannot honor alignment=" << alignment
             << " (guaranteed=" << guaranteed_alignment
             << "); pointer may be under-aligned"
@@ -272,12 +272,12 @@ void *allocate_buffer_mmap_memory(size_t total_size, size_t alignment) {
 
     void *ptr = mmap(nullptr, map_size, PROT_READ | PROT_WRITE, flags, -1, 0);
     if (ptr == MAP_FAILED) {
-        LOG_ERROR << "mmap failed, size=" << map_size << ", errno=" << errno
+        LOG(ERROR) << "mmap failed, size=" << map_size << ", errno=" << errno
                    << " (" << strerror(errno) << ")";
         return nullptr;
     }
 
-    LOG_INFO << "Allocated " << total_size << " bytes via mmap() at " << ptr;
+    LOG(INFO) << "Allocated " << total_size << " bytes via mmap() at " << ptr;
     return ptr;
 }
 
@@ -292,7 +292,7 @@ void free_buffer_mmap_memory(void *ptr, size_t total_size) {
     if (g_mmap_arena && g_mmap_arena->owns(ptr)) {
         const uint64_t noop_free_count =
             g_arena_noop_free_count.fetch_add(1, std::memory_order_relaxed) + 1;
-        LOG_WARNING
+        LOG(WARNING)
             << "free_buffer_mmap_memory() does not individually release "
                "arena-owned pointer "
             << ptr << "; the global arena releases its pool at process shutdown"
@@ -305,10 +305,10 @@ void free_buffer_mmap_memory(void *ptr, size_t total_size) {
     const size_t map_size =
         mmap_map_size(total_size, get_hugepage_size_from_env());
     if (munmap(ptr, map_size) != 0) {
-        LOG_ERROR << "munmap hugepage failed, size=" << map_size
+        LOG(ERROR) << "munmap hugepage failed, size=" << map_size
                    << ", errno=" << errno << " (" << strerror(errno) << ")";
     } else {
-        LOG_INFO << "Freed direct mmap allocation at " << ptr
+        LOG(INFO) << "Freed direct mmap allocation at " << ptr
                 << ", size=" << map_size;
     }
 }
@@ -318,7 +318,7 @@ void *allocate_buffer_numa_segments(size_t total_size,
                                     const std::vector<int> &numa_nodes,
                                     size_t page_size) {
     if (total_size == 0 || numa_nodes.empty()) {
-        LOG_ERROR << "Invalid params: total_size=" << total_size
+        LOG(ERROR) << "Invalid params: total_size=" << total_size
                    << " numa_nodes.size=" << numa_nodes.size();
         return nullptr;
     }
@@ -332,7 +332,7 @@ void *allocate_buffer_numa_segments(size_t total_size,
     void *ptr = mmap(nullptr, map_size, PROT_READ | PROT_WRITE,
                      MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
     if (ptr == MAP_FAILED) {
-        LOG_ERROR << "mmap failed, size=" << map_size << ", errno=" << errno
+        LOG(ERROR) << "mmap failed, size=" << map_size << ", errno=" << errno
                    << " (" << strerror(errno) << ")";
         return nullptr;
     }
@@ -347,7 +347,7 @@ void *allocate_buffer_numa_segments(size_t total_size,
             mbind(region, region_size, MPOL_BIND, mask->maskp, mask->size, 0);
         numa_bitmask_free(mask);
         if (rc != 0) {
-            LOG_ERROR << "mbind failed for NUMA " << numa_nodes[i]
+            LOG(ERROR) << "mbind failed for NUMA " << numa_nodes[i]
                        << ", errno=" << errno << " (" << strerror(errno) << ")";
             munmap(ptr, map_size);
             return nullptr;
@@ -359,7 +359,7 @@ void *allocate_buffer_numa_segments(size_t total_size,
     // Pages are allocated directly on the target NUMA during MR registration,
     // avoiding a redundant full-buffer traversal.
 
-    LOG_INFO << "Allocated NUMA-segmented buffer: " << map_size << " bytes, "
+    LOG(INFO) << "Allocated NUMA-segmented buffer: " << map_size << " bytes, "
               << n << " regions, page_size=" << page_size << ", nodes=[" <<
         [&]() {
             std::string s;

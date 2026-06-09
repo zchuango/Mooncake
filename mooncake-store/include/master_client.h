@@ -72,7 +72,7 @@ inline void ApplyRpcProtocolSocketConfig(SocketConfigVariant& socket_config) {
     switch (GetRpcProtocolFromEnv()) {
         case RpcProtocol::Urma:
             if (!MaybeEnableUrmaSocketConfig(socket_config)) {
-                MC_LOG_WARNING
+                MC_LOG(WARNING)
                     << "MC_RPC_PROTOCOL=urma requested but yalantinglibs was "
                        "not built with YLT_ENABLE_URMA; using TCP";
             }
@@ -80,11 +80,11 @@ inline void ApplyRpcProtocolSocketConfig(SocketConfigVariant& socket_config) {
         case RpcProtocol::Rdma:
             if (!MaybeEnableRdmaSocketConfig(socket_config)) {
                 if (MaybeEnableUrmaSocketConfig(socket_config)) {
-                    MC_LOG_WARNING
+                    MC_LOG(WARNING)
                         << "MC_RPC_PROTOCOL=rdma requested but "
                            "YLT_ENABLE_IBV is unavailable; using URMA";
                 } else {
-                    MC_LOG_WARNING
+                    MC_LOG(WARNING)
                         << "MC_RPC_PROTOCOL=rdma requested but no RDMA RPC "
                            "transport is enabled; using TCP";
                 }

@@ -103,7 +103,7 @@ static Status configureLaneCount(std::shared_ptr<Config> conf,
 
     if (num_cq_list != kUnset || qp_mul_factor != kUnset ||
         num_workers != kUnset) {
-        LOG_WARNING << "Legacy RDMA parallelism knobs "
+        LOG(WARNING) << "Legacy RDMA parallelism knobs "
                      << "(device.num_cq_list, endpoint.qp_mul_factor, "
                      << "workers.num_workers) are deprecated; prefer "
                      << "transports/rdma/num_lanes";
@@ -222,7 +222,7 @@ Status RdmaTransport::install(std::string& local_segment_name,
         auto context = std::make_shared<RdmaContext>(*this);
         int ret = context->construct(entry->name, params_);
         if (ret) {
-            LOG_WARNING << "Disable RDMA device " << entry->name << " because "
+            LOG(WARNING) << "Disable RDMA device " << entry->name << " because "
                          << "of initialization failure";
             continue;
         }
@@ -383,7 +383,7 @@ Status RdmaTransport::submitTransferTasks(
                     block_size, source_location, slice_dev_ids,
                     request.priority, batch->device_mask);
                 if (!status.ok() || slice_dev_ids.empty()) {
-                    LOG_WARNING << "Device quota allocation failed: "
+                    LOG(WARNING) << "Device quota allocation failed: "
                                  << status.message();
                 }
             }
@@ -457,11 +457,11 @@ bool RdmaTransport::warmupMemory(void* addr, size_t length) {
     if (!warmup_ctx) return false;
     int ret = warmupMrRegistrationParallel(warmup_ctx, addr, length);
     if (ret != 0) {
-        LOG_WARNING << "MR warm-up failed (rc=" << ret
+        LOG(WARNING) << "MR warm-up failed (rc=" << ret
                      << "), falling back to cold registration";
         return false;
     }
-    LOG_INFO << "MR warm-up succeeded for " << length << " bytes";
+    LOG(INFO) << "MR warm-up succeeded for " << length << " bytes";
     return true;
 }
 
@@ -507,7 +507,7 @@ int RdmaTransport::onSetupRdmaConnections(const BootstrapDesc& peer_desc,
     if (local_nic_name.empty() || !context_name_lookup_.count(local_nic_name)) {
         std::stringstream ss;
         ss << "No device found in local segment: " << local_nic_name;
-        LOG_ERROR << ss.str();
+        LOG(ERROR) << ss.str();
         local_desc.reply_msg = ss.str();
         return -1;
     }
@@ -516,7 +516,7 @@ int RdmaTransport::onSetupRdmaConnections(const BootstrapDesc& peer_desc,
     if (context->status() == RdmaContext::DEVICE_DISABLED) {
         std::stringstream ss;
         ss << "Device is down: " << peer_desc.local_nic_path;
-        LOG_ERROR << ss.str();
+        LOG(ERROR) << ss.str();
         local_desc.reply_msg = ss.str();
         return -1;
     }
@@ -525,13 +525,13 @@ int RdmaTransport::onSetupRdmaConnections(const BootstrapDesc& peer_desc,
     if (!endpoint) {
         std::stringstream ss;
         ss << "Cannot allocate endpoint: " << peer_desc.local_nic_path;
-        LOG_ERROR << ss.str();
+        LOG(ERROR) << ss.str();
         local_desc.reply_msg = ss.str();
         return -1;
     }
     auto status = endpoint->accept(peer_desc, local_desc);
     if (!status.ok()) {
-        LOG_ERROR << status.ToString();
+        LOG(ERROR) << status.ToString();
         local_desc.reply_msg = status.ToString();
         return -1;
     }
@@ -568,7 +568,7 @@ std::shared_ptr<RdmaEndPoint> RdmaTransport::getEndpoint(SegmentID target_id,
         });
 
     if (!status.ok()) {
-        LOG_ERROR << status.ToString();
+        LOG(ERROR) << status.ToString();
         return nullptr;
     }
 
@@ -580,7 +580,7 @@ std::shared_ptr<RdmaEndPoint> RdmaTransport::getEndpoint(SegmentID target_id,
     std::string peer_name = MakeNicPath(segment_desc->name, target_dev_name);
     endpoint = context->endpointStore()->getOrInsert(peer_name);
     if (!endpoint) {
-        LOG_ERROR << "Cannot allocate endpoint " << peer_name;
+        LOG(ERROR) << "Cannot allocate endpoint " << peer_name;
         return nullptr;
     }
     if (endpoint->status() != RdmaEndPoint::EP_READY) {
@@ -591,7 +591,7 @@ std::shared_ptr<RdmaEndPoint> RdmaTransport::getEndpoint(SegmentID target_id,
             uint64_t current_ts = getCurrentTimeInNano();
             if (current_ts - tl_last_output_ts > 10000000000ull) {
                 tl_last_output_ts = current_ts;
-                LOG_ERROR << "Unable to connect endpoint " << peer_name << ": "
+                LOG(ERROR) << "Unable to connect endpoint " << peer_name << ": "
                            << status.ToString();
             }
             return nullptr;
@@ -642,7 +642,7 @@ int RdmaTransport::processNotifyCompletions() {
         int completed = ibv_poll_cq(notify_cq->cq(), 16, wc);
 
         if (completed < 0) {
-            PLOG_ERROR << "Failed to poll notification CQ";
+            PLOG(ERROR) << "Failed to poll notification CQ";
             continue;
         }
 
@@ -651,7 +651,7 @@ int RdmaTransport::processNotifyCompletions() {
         // Process each completion
         for (int i = 0; i < completed; ++i) {
             if (wc[i].status != IBV_WC_SUCCESS) {
-                LOG_ERROR << "Notification completion failed: " << wc[i].status
+                LOG(ERROR) << "Notification completion failed: " << wc[i].status
                            << ", qp_num=" << wc[i].qp_num;
                 continue;
             }
@@ -667,7 +667,7 @@ int RdmaTransport::processNotifyCompletions() {
             }
 
             if (!endpoint) {
-                LOG_WARNING << "Received notification from unknown QP: "
+                LOG(WARNING) << "Received notification from unknown QP: "
                              << wc[i].qp_num;
                 continue;
             }

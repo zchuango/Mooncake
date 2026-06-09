@@ -9,6 +9,7 @@
 #include <string>
 
 #include <gtest/gtest.h>
+#include <spdlog/logger.h>
 
 namespace mooncake {
 namespace {
@@ -41,8 +42,8 @@ TEST(LoggingSpdlogFile, WritesFile)
     std::filesystem::create_directories(dir);
 
     Logger::Instance().Init(TestConfig(dir));
-    LOG_INFO << "spdlog_marker_abc";
-    spdlog::default_logger()->flush();
+    LOG(INFO) << "spdlog_marker_abc";
+    Logger::Instance().GetSpdlogger()->flush();
     Logger::Instance().Shutdown();
 
     auto content = ReadFile(dir / "logging_test.log");
@@ -57,10 +58,10 @@ TEST(LoggingMacros, CompatibilityMacrosCompileAndLog)
 
     Logger::Instance().Init(TestConfig(dir));
     LOG(INFO) << "log_info_marker";
-    LOG_WARNING << "log_warning_marker";
-    MC_LOG_INFO << "mc_log_info_marker";
+    LOG(WARNING) << "log_warning_marker";
+    MC_LOG(INFO) << "mc_log_info_marker";
     PLOG(ERROR) << "plog_error_marker";
-    spdlog::default_logger()->flush();
+    Logger::Instance().GetSpdlogger()->flush();
     Logger::Instance().Shutdown();
 
     auto content = ReadFile(dir / "logging_test.log");
@@ -90,9 +91,9 @@ TEST(LoggingRateLimiter, LimitsPerTrace)
     RateLimiter::Instance().SetRate(2);
     Trace::Instance().SetTraceID("rate-limit-trace");
 
-    EXPECT_TRUE(ShouldLog(spdlog::level::info));
-    EXPECT_TRUE(ShouldLog(spdlog::level::info));
-    EXPECT_FALSE(ShouldLog(spdlog::level::info));
+    EXPECT_TRUE(ShouldLog(LogLevel::kInfo));
+    EXPECT_TRUE(ShouldLog(LogLevel::kInfo));
+    EXPECT_FALSE(ShouldLog(LogLevel::kInfo));
 
     RateLimiter::Instance().SetRate(0);
     Trace::Instance().Invalidate();

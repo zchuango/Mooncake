@@ -26,7 +26,7 @@ DEFINE_int32(gpu_id, 0, "GPU ID to use");
 
 static void checkCudaError(cudaError_t result, const char* message) {
     if (result != cudaSuccess) {
-        LOG_ERROR << message << " (Error code: " << result << " - "
+        LOG(ERROR) << message << " (Error code: " << result << " - "
                    << cudaGetErrorString(result) << ")";
         exit(EXIT_FAILURE);
     }

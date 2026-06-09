@@ -338,13 +338,13 @@ TEST_F(DummyClientGetBufferTest, Perf_HotCacheVsFallback) {
     double fallback_ms =
         std::chrono::duration<double, std::milli>(t3 - t2).count() / iterations;
 
-    LOG_INFO << "=== get_buffer latency (avg over " << iterations
+    LOG(INFO) << "=== get_buffer latency (avg over " << iterations
               << " iterations, payload=" << payload_size / kMB << " MB) ===";
-    LOG_INFO << "  Hot cache path : " << std::fixed << std::setprecision(2)
+    LOG(INFO) << "  Hot cache path : " << std::fixed << std::setprecision(2)
               << hot_ms << " ms";
-    LOG_INFO << "  Fallback path  : " << std::fixed << std::setprecision(2)
+    LOG(INFO) << "  Fallback path  : " << std::fixed << std::setprecision(2)
               << fallback_ms << " ms";
-    LOG_INFO << "  Speedup        : " << std::fixed << std::setprecision(2)
+    LOG(INFO) << "  Speedup        : " << std::fixed << std::setprecision(2)
               << fallback_ms / hot_ms << "x";
 
     // Hot cache should be faster (no data copy, no allocator round-trip)
@@ -390,13 +390,13 @@ TEST_F(DummyClientGetBufferTest, Perf_BatchHotVsCold) {
     double fallback_ms =
         std::chrono::duration<double, std::milli>(t3 - t2).count() / iterations;
 
-    LOG_INFO << "=== batch_get_buffer latency (avg over " << iterations
+    LOG(INFO) << "=== batch_get_buffer latency (avg over " << iterations
               << " iterations, 2 keys x " << payload_size / kMB << " MB) ===";
-    LOG_INFO << "  Hot cache path : " << std::fixed << std::setprecision(2)
+    LOG(INFO) << "  Hot cache path : " << std::fixed << std::setprecision(2)
               << hot_ms << " ms";
-    LOG_INFO << "  Fallback path  : " << std::fixed << std::setprecision(2)
+    LOG(INFO) << "  Fallback path  : " << std::fixed << std::setprecision(2)
               << fallback_ms << " ms";
-    LOG_INFO << "  Speedup        : " << std::fixed << std::setprecision(2)
+    LOG(INFO) << "  Speedup        : " << std::fixed << std::setprecision(2)
               << fallback_ms / hot_ms << "x";
 
     EXPECT_LT(hot_ms, fallback_ms)

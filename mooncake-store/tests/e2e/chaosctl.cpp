@@ -28,7 +28,7 @@ DEFINE_int32(client_op_prob, 1000, "Probability weight for client operations");
 // Custom validators for the flags
 DEFINE_validator(master_num, [](const char* flagname, int32_t value) {
     if (value <= 0) {
-        LOG_FATAL << "master_num must be greater than 0, got: " << value;
+        LOG(FATAL) << "master_num must be greater than 0, got: " << value;
         return false;
     }
     return true;
@@ -36,7 +36,7 @@ DEFINE_validator(master_num, [](const char* flagname, int32_t value) {
 
 DEFINE_validator(client_num, [](const char* flagname, int32_t value) {
     if (value <= 0) {
-        LOG_FATAL << "client_num must be greater than 0, got: " << value;
+        LOG(FATAL) << "client_num must be greater than 0, got: " << value;
         return false;
     }
     return true;
@@ -59,7 +59,7 @@ std::map<std::string, int> count_test_string(const std::string& filename) {
 
     std::ifstream file(filename);
     if (!file.is_open()) {
-        LOG_WARNING << "Could not open file for analysis: " << filename;
+        LOG(WARNING) << "Could not open file for analysis: " << filename;
         return counts;
     }
 
@@ -142,7 +142,7 @@ void generate_testing_report(int master_num, int client_num,
     }
 
     // Output the report
-    LOG_INFO << "Testing Report:\n" << report.str();
+    LOG(INFO) << "Testing Report:\n" << report.str();
 }
 
 int main(int argc, char* argv[]) {
@@ -156,14 +156,14 @@ int main(int argc, char* argv[]) {
     gflags::ParseCommandLineFlags(&argc, &argv, true);
 
     // Log the parsed parameters
-    LOG_INFO << "Chaos testing configuration:";
-    LOG_INFO << "  master_num: " << FLAGS_master_num;
-    LOG_INFO << "  client_num: " << FLAGS_client_num;
-    LOG_INFO << "  master_path: " << FLAGS_master_path;
-    LOG_INFO << "  out_dir: " << FLAGS_out_dir;
-    LOG_INFO << "  skip_run: " << FLAGS_skip_run;
-    LOG_INFO << "  run_sec: " << FLAGS_run_sec;
-    LOG_INFO << "  rand_seed: " << FLAGS_rand_seed;
+    LOG(INFO) << "Chaos testing configuration:";
+    LOG(INFO) << "  master_num: " << FLAGS_master_num;
+    LOG(INFO) << "  client_num: " << FLAGS_client_num;
+    LOG(INFO) << "  master_path: " << FLAGS_master_path;
+    LOG(INFO) << "  out_dir: " << FLAGS_out_dir;
+    LOG(INFO) << "  skip_run: " << FLAGS_skip_run;
+    LOG(INFO) << "  run_sec: " << FLAGS_run_sec;
+    LOG(INFO) << "  rand_seed: " << FLAGS_rand_seed;
 
     int master_num = FLAGS_master_num;
     int client_num = FLAGS_client_num;
@@ -216,7 +216,7 @@ int main(int argc, char* argv[]) {
 
         // Log start time
         auto start_time = std::chrono::steady_clock::now();
-        LOG_INFO << "Chaos testing started at: "
+        LOG(INFO) << "Chaos testing started at: "
                   << std::chrono::duration_cast<std::chrono::seconds>(
                          start_time.time_since_epoch())
                          .count();
@@ -229,7 +229,7 @@ int main(int argc, char* argv[]) {
                                                                  start_time)
                     .count();
             if (elapsed_seconds >= FLAGS_run_sec) {
-                LOG_INFO << "Chaos testing completed after " << elapsed_seconds
+                LOG(INFO) << "Chaos testing completed after " << elapsed_seconds
                           << " seconds";
                 break;
             }

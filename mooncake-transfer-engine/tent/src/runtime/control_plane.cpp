@@ -346,7 +346,7 @@ void ControlService::onSegmentUpdated(const std::string_view& request,
 
     manager_->invalidateAllCacheForRemote(segment_name);
 
-    LOG_INFO << "Invalidated cache for segment " << segment_name
+    LOG(INFO) << "Invalidated cache for segment " << segment_name
             << " due to remote update notification";
 }
 
@@ -358,7 +358,7 @@ void ControlClient::subscribeSegmentUpdateAsync(
         server_addr, SubscribeSegmentUpdate, request,
         [](const Status& status, const std::string&) {
             if (!status.ok()) {
-                LOG_ERROR << "SubscribeSegmentUpdate RPC failed with: "
+                LOG(ERROR) << "SubscribeSegmentUpdate RPC failed with: "
                            << status.ToString();
             }
         });

@@ -52,7 +52,7 @@
 
 static void checkCudaError(cudaError_t result, const char *message) {
     if (result != cudaSuccess) {
-        LOG_ERROR << message << " (Error code: " << result << " - "
+        LOG(ERROR) << message << " (Error code: " << result << " - "
                    << cudaGetErrorString(result) << ")" << std::endl;
         exit(EXIT_FAILURE);
     }
@@ -149,7 +149,7 @@ static void freeMemoryPool(void *addr, size_t size) {
                attributes.type == cudaMemoryTypeUnregistered) {
         numa_free(addr, size);
     } else {
-        LOG_ERROR << "Unknown memory type, " << addr << " " << attributes.type;
+        LOG(ERROR) << "Unknown memory type, " << addr << " " << attributes.type;
     }
 #else
     numa_free(addr, size);
@@ -169,11 +169,11 @@ const static std::unordered_map<std::string, uint64_t> RATE_UNIT_MP = {
 
 static inline std::string calculateRate(uint64_t data_bytes, double duration) {
     if (std::fabs(duration) < 1e-10) {
-        LOG_ERROR << "Invalid args: duration shouldn't be 0";
+        LOG(ERROR) << "Invalid args: duration shouldn't be 0";
         return "";
     }
     if (!RATE_UNIT_MP.count(FLAGS_report_unit)) {
-        LOG_WARNING << "Invalid flag: report_unit only support "
+        LOG(WARNING) << "Invalid flag: report_unit only support "
                         "GB|GiB|Gb|MB|MiB|Mb|KB|KiB|Kb, not support "
                      << FLAGS_report_unit
                      << " . Now use GB(default) as report_unit";
@@ -198,13 +198,13 @@ Status initiatorWorker(TransferEngine *engine, SegmentID segment_id,
     else if (FLAGS_operation == "write")
         opcode = TransferRequest::WRITE;
     else {
-        LOG_ERROR << "Unsupported operation: must be 'read' or 'write'";
+        LOG(ERROR) << "Unsupported operation: must be 'read' or 'write'";
         exit(EXIT_FAILURE);
     }
 
     auto segment_desc = engine->getMetadata()->getSegmentDescByID(segment_id);
     if (!segment_desc) {
-        LOG_ERROR << "Unable to get target segment ID, please recheck";
+        LOG(ERROR) << "Unable to get target segment ID, please recheck";
         exit(EXIT_FAILURE);
     }
     uint64_t remote_base =
@@ -233,7 +233,7 @@ Status initiatorWorker(TransferEngine *engine, SegmentID segment_id,
         notify.name = "agent1";
         notify.notify_msg = "notification" + std::to_string(transfer_count);
         s = engine->submitTransferWithNotify(batch_id, requests, notify);
-        if (!s.ok()) LOG_ERROR << s.ToString();
+        if (!s.ok()) LOG(ERROR) << s.ToString();
         LOG_ASSERT(s.ok());
         for (int task_id = 0; task_id < FLAGS_batch_size; ++task_id) {
             bool completed = false;
@@ -244,7 +244,7 @@ Status initiatorWorker(TransferEngine *engine, SegmentID segment_id,
                 if (status.s == TransferStatusEnum::COMPLETED)
                     completed = true;
                 else if (status.s == TransferStatusEnum::FAILED) {
-                    LOG_INFO << "FAILED";
+                    LOG(INFO) << "FAILED";
                     completed = true;
                     exit(EXIT_FAILURE);
                 }
@@ -256,7 +256,7 @@ Status initiatorWorker(TransferEngine *engine, SegmentID segment_id,
         batch_count++;
         sleep(1);
     }
-    LOG_INFO << "Worker " << thread_id << " stopped!";
+    LOG(INFO) << "Worker " << thread_id << " stopped!";
     total_batch_count.fetch_add(batch_count);
     return Status::OK();
 }
@@ -334,7 +334,7 @@ int initiator() {
         } else if (FLAGS_protocol == "hip") {
             xport = engine->installTransport("hip", nullptr);
         } else {
-            LOG_ERROR << "Unsupported protocol";
+            LOG(ERROR) << "Unsupported protocol";
         }
         LOG_ASSERT(xport);
     }
@@ -344,7 +344,7 @@ int initiator() {
 
 #if defined(USE_CUDA) || defined(USE_MUSA) || defined(USE_HIP) || \
     defined(USE_MACA) || defined(USE_HYGON) || defined(USE_COREX)
-    if (FLAGS_use_vram) LOG_INFO << "VRAM is used";
+    if (FLAGS_use_vram) LOG(INFO) << "VRAM is used";
     for (int i = 0; i < buffer_num; ++i) {
         addr[i] = allocateMemoryPool(FLAGS_buffer_size, i, FLAGS_use_vram);
         std::string name_prefix = FLAGS_use_vram ? GPU_PREFIX : "cpu:";
@@ -383,9 +383,9 @@ int initiator() {
                     (stop_tv.tv_usec - start_tv.tv_usec) / 1000000.0;
     auto batch_count = total_batch_count.load();
 
-    LOG_INFO << "numa node num: " << NR_SOCKETS;
+    LOG(INFO) << "numa node num: " << NR_SOCKETS;
 
-    LOG_INFO << "Test completed: duration " << std::fixed
+    LOG(INFO) << "Test completed: duration " << std::fixed
               << std::setprecision(2) << duration << ", batch count "
               << batch_count << ", throughput "
               << calculateRate(
@@ -403,7 +403,7 @@ int initiator() {
 volatile bool target_running = true;
 
 void signalHandler(int signum) {
-    LOG_INFO << "Received signal " << signum << ", stopping target server...";
+    LOG(INFO) << "Received signal " << signum << ", stopping target server...";
     target_running = false;
 }
 
@@ -435,7 +435,7 @@ int target() {
         } else if (FLAGS_protocol == "hip") {
             engine->installTransport("hip", nullptr);
         } else {
-            LOG_ERROR << "Unsupported protocol";
+            LOG(ERROR) << "Unsupported protocol";
         }
     }
 
@@ -444,7 +444,7 @@ int target() {
 
 #if defined(USE_CUDA) || defined(USE_MUSA) || defined(USE_HIP) || \
     defined(USE_MACA) || defined(USE_HYGON) || defined(USE_COREX)
-    if (FLAGS_use_vram) LOG_INFO << "VRAM is used";
+    if (FLAGS_use_vram) LOG(INFO) << "VRAM is used";
     for (int i = 0; i < buffer_num; ++i) {
         addr[i] = allocateMemoryPool(FLAGS_buffer_size, i, FLAGS_use_vram);
         std::string name_prefix = FLAGS_use_vram ? GPU_PREFIX : "cpu:";
@@ -461,14 +461,14 @@ int target() {
     }
 #endif
 
-    LOG_INFO << "numa node num: " << NR_SOCKETS;
+    LOG(INFO) << "numa node num: " << NR_SOCKETS;
 
     std::vector<TransferMetadata::NotifyDesc> notifies;
     while (target_running) {
         sleep(1);
         engine->getNotifies(notifies);
         for (auto notify : notifies) {
-            LOG_INFO << notify.name << notify.notify_msg;
+            LOG(INFO) << notify.name << notify.notify_msg;
         }
         notifies.clear();
     }
@@ -484,7 +484,7 @@ void check_total_buffer_size() {
     uint64_t require_size = FLAGS_block_size * FLAGS_batch_size * FLAGS_threads;
     if (FLAGS_buffer_size < require_size) {
         FLAGS_buffer_size = require_size;
-        LOG_WARNING << "Invalid flag: buffer size is smaller than "
+        LOG(WARNING) << "Invalid flag: buffer size is smaller than "
                         "require_size, adjust to "
                      << require_size;
     }
@@ -499,6 +499,6 @@ int main(int argc, char **argv) {
     else if (FLAGS_mode == "target")
         return target();
 
-    LOG_ERROR << "Unsupported mode: must be 'initiator' or 'target'";
+    LOG(ERROR) << "Unsupported mode: must be 'initiator' or 'target'";
     exit(EXIT_FAILURE);
 }

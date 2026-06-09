@@ -28,7 +28,7 @@ EtcdOpLogStore::EtcdOpLogStore(const std::string& cluster_id,
       enable_batch_write_(enable_batch_write),
       last_update_time_(std::chrono::steady_clock::now()) {
     if (!NormalizeAndValidateClusterId(cluster_id_)) {
-        LOG_FATAL
+        LOG(FATAL)
             << "Invalid cluster_id for EtcdOpLogStore: '" << cluster_id_
             << "'. Allowed chars: [A-Za-z0-9_.-], max_len=128, no slashes.";
     }
@@ -53,30 +53,30 @@ ErrorCode EtcdOpLogStore::Init() {
                 EtcdHelper::Create(latest_key.c_str(), latest_key.size(),
                                    initial_value.c_str(), initial_value.size());
             if (create_err == ErrorCode::OK) {
-                LOG_INFO << "Initialized /latest key to 0 for cluster_id="
+                LOG(INFO) << "Initialized /latest key to 0 for cluster_id="
                           << cluster_id_;
             } else if (create_err == ErrorCode::ETCD_TRANSACTION_FAIL) {
                 // Race condition: another instance created it between Get and
                 // Create
-                LOG_INFO << "/latest key was created by another instance for "
+                LOG(INFO) << "/latest key was created by another instance for "
                              "cluster_id="
                           << cluster_id_;
             } else {
                 // Other errors (e.g., etcd not connected) are logged but don't
                 // fail initialization. The key will be created when the first
                 // OpLog entry is written
-                LOG_WARNING
+                LOG(WARNING)
                     << "Failed to initialize /latest key (error=" << create_err
                     << "), will be created on first OpLog write";
             }
         } else if (get_err == ErrorCode::OK) {
             // Key already exists, do nothing - preserve existing value
-            LOG_INFO << "/latest key already exists (value=" << existing_value
+            LOG(INFO) << "/latest key already exists (value=" << existing_value
                       << ") for cluster_id=" << cluster_id_;
         } else {
             // Other errors (e.g., etcd not connected) are logged but don't fail
             // initialization
-            LOG_WARNING << "Failed to check /latest key existence (error="
+            LOG(WARNING) << "Failed to check /latest key existence (error="
                          << get_err
                          << "), will be created on first OpLog write";
         }
@@ -134,7 +134,7 @@ EtcdOpLogStore::~EtcdOpLogStore() {
 
 ErrorCode EtcdOpLogStore::WriteOpLog(const OpLogEntry& entry, bool sync) {
     if (!enable_batch_write_) {
-        LOG_ERROR << "WriteOpLog called on a read-only EtcdOpLogStore "
+        LOG(ERROR) << "WriteOpLog called on a read-only EtcdOpLogStore "
                    << "(enable_batch_write=false), cluster_id=" << cluster_id_;
         return ErrorCode::INVALID_PARAMS;
     }
@@ -168,7 +168,7 @@ ErrorCode EtcdOpLogStore::WriteOpLog(const OpLogEntry& entry, bool sync) {
                 lock, std::chrono::milliseconds(kSyncWaitTimeoutMs),
                 [&] { return last_persisted_seq_id_.load() >= target_seq; });
             if (!success) {
-                LOG_ERROR << "Timeout waiting for OpLog persistence, seq="
+                LOG(ERROR) << "Timeout waiting for OpLog persistence, seq="
                            << target_seq;
                 return ErrorCode::ETCD_OPERATION_ERROR;
             }
@@ -257,7 +257,7 @@ void EtcdOpLogStore::FlushBatch() {
             // on the etcd side. Since OpLog entries are idempotent (same
             // sequence_id -> same key/value), we can safely fall back to
             // individual Put (overwrite) for the remaining keys.
-            LOG_WARNING
+            LOG(WARNING)
                 << "BatchCreate transaction failed (keys already exist), "
                 << "falling back to per-key Put for " << keys.size()
                 << " entries";
@@ -267,7 +267,7 @@ void EtcdOpLogStore::FlushBatch() {
                     EtcdHelper::Put(keys[j].c_str(), keys[j].size(),
                                     values[j].c_str(), values[j].size());
                 if (put_err != ErrorCode::OK) {
-                    LOG_ERROR << "Fallback Put failed for key=" << keys[j];
+                    LOG(ERROR) << "Fallback Put failed for key=" << keys[j];
                     all_ok = false;
                 }
             }
@@ -277,7 +277,7 @@ void EtcdOpLogStore::FlushBatch() {
             break;  // Do not retry further; fallback already handled it.
         }
         if (i < kFlushRetryCount) {
-            LOG_WARNING << "Failed to flush OpLog batch (attempt " << i + 1
+            LOG(WARNING) << "Failed to flush OpLog batch (attempt " << i + 1
                          << "/" << kFlushRetryCount + 1 << "), retrying...";
             std::this_thread::sleep_for(
                 std::chrono::milliseconds(kFlushRetryIntervalMs));
@@ -300,11 +300,11 @@ void EtcdOpLogStore::FlushBatch() {
             }
 
             if (batch_to_write.size() > 1) {
-                LOG_INFO
+                LOG(INFO)
                     << "HA Strategy: Group Commit flush success. batch_size="
                     << batch_to_write.size() << ", max_seq=" << max_seq;
             } else {
-                LOG_INFO
+                LOG(INFO)
                     << "HA Strategy: Group Commit flush success. batch_size=1, "
                        "max_seq="
                     << max_seq;
@@ -315,7 +315,7 @@ void EtcdOpLogStore::FlushBatch() {
                 }
             }
         } else {
-            LOG_ERROR << "Failed to flush OpLog batch, count="
+            LOG(ERROR) << "Failed to flush OpLog batch, count="
                        << batch_to_write.size();
         }
     }
@@ -340,7 +340,7 @@ ErrorCode EtcdOpLogStore::ReadOpLog(uint64_t sequence_id, OpLogEntry& entry) {
     }
 
     if (!mooncake::DeserializeOpLogEntry(value, entry)) {
-        LOG_ERROR << "Failed to deserialize OpLog entry, sequence_id="
+        LOG(ERROR) << "Failed to deserialize OpLog entry, sequence_id="
                    << sequence_id;
         return ErrorCode::INTERNAL_ERROR;
     }
@@ -405,7 +405,7 @@ ErrorCode EtcdOpLogStore::ReadOpLogSinceWithRevision(
         std::string errs;
         std::istringstream s(json);
         if (!Json::parseFromStream(reader, s, &root, &errs)) {
-            LOG_ERROR << "Failed to parse range JSON: " << errs;
+            LOG(ERROR) << "Failed to parse range JSON: " << errs;
             return ErrorCode::INTERNAL_ERROR;
         }
         if (!root.isArray()) {
@@ -442,7 +442,7 @@ ErrorCode EtcdOpLogStore::ReadOpLogSinceWithRevision(
             OpLogEntry entry;
             const std::string value = kv.get("value", "").asString();
             if (!mooncake::DeserializeOpLogEntry(value, entry)) {
-                LOG_ERROR << "Failed to deserialize OpLog entry from key="
+                LOG(ERROR) << "Failed to deserialize OpLog entry from key="
                            << key;
                 return ErrorCode::INTERNAL_ERROR;
             }
@@ -479,7 +479,7 @@ ErrorCode EtcdOpLogStore::GetLatestSequenceId(uint64_t& sequence_id) {
     try {
         sequence_id = std::stoull(value);
     } catch (const std::exception& e) {
-        LOG_ERROR << "Failed to parse latest sequence_id: " << e.what();
+        LOG(ERROR) << "Failed to parse latest sequence_id: " << e.what();
         return ErrorCode::INTERNAL_ERROR;
     }
 
@@ -527,7 +527,7 @@ ErrorCode EtcdOpLogStore::GetSnapshotSequenceId(const std::string& snapshot_id,
     try {
         sequence_id = std::stoull(value);
     } catch (const std::exception& e) {
-        LOG_ERROR << "Failed to parse snapshot sequence_id: " << e.what();
+        LOG(ERROR) << "Failed to parse snapshot sequence_id: " << e.what();
         return ErrorCode::INTERNAL_ERROR;
     }
 
@@ -686,14 +686,14 @@ void EtcdOpLogStore::DoBatchUpdate() {
     // Update latest_sequence_id in etcd
     ErrorCode err = UpdateLatestSequenceId(seq_id_to_update);
     if (err != ErrorCode::OK) {
-        LOG_WARNING << "Failed to batch update latest_sequence_id="
+        LOG(WARNING) << "Failed to batch update latest_sequence_id="
                      << seq_id_to_update << ", error=" << err
                      << ". Will retry in next batch.";
         // Restore the count so it will be retried
         pending_count_.fetch_add(count);
     } else {
         last_update_time_ = std::chrono::steady_clock::now();
-        LOG_INFO << "Batch updated latest_sequence_id=" << seq_id_to_update
+        LOG(INFO) << "Batch updated latest_sequence_id=" << seq_id_to_update
                 << " (count=" << count << " entries)";
     }
 }

@@ -187,7 +187,7 @@ TEST_F(MultiProtocolTransportTest, MultiWrite) {
             if (status.s == TransferStatusEnum::COMPLETED)
                 completed = true;
             else if (status.s == TransferStatusEnum::FAILED) {
-                LOG_INFO << "FAILED";
+                LOG(INFO) << "FAILED";
                 completed = true;
             }
         }

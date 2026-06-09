@@ -126,19 +126,19 @@ int main(int argc, char *argv[]) {
         nullptr, "@mooncake_client_" + std::to_string(FLAGS_port) + ".sock",
         FLAGS_port, FLAGS_enable_offload, FLAGS_start_offload_rpc_server);
     if (!res) {
-        LOG_ERROR << "Failed to setup client: " << toString(res.error());
+        LOG(ERROR) << "Failed to setup client: " << toString(res.error());
         return -1;
     }
 
     if (client_inst->start_dummy_client_monitor()) {
-        LOG_ERROR << "Failed to start dummy client monitor thread";
+        LOG(ERROR) << "Failed to start dummy client monitor thread";
         return -1;
     }
 
     coro_rpc::coro_rpc_server server(FLAGS_threads, FLAGS_port, FLAGS_host);
     RegisterClientRpcService(server, *client_inst);
 
-    LOG_INFO << "Starting real client service on " << FLAGS_host << ":"
+    LOG(INFO) << "Starting real client service on " << FLAGS_host << ":"
               << FLAGS_port;
 
     return server.start();

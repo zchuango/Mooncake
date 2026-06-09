@@ -54,11 +54,11 @@ class EFATransportTest : public ::testing::Test {
 
         const char *env = std::getenv("MC_METADATA_SERVER");
         metadata_server_ = env ? env : "P2PHANDSHAKE";
-        LOG_INFO << "metadata_server: " << metadata_server_;
+        LOG(INFO) << "metadata_server: " << metadata_server_;
 
         env = std::getenv("MC_LOCAL_SERVER_NAME");
         local_server_name_ = env ? env : "127.0.0.1:12345";
-        LOG_INFO << "local_server_name: " << local_server_name_;
+        LOG(INFO) << "local_server_name: " << local_server_name_;
     }
 
     void TearDown() override { google::ShutdownGoogleLogging(); }
@@ -125,7 +125,7 @@ class EFATransportTest : public ::testing::Test {
 
         Status s = engine->submitTransfer(batch_id, {entry});
         if (!s.ok()) {
-            LOG_ERROR << "submitTransfer failed: " << s.ToString();
+            LOG(ERROR) << "submitTransfer failed: " << s.ToString();
             engine->freeBatchID(batch_id);
             return false;
         }
@@ -136,7 +136,7 @@ class EFATransportTest : public ::testing::Test {
         for (int i = 0; i < kMaxPollIterations; ++i) {
             s = engine->getTransferStatus(batch_id, 0, status);
             if (!s.ok()) {
-                LOG_ERROR << "getTransferStatus failed: " << s.ToString();
+                LOG(ERROR) << "getTransferStatus failed: " << s.ToString();
                 engine->freeBatchID(batch_id);
                 return false;
             }
@@ -145,12 +145,12 @@ class EFATransportTest : public ::testing::Test {
                 return true;
             }
             if (status.s == TransferStatusEnum::FAILED) {
-                LOG_ERROR << "Transfer FAILED";
+                LOG(ERROR) << "Transfer FAILED";
                 engine->freeBatchID(batch_id);
                 return false;
             }
         }
-        LOG_ERROR << "Transfer timed out";
+        LOG(ERROR) << "Transfer timed out";
         engine->freeBatchID(batch_id);
         return false;
     }

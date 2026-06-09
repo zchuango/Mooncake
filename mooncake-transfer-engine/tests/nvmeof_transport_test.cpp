@@ -127,7 +127,7 @@ TEST_F(NVMeofTransportTest, MultiWrite) {
             if (status.s == TransferStatusEnum::COMPLETED)
                 completed = true;
             else if (status.s == TransferStatusEnum::FAILED) {
-                LOG_INFO << "FAILED";
+                LOG(INFO) << "FAILED";
                 completed = true;
             }
         }
@@ -161,7 +161,7 @@ TEST_F(NVMeofTransportTest, MultipleRead) {
             if (status.s == TransferStatusEnum::COMPLETED)
                 completed = true;
             else if (status.s == TransferStatusEnum::FAILED) {
-                LOG_INFO << "FAILED";
+                LOG(INFO) << "FAILED";
                 completed = true;
             }
         }

@@ -46,7 +46,7 @@ static std::vector<Topology::NicEntry> listInfiniBandDevices() {
 
     struct ibv_device** device_list = ibv_get_device_list(&num_devices);
     if (!device_list || num_devices <= 0) {
-        LOG_WARNING << "No RDMA devices found, check your device installation";
+        LOG(WARNING) << "No RDMA devices found, check your device installation";
         return {};
     }
 
@@ -60,7 +60,7 @@ static std::vector<Topology::NicEntry> listInfiniBandDevices() {
         snprintf(path, sizeof(path), "/sys/class/infiniband/%s/../..",
                  device_name.c_str());
         if (realpath(path, resolved_path) == NULL) {
-            PLOG_ERROR << "realpath " << path << ":";
+            PLOG(ERROR) << "realpath " << path << ":";
             continue;
         }
         std::string pci_bus_id = basename(resolved_path);
@@ -108,7 +108,7 @@ static void discoverCpuTopology(std::vector<Topology::NicEntry>& nic_list,
     DIR* dir = opendir("/sys/devices/system/node");
     struct dirent* entry;
     if (dir == NULL) {
-        PLOG_WARNING << "open /sys/devices/system/node failed";
+        PLOG(WARNING) << "open /sys/devices/system/node failed";
         return;
     }
     while ((entry = readdir(dir))) {
@@ -181,14 +181,14 @@ static void discoverCudaTopology(std::vector<Topology::NicEntry>& nic_list,
     int device_count;
     auto err = cudaGetDeviceCount(&device_count);
     if (err != cudaSuccess) {
-        LOG_WARNING << "cudaGetDeviceCount: " << cudaGetErrorString(err);
+        LOG(WARNING) << "cudaGetDeviceCount: " << cudaGetErrorString(err);
         device_count = 0;
     }
     for (int i = 0; i < device_count; i++) {
         char pci_bus_id[20];
         err = cudaDeviceGetPCIBusId(pci_bus_id, sizeof(pci_bus_id), i);
         if (err != cudaSuccess) {
-            LOG_WARNING << "cudaDeviceGetPCIBusId: "
+            LOG(WARNING) << "cudaDeviceGetPCIBusId: "
                          << cudaGetErrorString(err);
             continue;
         }
@@ -268,7 +268,7 @@ MemoryType CudaPlatform::getMemoryType(void* addr) {
     cudaError_t result;
     result = cudaPointerGetAttributes(&attributes, addr);
     if (result != cudaSuccess) {
-        LOG_WARNING << "cudaPointerGetAttributes: "
+        LOG(WARNING) << "cudaPointerGetAttributes: "
                      << cudaGetErrorString(result);
         return MTYPE_UNKNOWN;
     }
@@ -302,7 +302,7 @@ const std::vector<RangeLocation> CudaPlatform::getLocation(void* start,
 
     result = cudaPointerGetAttributes(&attributes, start);
     if (result != cudaSuccess) {
-        LOG_WARNING << "cudaPointerGetAttributes: "
+        LOG(WARNING) << "cudaPointerGetAttributes: "
                      << cudaGetErrorString(result);
         entries.push_back({(uint64_t)start, len, kWildcardLocation});
         return entries;
@@ -331,7 +331,7 @@ const std::vector<RangeLocation> CudaPlatform::getLocation(void* start,
 
     int rc = numa_move_pages(0, n, pages, nullptr, status, 0);
     if (rc != 0) {
-        // PLOG_WARNING << "Failed to get NUMA node, addr: " << start
+        // PLOG(WARNING) << "Failed to get NUMA node, addr: " << start
         //               << ", len: " << len;
         entries.push_back({(uint64_t)start, len, kWildcardLocation});
         ::free(pages);

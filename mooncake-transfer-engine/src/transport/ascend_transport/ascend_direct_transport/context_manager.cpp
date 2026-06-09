@@ -28,7 +28,7 @@ namespace {
 // Helper function to check ACL return code
 bool checkAclError(aclError error, const char *message) {
     if (error != ACL_ERROR_NONE) {
-        LOG_ERROR << message << ", error: " << error << ", "
+        LOG(ERROR) << message << ", error: " << error << ", "
                    << aclGetRecentErrMsg();
         return false;
     }
@@ -44,7 +44,7 @@ ContextManager &ContextManager::getInstance() {
 bool ContextManager::initialize() {
     std::lock_guard<std::mutex> lock(mutex_);
     if (initialized_) {
-        LOG_INFO << "ContextManager already initialized";
+        LOG(INFO) << "ContextManager already initialized";
         return true;
     }
 
@@ -58,7 +58,7 @@ bool ContextManager::initialize() {
         return false;
     }
 
-    LOG_INFO << "ContextManager: found " << device_count_ << " device(s)";
+    LOG(INFO) << "ContextManager: found " << device_count_ << " device(s)";
 
     int32_t saved_logic_device = 0;
     ret = aclrtGetDevice(&saved_logic_device);
@@ -101,7 +101,7 @@ bool ContextManager::initialize() {
         auto existing = physical_to_logic_.find(physical_id);
         if (existing != physical_to_logic_.end() &&
             existing->second != logic_id) {
-            LOG_ERROR << "Duplicate physical device id " << physical_id
+            LOG(ERROR) << "Duplicate physical device id " << physical_id
                        << " for logic " << logic_id << " and "
                        << existing->second;
             contexts_.clear();
@@ -114,7 +114,7 @@ bool ContextManager::initialize() {
         logic_to_physical_.push_back(physical_id);
 
         contexts_.push_back(context);
-        LOG_INFO << "ContextManager: logic " << logic_id << " -> physical "
+        LOG(INFO) << "ContextManager: logic " << logic_id << " -> physical "
                   << physical_id;
     }
 
@@ -154,7 +154,7 @@ bool ContextManager::setCurrentContext(int32_t device_id) const {
     std::lock_guard<std::mutex> lock(mutex_);
     if (!initialized_ || device_id < 0 ||
         static_cast<uint32_t>(device_id) >= device_count_) {
-        LOG_ERROR << "Invalid device_id: " << device_id
+        LOG(ERROR) << "Invalid device_id: " << device_id
                    << ", initialized: " << initialized_
                    << ", device_count: " << device_count_;
         return false;
@@ -171,18 +171,18 @@ bool ContextManager::setCurrentContextByPhysicalId(
     int32_t physical_dev_id) const {
     std::lock_guard<std::mutex> lock(mutex_);
     if (!initialized_) {
-        LOG_ERROR << "ContextManager not initialized";
+        LOG(ERROR) << "ContextManager not initialized";
         return false;
     }
     auto it = physical_to_logic_.find(physical_dev_id);
     if (it == physical_to_logic_.end()) {
-        LOG_ERROR << "Physical device id not managed by this process: "
+        LOG(ERROR) << "Physical device id not managed by this process: "
                    << physical_dev_id;
         return false;
     }
     const int32_t logic_id = it->second;
     if (logic_id < 0 || static_cast<uint32_t>(logic_id) >= device_count_) {
-        LOG_ERROR << "Invalid logic id " << logic_id << " for physical "
+        LOG(ERROR) << "Invalid logic id " << logic_id << " for physical "
                    << physical_dev_id;
         return false;
     }
@@ -199,7 +199,7 @@ void ContextManager::finalize() {
         return;
     }
 
-    LOG_INFO << "ContextManager: finalizing " << device_count_ << " device(s)";
+    LOG(INFO) << "ContextManager: finalizing " << device_count_ << " device(s)";
     contexts_.clear();
     logic_to_physical_.clear();
     physical_to_logic_.clear();

@@ -303,7 +303,7 @@ Transport* TransferEngine::installTransport(const std::string& proto,
     if (use_tent_) {
         static bool g_present = false;
         if (!g_present) {
-            LOG_INFO << "installTransport not used by TENT";
+            LOG(INFO) << "installTransport not used by TENT";
             g_present = true;
         }
         return nullptr;
@@ -599,7 +599,7 @@ int TransferEngine::syncSegmentCache(const std::string& segment_name) {
 
 std::shared_ptr<TransferMetadata> TransferEngine::getMetadata() {
     if (use_tent_) {
-        LOG_WARNING << "API deprecated in Mooncake TENT";
+        LOG(WARNING) << "API deprecated in Mooncake TENT";
         return nullptr;
     } else
         return impl_->getMetadata();
@@ -627,7 +627,7 @@ int TransferEngine::numContexts() const {
 
 std::shared_ptr<Topology> TransferEngine::getLocalTopology() {
     if (use_tent_) {
-        LOG_WARNING << "API deprecated in Mooncake TENT";
+        LOG(WARNING) << "API deprecated in Mooncake TENT";
         return std::make_shared<Topology>();
     } else
         return impl_->getLocalTopology();

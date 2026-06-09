@@ -43,7 +43,7 @@
     do {                                                        \
         auto status_ = call;                                    \
         if (!status_.ok()) {                                    \
-            LOG_INFO << "Found error: " << status_.ToString(); \
+            LOG(INFO) << "Found error: " << status_.ToString(); \
             exit(EXIT_FAILURE);                                 \
         }                                                       \
     } while (0)
@@ -204,7 +204,7 @@ static inline void verifyData(void* addr, size_t length, uint8_t seed) {
         std::vector<uint8_t> act_data(length);
         cudaMemcpy(act_data.data(), addr, length, cudaMemcpyDefault);
         if (memcmp(act_data.data(), ref_data.data(), length)) {
-            LOG_FATAL << "Inconsistent data detected";
+            LOG(FATAL) << "Inconsistent data detected";
         }
         return;
     }
@@ -214,13 +214,13 @@ static inline void verifyData(void* addr, size_t length, uint8_t seed) {
         std::vector<uint8_t> act_data(length);
         hipMemcpy(act_data.data(), addr, length, hipMemcpyDefault);
         if (memcmp(act_data.data(), ref_data.data(), length)) {
-            LOG_FATAL << "Inconsistent data detected";
+            LOG(FATAL) << "Inconsistent data detected";
         }
         return;
     }
 #endif
     if (memcmp(addr, ref_data.data(), length)) {
-        LOG_FATAL << "Inconsistent data detected";
+        LOG(FATAL) << "Inconsistent data detected";
     }
 }
 

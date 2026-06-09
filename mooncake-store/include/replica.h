@@ -223,7 +223,7 @@ class Replica {
         } else if (replica_type == ReplicaType::NOF_SSD) {
             data_ = NoFReplicaData{std::move(buffer)};
         } else {
-            LOG_ERROR << "Invalid buffered replica type: " << replica_type;
+            LOG(ERROR) << "Invalid buffered replica type: " << replica_type;
         }
     }
 
@@ -416,7 +416,7 @@ class Replica {
             const auto& mem_data = std::get<MemoryReplicaData>(data_);
             return mem_data.buffer->size();
         } else {
-            LOG_ERROR << "Invalid replica type: " << type();
+            LOG(ERROR) << "Invalid replica type: " << type();
             return 0;
         }
     }
@@ -428,9 +428,9 @@ class Replica {
         if (status_ == ReplicaStatus::PROCESSING) {
             status_ = ReplicaStatus::COMPLETE;
         } else if (status_ == ReplicaStatus::COMPLETE) {
-            LOG_WARNING << "Replica already marked as complete";
+            LOG(WARNING) << "Replica already marked as complete";
         } else {
-            LOG_ERROR << "Invalid replica status: " << status_;
+            LOG(ERROR) << "Invalid replica status: " << status_;
         }
     }
 
@@ -438,7 +438,7 @@ class Replica {
         if (status_ == ReplicaStatus::COMPLETE) {
             status_ = ReplicaStatus::PROCESSING;
         } else {
-            LOG_ERROR << "Cannot mark_processing from status: " << status_;
+            LOG(ERROR) << "Cannot mark_processing from status: " << status_;
         }
     }
 
@@ -597,7 +597,7 @@ inline Replica::Descriptor Replica::get_descriptor() const {
             mem_desc.buffer_descriptor.size_ = 0;
             mem_desc.buffer_descriptor.buffer_address_ = 0;
             mem_desc.buffer_descriptor.transport_endpoint_ = "";
-            LOG_ERROR << "Trying to get invalid memory replica descriptor";
+            LOG(ERROR) << "Trying to get invalid memory replica descriptor";
         }
         desc.descriptor_variant = std::move(mem_desc);
     } else if (is_nof_replica()) {
@@ -609,7 +609,7 @@ inline Replica::Descriptor Replica::get_descriptor() const {
             nof_desc.buffer_descriptor.size_ = 0;
             nof_desc.buffer_descriptor.buffer_address_ = 0;
             nof_desc.buffer_descriptor.transport_endpoint_ = "";
-            LOG_ERROR << "Trying to get invalid nof replica descriptor";
+            LOG(ERROR) << "Trying to get invalid nof replica descriptor";
         }
         desc.descriptor_variant = std::move(nof_desc);
     } else if (is_disk_replica()) {

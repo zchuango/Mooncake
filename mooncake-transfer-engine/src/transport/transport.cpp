@@ -45,7 +45,7 @@ Status Transport::freeBatchID(BatchID batch_id) {
     const size_t task_count = batch_desc.task_list.size();
     for (size_t task_id = 0; task_id < task_count; task_id++) {
         if (!batch_desc.task_list[task_id].is_finished) {
-            LOG_ERROR << "BatchID cannot be freed until all tasks are done";
+            LOG(ERROR) << "BatchID cannot be freed until all tasks are done";
             return Status::BatchBusy(
                 "BatchID cannot be freed until all tasks are done");
         }

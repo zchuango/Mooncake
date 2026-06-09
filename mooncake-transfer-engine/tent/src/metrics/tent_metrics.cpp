@@ -84,7 +84,7 @@ Status TentMetrics::initialize(const MetricsConfig& config) {
         metric_report_thread_ = std::thread([this]() {
             while (metric_report_running_) {
                 std::string summary = getSummaryString();
-                LOG_INFO << "TENT Metrics: " << summary;
+                LOG(INFO) << "TENT Metrics: " << summary;
 
                 // Use condition variable for interruptible sleep
                 std::unique_lock<std::mutex> lock(metric_report_mutex_);
@@ -95,7 +95,7 @@ Status TentMetrics::initialize(const MetricsConfig& config) {
         });
     }
 
-    LOG_INFO
+    LOG(INFO)
         << "TENT metrics initialized successfully, HTTP server listening on "
         << config_.http_host << ":" << config_.http_port
         << ", runtime_enabled=" << (runtime_enabled_.load() ? "true" : "false");
@@ -168,7 +168,7 @@ void TentMetrics::shutdown() {
     histogram_boundaries_.clear();
 
     initialized_ = false;
-    LOG_INFO << "TENT metrics shutdown complete";
+    LOG(INFO) << "TENT metrics shutdown complete";
 }
 
 void TentMetrics::registerMetrics() {
@@ -275,7 +275,7 @@ std::string TentMetrics::getPrometheusMetrics() {
 
         return result;
     } catch (const std::exception& e) {
-        LOG_ERROR << "Failed to serialize Prometheus metrics: " << e.what();
+        LOG(ERROR) << "Failed to serialize Prometheus metrics: " << e.what();
         return "";
     }
 }
@@ -320,7 +320,7 @@ std::string TentMetrics::getJsonMetrics() {
 
         return root.dump(2);  // Pretty print with 2-space indent
     } catch (const std::exception& e) {
-        LOG_ERROR << "Failed to serialize JSON metrics: " << e.what();
+        LOG(ERROR) << "Failed to serialize JSON metrics: " << e.what();
         return R"({"error": "Failed to serialize metrics"})";
     }
 }
@@ -373,7 +373,7 @@ std::string TentMetrics::getSummaryString() {
 Status TentMetrics::initialize(const MetricsConfig& config) {
     config_ = config;
     initialized_ = true;
-    LOG_INFO
+    LOG(INFO)
         << "TENT metrics disabled at compile time (TENT_METRICS_ENABLED=0)";
     return Status::OK();
 }
