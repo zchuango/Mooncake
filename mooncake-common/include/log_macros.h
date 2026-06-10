@@ -180,28 +180,38 @@ LogStream MakeLogStream(LogLevel level, const char *file, int line,
 #define LOG_ASSERT(condition) CHECK(condition)
 
 // ---------------------------------------------------------------------------
-// Compatibility shims for the spdlog-branch macros (ported during the
-// lx/supercache_dev merge).
-//   DLOG_*  : "detail" logs, additionally gated by MC_LOG_DETAIL_ENABLE
-//             (LOG_IF already applies the per-level ShouldLog() check, so the
-//             combined semantics equal the old ShouldDetailLog()).
-//   CLOG_*  : on the spdlog branch these bypassed MC_LOG_ENABLE and always
-//             reached the file; under this tree they map to the normal level
-//             macros (note: MC_LOG_ENABLE here is honored centrally in
-//             ShouldLog(), so a dedicated bypass logger is no longer needed).
-// trace.h's enclosing namespace re-declaration keeps this self-contained for
-// any TU that only includes log_macros.h.
+// spdlog-branch macro family (ported during the lx/supercache_dev merge),
+// kept in the function-macro form DLOG(severity) / CLOG(severity) to match
+// LOG(severity) / VLOG(level).
+//
+//   DLOG(severity): "detail" logs, additionally gated by MC_LOG_DETAIL_ENABLE.
+//                   LOG_IF already applies the per-level ShouldLog() check, so
+//                   the combined semantics equal the old ShouldDetailLog().
+//   CLOG(severity): "critical/console" logs that ALWAYS emit regardless of
+//                   MC_LOG_ENABLE, rate-limiting and request sampling, honoring
+//                   only spdlog's own level filter. Matches the spdlog-branch
+//                   console logger whose output must reach terminal+file even
+//                   when MC_LOG_ENABLE is off.
+//
+// TRACE has no dedicated LogLevel in this tree; it is aliased to DEBUG.
 // ---------------------------------------------------------------------------
+#define MOONCAKE_SPDLOG_LEVEL_TRACE mooncake::LogLevel::kDebug
+#define MOONCAKE_LOG_IS_FATAL_TRACE false
+
 namespace mooncake {
 bool DetailLogEnabledFromEnv();
+bool ShouldLogAlways(LogLevel level);
 }  // namespace mooncake
 
-#define DLOG_TRACE   LOG_IF(DEBUG, ::mooncake::DetailLogEnabledFromEnv())
-#define DLOG_DEBUG   LOG_IF(DEBUG, ::mooncake::DetailLogEnabledFromEnv())
-#define DLOG_INFO    LOG_IF(INFO, ::mooncake::DetailLogEnabledFromEnv())
-#define DLOG_WARNING LOG_IF(WARNING, ::mooncake::DetailLogEnabledFromEnv())
-#define DLOG_ERROR   LOG_IF(ERROR, ::mooncake::DetailLogEnabledFromEnv())
+#define DLOG(severity) LOG_IF(severity, ::mooncake::DetailLogEnabledFromEnv())
 
-#define CLOG_INFO    LOG_INFO
-#define CLOG_WARNING LOG_WARNING
-#define CLOG_ERROR   LOG_ERROR
+#define MOONCAKE_CLOG_STREAM(level, fatal)                                   \
+    !::mooncake::ShouldLogAlways(level)                                      \
+        ? (void)0                                                            \
+        : ::mooncake::LogStreamVoidify() &                                   \
+              ::mooncake::MakeLogStream(level, __FILE__, __LINE__, fatal, 0) \
+                  .Stream()
+
+#define CLOG(severity)                                                       \
+    MOONCAKE_CLOG_STREAM(MOONCAKE_SPDLOG_LEVEL_##severity,                   \
+                         MOONCAKE_LOG_IS_FATAL_##severity)

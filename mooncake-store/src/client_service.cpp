@@ -950,7 +950,7 @@ tl::expected<void, ErrorCode> Client::Get(const std::string& object_key,
     }
     // Log cache hit statistics
     if (hot_cache_ && replica.is_memory_replica()) {
-        DLOG_DEBUG << "Get completed: key=" << object_key
+        DLOG(DEBUG) << "Get completed: key=" << object_key
                    << " cache_hit=" << (cache_used ? 1 : 0);
     }
 
@@ -1094,7 +1094,7 @@ std::vector<tl::expected<void, ErrorCode>> Client::BatchGetWhenPreferSameNode(
         } else {
             for (size_t idx = 0; idx < op.key_indexes.size(); ++idx) {
                 auto index = op.key_indexes[idx];
-                DLOG_DEBUG << "Transfer completed successfully for key: "
+                DLOG(DEBUG) << "Transfer completed successfully for key: "
                            << object_keys[index];
                 results[index] = {};
 
@@ -1223,7 +1223,7 @@ std::vector<tl::expected<void, ErrorCode>> Client::BatchGet(
             continue;
         }
 
-        DLOG_DEBUG << "Submitted transfer for key " << key
+        DLOG(DEBUG) << "Submitted transfer for key " << key
                    << " using strategy: "
                    << static_cast<int>(future->strategy());
 
@@ -1253,7 +1253,7 @@ std::vector<tl::expected<void, ErrorCode>> Client::BatchGet(
                        << " with error: " << static_cast<int>(result);
             results[index] = tl::unexpected(result);
         } else {
-            DLOG_DEBUG << "Transfer completed successfully for key: " << key;
+            DLOG(DEBUG) << "Transfer completed successfully for key: " << key;
             results[index] = {};
 
             // Frequency admission: only promote frequently accessed keys.
@@ -1292,10 +1292,10 @@ std::vector<tl::expected<void, ErrorCode>> Client::BatchGet(
 
     // Log overall cache hit statistics for the entire batch
     if (hot_cache_) {
-        DLOG_DEBUG << "BatchGet completed: num_keys=" << object_keys.size()
+        DLOG(DEBUG) << "BatchGet completed: num_keys=" << object_keys.size()
                    << " total_cache_hits=" << total_cache_hits;
     } else {
-        DLOG_DEBUG << "BatchGet completed for " << object_keys.size()
+        DLOG(DEBUG) << "BatchGet completed for " << object_keys.size()
                    << " keys";
     }
 
@@ -1303,7 +1303,7 @@ std::vector<tl::expected<void, ErrorCode>> Client::BatchGet(
     for (const auto& r : results) {
         if (r.has_value()) num_success++;
     }
-    DLOG_INFO << "batch_get_transfer_complete num_keys[" << object_keys.size()
+    DLOG(INFO) << "batch_get_transfer_complete num_keys[" << object_keys.size()
                << "] success[" << num_success << "] elapsed_us["
                << us_batch_get << "] pending_count["
                << pending_transfers.size() << "]";
@@ -2678,7 +2678,7 @@ tl::expected<void, ErrorCode> Client::BatchGetOffloadObject(
         LOG_ERROR << "Failed to submit transfer operation";
         return tl::make_unexpected(ErrorCode::TRANSFER_FAIL);
     }
-    DLOG_DEBUG << "Using transfer strategy: " << future->strategy();
+    DLOG(DEBUG) << "Using transfer strategy: " << future->strategy();
     auto result = future->get();
     if (result != ErrorCode::OK) {
         LOG_ERROR << "Transfer failed, error code is " << result;
@@ -3036,7 +3036,7 @@ ErrorCode Client::TransferData(const Replica::Descriptor& replica_descriptor,
                          std::chrono::steady_clock::now() - t0_transfer)
                          .count();
 
-    DLOG_DEBUG << "Using transfer strategy: " << future->strategy();
+    DLOG(DEBUG) << "Using transfer strategy: " << future->strategy();
 
     UbDiag::PerfPoint pt_wait(is_write ? PerfKey::PUT_SINGLE_TRANSFER_WAIT
                                        : PerfKey::GET_SINGLE_TRANSFER_WAIT,
@@ -3048,7 +3048,7 @@ ErrorCode Client::TransferData(const Replica::Descriptor& replica_descriptor,
 
     auto wait_us = std::chrono::duration_cast<std::chrono::microseconds>(
         std::chrono::steady_clock::now() - t0_transfer).count() - submit_us;
-    DLOG_INFO << "transfer_data first_transfer_data["
+    DLOG(INFO) << "transfer_data first_transfer_data["
                << (first_transfer_data ? 1 : 0) << "] op["
                << (is_write ? "WRITE" : "READ") << "] strategy["
                << static_cast<int>(future->strategy()) << "] submit_us["
@@ -3072,7 +3072,7 @@ ErrorCode Client::TransferReadInternal(
         return ErrorCode::TRANSFER_FAIL;
     }
 
-    DLOG_DEBUG << "Using transfer strategy: " << future->strategy();
+    DLOG(DEBUG) << "Using transfer strategy: " << future->strategy();
 
     return future->get();
 }

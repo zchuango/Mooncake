@@ -937,7 +937,7 @@ void LoadConfigFromCmdline(mooncake::MasterConfig& master_config,
 // Function to start HTTP metadata server
 std::unique_ptr<mooncake::HttpMetadataServer> StartHttpMetadataServer(
     int port, const std::string& host) {
-    CLOG_INFO << "Starting C++ HTTP metadata server on " << host << ":" << port;
+    CLOG(INFO) << "Starting C++ HTTP metadata server on " << host << ":" << port;
 
     try {
         auto server =
@@ -946,7 +946,7 @@ std::unique_ptr<mooncake::HttpMetadataServer> StartHttpMetadataServer(
 
         // Check if server started successfully
         if (server->is_running()) {
-            CLOG_INFO << "C++ HTTP metadata server started successfully";
+            CLOG(INFO) << "C++ HTTP metadata server started successfully";
             return server;
         } else {
             LOG_ERROR << "Failed to start C++ HTTP metadata server";

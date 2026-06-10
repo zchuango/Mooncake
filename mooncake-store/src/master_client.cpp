@@ -515,28 +515,28 @@ MasterClient::GetReplicaListByRegex(const std::string& str) {
 
 tl::expected<GetReplicaListResponse, ErrorCode> MasterClient::GetReplicaList(
     const std::string& object_key) {
-    DLOG_DEBUG << "MasterClient::GetReplicaList request object_key="
+    DLOG(DEBUG) << "MasterClient::GetReplicaList request object_key="
                << object_key;
 
     const uint64_t trace_id = mooncake::logging::CurrentTraceId();
     auto result = invoke_rpc<&WrappedMasterService::GetReplicaList,
                              GetReplicaListResponse>(object_key, client_id_,
                                                      trace_id);
-    DLOG_DEBUG << "MasterClient::GetReplicaList response has_value="
+    DLOG(DEBUG) << "MasterClient::GetReplicaList response has_value="
                << result.has_value();
     return result;
 }
 
 std::vector<tl::expected<GetReplicaListResponse, ErrorCode>>
 MasterClient::BatchGetReplicaList(const std::vector<std::string>& object_keys) {
-    DLOG_DEBUG << "MasterClient::BatchGetReplicaList request keys_count="
+    DLOG(DEBUG) << "MasterClient::BatchGetReplicaList request keys_count="
                << object_keys.size();
 
     const uint64_t trace_id = mooncake::logging::CurrentTraceId();
     auto result = invoke_batch_rpc<&WrappedMasterService::BatchGetReplicaList,
                                    GetReplicaListResponse>(
         object_keys.size(), object_keys, client_id_, trace_id);
-    DLOG_DEBUG << "MasterClient::BatchGetReplicaList response operations="
+    DLOG(DEBUG) << "MasterClient::BatchGetReplicaList response operations="
                << result.size();
     return result;
 }

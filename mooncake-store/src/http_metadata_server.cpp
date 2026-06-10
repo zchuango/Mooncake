@@ -108,7 +108,7 @@ bool HttpMetadataServer::start() {
 
     server_->async_start();
     running_ = true;
-    CLOG_INFO << "HTTP metadata server started on " << host_ << ":" << port_;
+    CLOG(INFO) << "HTTP metadata server started on " << host_ << ":" << port_;
     return true;
 }
 

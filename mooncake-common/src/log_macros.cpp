@@ -152,6 +152,15 @@ bool ShouldLog(LogLevel level)
     return true;
 }
 
+// Backs the CLOG(severity) macros: always emit regardless of MC_LOG_ENABLE,
+// rate-limiting and request sampling; honor only spdlog's own level filter.
+bool ShouldLogAlways(LogLevel level)
+{
+    auto spdlog_level = ToSpdlogLevel(level);
+    auto logger = spdlog::default_logger();
+    return !(logger && !logger->should_log(spdlog_level));
+}
+
 bool ShouldVLog(int level)
 {
     return level <= g_log_verbosity.load(std::memory_order_relaxed);
