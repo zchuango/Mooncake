@@ -82,6 +82,19 @@ LogStream::LogStream(LogStream &&other) noexcept
     other.fatal_ = false;
 }
 
+namespace {
+// Mirrors the legacy "trace_id[<id>] " stamp prepended to every non-console log
+// line, computed on the calling thread (the LogStream destructor runs there).
+std::string TraceIdPrefix()
+{
+    const uint64_t tid = ::mooncake::logging::CurrentTraceId();
+    if (tid != 0) {
+        return "trace_id[" + std::to_string(tid) + "] ";
+    }
+    return "trace_id[none] ";
+}
+}  // namespace
+
 LogStream::~LogStream()
 {
     spdlog::logger *logger =
@@ -91,6 +104,11 @@ LogStream::~LogStream()
         if (saved_errno_ != 0) {
             msg += ": ";
             msg += std::strerror(saved_errno_);
+        }
+        // CLOG() messages are operational and not request-scoped, so they keep
+        // the legacy behavior of no trace prefix; LOG_*/DLOG carry it.
+        if (!to_console_) {
+            msg.insert(0, TraceIdPrefix());
         }
 
         spdlog::source_loc loc;
