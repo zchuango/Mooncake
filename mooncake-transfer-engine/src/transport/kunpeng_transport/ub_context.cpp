@@ -525,7 +525,7 @@ void UbWorkerPool::monitorWorker() {
         int num_events = epoll_wait(context_.eventFd(), &event, 1, 100);
         if (num_events < 0) {
             if (errno != EWOULDBLOCK && errno != EINTR)
-                MC_PLOG_ERROR << "Worker: epoll_wait()";
+                PLOG_ERROR << "Worker: epoll_wait()";
             continue;
         }
 

@@ -101,7 +101,7 @@ int UrmaContext::construct(GlobalConfig& config) {
     for (size_t i = 0; i < num_jfces; ++i) {
         jfce_[i] = urma_create_jfce(urma_context_);
         if (!jfce_[i]) {
-            MC_PLOG_ERROR << "Failed to create jetty for completion events queue "
+            PLOG_ERROR << "Failed to create jetty for completion events queue "
                            "on device"
                         << device_name_;
             return ERR_CONTEXT;
@@ -123,7 +123,7 @@ int UrmaContext::construct(GlobalConfig& config) {
         jfc_s_cfg[i].user_ctx = (uint64_t)&jfc_list_[i].outstanding;
         auto jfc = urma_create_jfc(urma_context_, &jfc_s_cfg[i]);
         if (!jfc) {
-            MC_PLOG_ERROR << "Failed to create jetty for completion queue(jfs)";
+            PLOG_ERROR << "Failed to create jetty for completion queue(jfs)";
             close(event_fd_);
             return ERR_CONTEXT;
         }
@@ -138,7 +138,7 @@ int UrmaContext::construct(GlobalConfig& config) {
     for (size_t i = 0; i < num_jfc_list; ++i) {
         auto jfc = urma_create_jfc(urma_context_, &jfc_r_cfg);
         if (!jfc) {
-            MC_PLOG_ERROR << "Failed to create jetty for completion queue(jfr)";
+            PLOG_ERROR << "Failed to create jetty for completion queue(jfr)";
             close(event_fd_);
             return ERR_CONTEXT;
         }
@@ -160,7 +160,7 @@ int UrmaContext::construct(GlobalConfig& config) {
         jfr_cfg[i].jfc = jfc_r_list_[i];
         auto jfr = urma_create_jfr(urma_context_, &jfr_cfg[i]);
         if (!jfr) {
-            MC_PLOG_ERROR << "Failed to create jetty for receive queue";
+            PLOG_ERROR << "Failed to create jetty for receive queue";
             close(event_fd_);
             return ERR_CONTEXT;
         }
@@ -182,7 +182,7 @@ int UrmaContext::deconstruct() {
     for (auto& entry : seg_region_list_) {
         int ret = urma_unregister_seg(entry.first);
         if (ret) {
-            MC_PLOG_ERROR << "Failed to unregister segment";
+            PLOG_ERROR << "Failed to unregister segment";
         }
     }
     seg_region_list_.clear();
@@ -190,7 +190,7 @@ int UrmaContext::deconstruct() {
     for (auto& seg : imported_seg_list_) {
         int ret = urma_unimport_seg(seg);
         if (ret) {
-            MC_PLOG_ERROR << "Failed to unimport segment";
+            PLOG_ERROR << "Failed to unimport segment";
         }
     }
     imported_seg_list_.clear();
@@ -207,7 +207,7 @@ int UrmaContext::deconstruct() {
 
         int ret = urma_delete_jfr(jfr_list_[i].native);
         if (ret) {
-            MC_PLOG_ERROR << "Failed to destroy jetty for receive queue";
+            PLOG_ERROR << "Failed to destroy jetty for receive queue";
         }
     }
     jfr_list_.clear();
@@ -217,7 +217,7 @@ int UrmaContext::deconstruct() {
 
         int ret = urma_delete_jfc(jfc_list_[i].native);
         if (ret) {
-            MC_PLOG_ERROR << "Failed to destroy jetty for completion queue";
+            PLOG_ERROR << "Failed to destroy jetty for completion queue";
         }
     }
     jfc_list_.clear();
@@ -227,7 +227,7 @@ int UrmaContext::deconstruct() {
 
         int ret = urma_delete_jfc(jfc_r_list_[i]);
         if (ret) {
-            MC_PLOG_ERROR << "Failed to destroy jetty for completion queue";
+            PLOG_ERROR << "Failed to destroy jetty for completion queue";
         }
     }
     jfc_r_list_.clear();
@@ -249,7 +249,7 @@ int UrmaContext::deconstruct() {
 
     if (urma_context_) {
         if (urma_delete_context(urma_context_))
-            MC_PLOG_ERROR << "Failed to close device context";
+            PLOG_ERROR << "Failed to close device context";
         urma_context_ = nullptr;
     }
 
@@ -284,7 +284,7 @@ void* UrmaContext::localSegWithIndex(unsigned value) {
 
 int UrmaContext::registerMemoryRegion(uint64_t va, size_t length) {
     if (length > (size_t)globalConfig().max_seg_size) {
-        MC_PLOG_WARNING << "The buffer length exceeds device max_seg_size, "
+        PLOG_WARNING << "The buffer length exceeds device max_seg_size, "
                       << "shrink it to " << globalConfig().max_seg_size;
         length = (size_t)globalConfig().max_seg_size;
     }
@@ -307,7 +307,7 @@ int UrmaContext::registerMemoryRegion(uint64_t va, size_t length) {
     };
     urma_target_seg_t* seg = urma_register_seg(urma_context_, &seg_cfg);
     if (!seg) {
-        MC_PLOG_ERROR << "Failed to register segment " << seg_cfg.va;
+        PLOG_ERROR << "Failed to register segment " << seg_cfg.va;
         return ERR_CONTEXT;
     }
     LOG_INFO << "Local seg token id : " << seg->seg.token_id;
@@ -411,7 +411,7 @@ int UrmaContext::openDevice(const std::string& device_name, uint8_t port,
 
         eid_list = urma_get_eid_list(devices[i], &eid_cnt);
         if (eid_list == NULL) {
-            MC_PLOG_ERROR << "Failed to get eid list, device = " << device_name;
+            PLOG_ERROR << "Failed to get eid list, device = " << device_name;
             urma_free_device_list(devices);
             return ERR_CONTEXT;
         }
@@ -449,9 +449,9 @@ int UrmaContext::openDevice(const std::string& device_name, uint8_t port,
         }
         ret = urma_query_device(devices[i], &dev_attr_);
         if (ret) {
-            MC_PLOG_ERROR << "Failed to query dev attr( " << device_name << " ) ";
+            PLOG_ERROR << "Failed to query dev attr( " << device_name << " ) ";
             if (urma_delete_context(context)) {
-                MC_PLOG_ERROR
+                PLOG_ERROR
                     << "urma_delete_context(" << device_name << ") failed";
             }
             urma_free_device_list(devices);
@@ -471,7 +471,7 @@ int UrmaContext::openDevice(const std::string& device_name, uint8_t port,
             LOG_WARNING << "Device " << device_name
                          << " not found active port";
             if (urma_delete_context(context)) {
-                MC_PLOG_ERROR
+                PLOG_ERROR
                     << "urma_delete_context(" << device_name << ") failed";
             }
             urma_free_device_list(devices);
@@ -485,7 +485,7 @@ int UrmaContext::openDevice(const std::string& device_name, uint8_t port,
             LOG_WARNING << "GID is NULL, please check your EID index by "
                             "specifying MC_EID_INDEX";
             if (urma_delete_context(context)) {
-                MC_PLOG_ERROR
+                PLOG_ERROR
                     << "urma_delete_context(" << device_name << ") failed";
             }
             urma_free_device_list(devices);
@@ -687,7 +687,7 @@ int UrmaEndpoint::construct(GlobalConfig& config) {
                              .count();
         pt_create.End(jetty_list_[i] ? 0 : -1);
         if (!jetty_list_[i]) {
-            MC_PLOG_ERROR << "Failed to create jetty";
+            PLOG_ERROR << "Failed to create jetty";
             LOG_INFO << "urma_create_jetty_breakdown index[" << i
                          << "] create_us[" << create_us << "] status[-1]";
             pt_construct.End(-1);
@@ -724,14 +724,14 @@ int UrmaEndpoint::deconstruct() {
                                   : nullptr;
         if (context_->transMode() == URMA_TM_RC) {
             ret = urma_unbind_jetty(jetty_list_[i]);
-            if (ret) MC_PLOG_ERROR << "Failed to unbind jetty";
+            if (ret) PLOG_ERROR << "Failed to unbind jetty";
         }
         if (imported_jetty != nullptr) {
             ret = urma_unimport_jetty(imported_jetty);
-            if (ret) MC_PLOG_ERROR << "Failed to unimport jetty";
+            if (ret) PLOG_ERROR << "Failed to unimport jetty";
         }
         ret = urma_delete_jetty(jetty_list_[i]);
-        if (ret) MC_PLOG_ERROR << "Failed to delete jetty";
+        if (ret) PLOG_ERROR << "Failed to delete jetty";
         // After destroying QP, the wr_depth_list_ won't change
         bool displayed = false;
         if (wr_depth_list_[i] != 0) {
@@ -903,14 +903,14 @@ void UrmaEndpoint::disconnectUnlocked() {
 
     for (size_t i = 0; i < jetty_list_.size(); ++i) {
         int ret = urma_modify_jetty(jetty_list_[i], &attr);
-        if (ret) MC_PLOG_ERROR << "Failed to modify jetty to RESET";
+        if (ret) PLOG_ERROR << "Failed to modify jetty to RESET";
         auto imported_jetty = imported_jetty_map_[jetty_list_[i]];
         if (context_->transMode() == URMA_TM_RC) {
             ret = urma_unbind_jetty(jetty_list_[i]);
-            if (ret) MC_PLOG_ERROR << "Failed to unbind jetty";
+            if (ret) PLOG_ERROR << "Failed to unbind jetty";
         }
         ret = urma_unimport_jetty(imported_jetty);
-        if (ret) MC_PLOG_ERROR << "Failed to unimport jetty";
+        if (ret) PLOG_ERROR << "Failed to unimport jetty";
         // After resetting QP, the wr_depth_list_ won't change
         bool displayed = false;
         if (wr_depth_list_[i] != 0) {
@@ -1061,7 +1061,7 @@ int UrmaEndpoint::submitPostSend(
     int rc =
         urma_post_jetty_send_wr(jetty_list_[jetty_index], wr_list, &bad_wr);
     if (rc) {
-        MC_PLOG_ERROR << "Failed to urma_post_jetty_send_wr";
+        PLOG_ERROR << "Failed to urma_post_jetty_send_wr";
         while (bad_wr) {
             int i = bad_wr - wr_list;
             LOG_ERROR << "slice (" << i << ") post send failed.";
@@ -1132,7 +1132,7 @@ int UrmaEndpoint::doSetupConnection(int jetty_index,
     urma_eid_t eid;
     bool trans_ret = context_->transEidFromString(peer_eid, eid);
     if (!trans_ret) {
-        MC_PLOG_ERROR << "Invalid peer eid: " << peer_eid;
+        PLOG_ERROR << "Invalid peer eid: " << peer_eid;
         return ERR_INVALID_ARGUMENT;
     }
     urma_rjetty_t rjetty = {};
@@ -1174,7 +1174,7 @@ int UrmaEndpoint::doSetupConnection(int jetty_index,
         pt_bind.End(ret == URMA_SUCCESS || ret == URMA_EEXIST ? 0 : -1);
         if (ret != URMA_SUCCESS && ret != URMA_EEXIST) {
                 std::string message = "Failed to bind jetty";
-                MC_PLOG_ERROR << "[Handshake] " << message;
+                PLOG_ERROR << "[Handshake] " << message;
                 if (reply_msg) *reply_msg = message + ": " + strerror(errno);
                 urma_unimport_jetty(imported_jetty);
                 return ERR_ENDPOINT;

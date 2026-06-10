@@ -75,7 +75,7 @@ static bool checkIbDevicePort(struct ibv_context *context,
     struct ibv_port_attr port_attr;
 
     if (ibv_query_port(context, port_num, &port_attr) != 0) {
-        MC_PLOG_WARNING << "Failed to query port " << static_cast<int>(port_num)
+        PLOG_WARNING << "Failed to query port " << static_cast<int>(port_num)
                       << " on " << device_name;
         return false;
     }
@@ -105,13 +105,13 @@ static bool isIbDeviceAvailable(struct ibv_device *device) {
 
     struct ibv_context *context = ibv_open_device(device);
     if (!context) {
-        MC_PLOG_WARNING << "Failed to open device " << device_name;
+        PLOG_WARNING << "Failed to open device " << device_name;
         return false;
     }
 
     struct ibv_device_attr device_attr;
     if (ibv_query_device(context, &device_attr) != 0) {
-        MC_PLOG_WARNING << "Failed to query device attributes for "
+        PLOG_WARNING << "Failed to query device attributes for "
                       << device_name;
         ibv_close_device(context);
         return false;
@@ -178,7 +178,7 @@ static std::vector<InfinibandDevice> listInfiniBandDevices(
         snprintf(path, sizeof(path), "/sys/class/infiniband/%s/../..",
                  device_name.c_str());
         if (realpath(path, resolved_path) == NULL) {
-            MC_PLOG_ERROR << "listInfiniBandDevices: realpath " << path
+            PLOG_ERROR << "listInfiniBandDevices: realpath " << path
                         << " failed";
             continue;
         }
@@ -269,7 +269,7 @@ static std::vector<TopologyEntry> discoverCpuTopology(
     std::vector<TopologyEntry> topology;
 
     if (dir == NULL) {
-        MC_PLOG_WARNING
+        PLOG_WARNING
             << "discoverCpuTopology: open /sys/devices/system/node failed";
         return {};
     }
@@ -307,7 +307,7 @@ static std::vector<TopologyEntry> discoverCpuTopology(
     std::vector<TopologyEntry> topology;
 
     if (dir == NULL) {
-        MC_PLOG_WARNING
+        PLOG_WARNING
             << "discoverCpuTopology: open /sys/devices/system/node failed";
         return {};
     }
