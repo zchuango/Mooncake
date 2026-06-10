@@ -4,5 +4,8 @@
 	branch = stable
 [submodule "extern/yalantinglibs"]
 	path = extern/yalantinglibs
-	url = https://github.com/alibaba/yalantinglibs.git
+	url = https://github.com/JerryLX/yalantinglibs.git
 	branch = v0.5.7
+[submodule "extern/spdlog"]
+	path = extern/spdlog
+	url = https://github.com/gabime/spdlog.git

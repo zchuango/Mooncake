@@ -15,7 +15,7 @@
 #ifndef MEMORY_LOCATION_H
 #define MEMORY_LOCATION_H
 
-#include <glog/logging.h>
+
 
 #include <memory>
 #include <string>

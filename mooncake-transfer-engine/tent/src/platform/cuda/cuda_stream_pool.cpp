@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include "tent/platform/cuda.h"
+#include "log_macros.h"
 
 namespace mooncake {
 namespace tent {

@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <atomic>
+#include "log_macros.h"
 #include <chrono>
 #include <iomanip>
 #include <iostream>
@@ -22,7 +23,7 @@
 #include <vector>
 
 #include "gflags/gflags.h"
-#include "glog/logging.h"
+
 
 #include "master_client.h"
 
@@ -363,10 +364,7 @@ int main(int argc, char** argv) {
     std::vector<std::unique_ptr<SegmentClient>> segment_clients;
     std::mutex segment_clients_mutex;
     std::jthread ping_thread;
-    std::vector<std::unique_ptr<BenchClient>> bench_clients;
-
-    google::InitGoogleLogging("MasterBench");
-    FLAGS_logtostderr = true;
+    std::vector<std::unique_ptr<BenchClient>> bench_clients; 
 
     gflags::ParseCommandLineFlags(&argc, &argv, false);
 
@@ -525,9 +523,7 @@ int main(int argc, char** argv) {
     LOG(INFO) << "Disconnected from master";
 
     std::cout << "Operations per second: " << std::fixed << std::setprecision(2)
-              << num_completed_operations / (double)FLAGS_duration << "\n";
-
-    google::ShutdownGoogleLogging();
+              << num_completed_operations / (double)FLAGS_duration << "\n"; 
 
     return 0;
 }

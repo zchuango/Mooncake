@@ -16,7 +16,7 @@
 #define TENT_CONTEXT_H
 
 #include <gflags/gflags.h>
-#include <glog/logging.h>
+
 #include <infiniband/verbs.h>
 
 #include <atomic>

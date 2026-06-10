@@ -1,4 +1,5 @@
 #include <mooncake_backend.h>
+#include "log_macros.h"
 #include <cstdio>
 #include <memory>
 #include <thread>

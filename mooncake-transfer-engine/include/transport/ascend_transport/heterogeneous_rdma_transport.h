@@ -17,6 +17,7 @@
 #define HETEROGENEOUS_RDMA_TRANSPORT_H_
 
 #include "transport/rdma_transport/rdma_transport.h"
+#include "log_macros.h"
 #include "acl/acl.h"
 #include <atomic>
 #include <new>

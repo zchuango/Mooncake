@@ -1,6 +1,7 @@
 #include "ha/oplog/oplog_applier.h"
+#include "log_macros.h"
 
-#include <glog/logging.h>
+
 
 #include <algorithm>
 #include <chrono>
@@ -84,14 +85,14 @@ bool OpLogApplier::ApplyOpLogEntry(const OpLogEntry& entry) {
             if (entry.op_type == OpType::PUT_END) {
                 HAMetricManager::instance().inc_oplog_dropped_put_end();
             }
-            VLOG(1) << "OpLogApplier: discard late skipped entry, op_type="
+            LOG(INFO) << "OpLogApplier: discard late skipped entry, op_type="
                     << static_cast<int>(entry.op_type)
                     << ", sequence_id=" << entry.sequence_id
                     << ", key=" << entry.object_key;
             return true;
         }
 
-        VLOG(2) << "OpLogApplier: skip already-applied entry, sequence_id="
+        LOG(INFO) << "OpLogApplier: skip already-applied entry, sequence_id="
                 << entry.sequence_id << ", expected=" << expected
                 << ", key=" << entry.object_key;
         return true;  // consumed (no-op)
@@ -110,7 +111,7 @@ bool OpLogApplier::ApplyOpLogEntry(const OpLogEntry& entry) {
         }
 
         pending_entries_[entry.sequence_id] = entry;
-        VLOG(1) << "OpLogApplier: future entry buffered, sequence_id="
+        LOG(INFO) << "OpLogApplier: future entry buffered, sequence_id="
                 << entry.sequence_id << ", expected=" << expected
                 << ", key=" << entry.object_key
                 << ", pending_entries=" << pending_entries_.size();
@@ -194,7 +195,7 @@ size_t OpLogApplier::ProcessPendingEntries() {
             auto it = missing_sequence_ids_.find(missing_seq);
             if (it == missing_sequence_ids_.end()) {
                 missing_sequence_ids_[missing_seq] = now;
-                VLOG(1) << "OpLogApplier: scheduling wait for missing "
+                LOG(INFO) << "OpLogApplier: scheduling wait for missing "
                            "sequence_id="
                         << missing_seq << ", will request after "
                         << kMissingEntryRequestSeconds << " seconds";
@@ -466,7 +467,7 @@ void OpLogApplier::ApplyPutEnd(const OpLogEntry& entry) {
         LOG(ERROR) << "OpLogApplier: failed to PutMetadata key="
                    << entry.object_key << ", sequence_id=" << entry.sequence_id;
     } else {
-        VLOG(1) << "OpLogApplier: applied PUT_END, key=" << entry.object_key
+        LOG(INFO) << "OpLogApplier: applied PUT_END, key=" << entry.object_key
                 << ", sequence_id=" << entry.sequence_id
                 << ", replicas=" << metadata.replicas.size()
                 << ", size=" << metadata.size;
@@ -484,7 +485,7 @@ void OpLogApplier::ApplyPutRevoke(const OpLogEntry& entry) {
                      << " in PUT_REVOKE, sequence_id=" << entry.sequence_id
                      << " (key may not exist)";
     } else {
-        VLOG(1) << "OpLogApplier: applied PUT_REVOKE, key=" << entry.object_key
+        LOG(INFO) << "OpLogApplier: applied PUT_REVOKE, key=" << entry.object_key
                 << ", sequence_id=" << entry.sequence_id;
     }
 }
@@ -496,7 +497,7 @@ void OpLogApplier::ApplyRemove(const OpLogEntry& entry) {
                      << ", sequence_id=" << entry.sequence_id
                      << " (key may not exist)";
     } else {
-        VLOG(1) << "OpLogApplier: applied REMOVE, key=" << entry.object_key
+        LOG(INFO) << "OpLogApplier: applied REMOVE, key=" << entry.object_key
                 << ", sequence_id=" << entry.sequence_id;
     }
 }

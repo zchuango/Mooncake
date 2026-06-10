@@ -1,6 +1,7 @@
 #include "memory_location.h"
+#include "log_macros.h"
 
-#include <glog/logging.h>
+
 #include <gtest/gtest.h>
 #include <numa.h>
 #include <numaif.h>

@@ -15,44 +15,25 @@
  */
 
 #include "logger.h"
-#include "rate_limiter.h"
 #include "log_macros.h"
+#include "rate_limiter.h"
 
 #include <spdlog/spdlog.h>
 #include <spdlog/async.h>
 #include <spdlog/sinks/rotating_file_sink.h>
-#include <spdlog/sinks/stdout_color_sinks.h>
+#include <cstdlib>
 #include <stdexcept>
 #include <map>
 #include <filesystem>
-#include <algorithm>
-#include <cctype>
-#include <chrono>
-#include <cstdlib>
-#include <vector>
 
 namespace mooncake {
 
 static std::map<std::string, spdlog::level::level_enum> LEVEL_MAP = {
-    { "TRACE", spdlog::level::trace },
     { "DEBUG", spdlog::level::debug },
     { "INFO", spdlog::level::info },
     { "WARNING", spdlog::level::warn },
-    { "ERROR", spdlog::level::err },
-    { "CRITICAL", spdlog::level::critical },
-    { "FATAL", spdlog::level::critical },
-    { "OFF", spdlog::level::off }
+    { "ERROR", spdlog::level::err }
 };
-
-namespace {
-// Always-on stderr console logger, independent of the file logger and the
-// MC_LOG_ENABLE kill switch. Synchronous (no thread pool), so it carries no
-// async-teardown hazard. Held here rather than in spdlog's registry so that
-// spdlog::drop_all() during re-init does not destroy it.
-std::shared_ptr<spdlog::logger> g_console_logger;
-}  // namespace
-
-spdlog::logger *ConsoleLogger() { return g_console_logger.get(); }
 
 class Logger::Impl {
 public:
@@ -78,15 +59,6 @@ public:
             config.maxSizeMB * 1024 * 1024,
             config.maxFiles);
 
-        auto consoleSink =
-            std::make_shared<spdlog::sinks::stderr_color_sink_mt>();
-        std::vector<spdlog::sink_ptr> clogSinks{fileSink, consoleSink};
-        g_console_logger = std::make_shared<spdlog::logger>(
-            "mooncake_console", clogSinks.begin(), clogSinks.end());
-        g_console_logger->set_level(spdlog::level::info);
-        g_console_logger->set_pattern(
-            "%Y-%m-%d %H:%M:%S.%6f | pid=%P tid=%t | %^%L%$ | %s:%# | %v");
-
         // Create async logger
         logger_ = std::make_shared<spdlog::async_logger>(
             "mooncake",
@@ -104,18 +76,14 @@ public:
         // Set as default logger
         spdlog::set_default_logger(logger_);
 
-        // Periodic background flush (the field was previously unused).
-        if (config.flushIntervalSecs > 0) {
-            spdlog::flush_every(std::chrono::seconds(config.flushIntervalSecs));
-        }
-
         // Configure rate limiter
         RateLimiter::Instance().SetRate(config.rateLimit);
 
-        // Initialization status is always emitted to both terminal and file.
-        CLOG_INFO << "mooncake logging initialized | file_dir=" << config.logDir
-                  << " | level=" << config.level << " | console=on"
-                  << " | file=on";
+        int verbosity = config.verbosity;
+        if (const char *env = std::getenv("MC_VLOG_LEVEL")) {
+            verbosity = std::atoi(env);
+        }
+        SetLogVerbosity(verbosity);
 
         initialized_ = true;
         return true;
@@ -127,18 +95,14 @@ public:
             logger_->flush();
         }
         spdlog::shutdown();
-        // Console logger lives outside spdlog's registry — flush and release it
-        // explicitly so it does not outlive shutdown.
-        if (g_console_logger) {
-            g_console_logger->flush();
-            g_console_logger.reset();
-        }
         initialized_ = false;
     }
 
-    std::shared_ptr<spdlog::logger> GetLogger()
+    void Flush()
     {
-        return logger_;
+        if (logger_) {
+            logger_->flush();
+        }
     }
 
     void SetLevel(const std::string &levelStr)
@@ -186,9 +150,9 @@ void Logger::Shutdown()
     pImpl_->Shutdown();
 }
 
-std::shared_ptr<spdlog::logger> Logger::GetSpdlogger()
+void Logger::Flush()
 {
-    return pImpl_->GetLogger();
+    pImpl_->Flush();
 }
 
 void Logger::SetLevel(const std::string &level)
@@ -199,79 +163,6 @@ void Logger::SetLevel(const std::string &level)
 bool Logger::IsInitialized() const
 {
     return pImpl_->IsInitialized();
-}
-
-namespace {
-
-std::string UpperString(const char *value)
-{
-    std::string text(value ? value : "");
-    std::transform(text.begin(), text.end(), text.begin(),
-                   [](unsigned char ch) { return std::toupper(ch); });
-    return text;
-}
-
-// MC_LOG_ENABLE total switch: default ON when unset/empty; only an explicit
-// falsy value (off/0/false/no) turns logging off.
-bool LogEnabledFromEnv()
-{
-    const char *value = std::getenv("MC_LOG_ENABLE");
-    if (value == nullptr || *value == '\0') {
-        return true;
-    }
-    std::string lowered(value);
-    std::transform(lowered.begin(), lowered.end(), lowered.begin(),
-                   [](unsigned char ch) { return std::tolower(ch); });
-    return !(lowered == "off" || lowered == "0" || lowered == "false" ||
-             lowered == "no");
-}
-
-}  // namespace
-
-bool DetailLogEnabledFromEnv()
-{
-    const char *value = std::getenv("MC_LOG_DETAIL_ENABLE");
-    if (value == nullptr || *value == '\0') {
-        return false;
-    }
-    std::string lowered(value);
-    std::transform(lowered.begin(), lowered.end(), lowered.begin(),
-                   [](unsigned char ch) { return std::tolower(ch); });
-    return lowered == "on" || lowered == "1" || lowered == "true" ||
-           lowered == "yes";
-}
-
-LogConfig LogConfigFromEnv()
-{
-    LogConfig config;
-
-    // Directory: honor MC_LOG_DIR, else match the legacy glog default.
-    if (const char *dir = std::getenv("MC_LOG_DIR")) {
-        config.logDir = dir;
-    } else {
-        config.logDir = "/var/log/mooncake";
-    }
-
-    if (const char *level = std::getenv("MC_LOG_LEVEL")) {
-        config.level = UpperString(level);
-    }
-
-    if (const char *maxSize = std::getenv("MC_LOG_MAX_SIZE")) {
-        config.maxSizeMB = static_cast<uint32_t>(std::atoi(maxSize));
-    }
-
-    if (const char *bufSecs = std::getenv("MC_LOG_BUFFER_SECS")) {
-        config.flushIntervalSecs = std::atoi(bufSecs);
-    } else {
-        config.flushIntervalSecs = 3;  // legacy FLAGS_logbufsecs default
-    }
-
-    // Total kill switch: when disabled, set level OFF so spdlog drops all logs.
-    if (!LogEnabledFromEnv()) {
-        config.level = "OFF";
-    }
-
-    return config;
 }
 
 }  // namespace mooncake

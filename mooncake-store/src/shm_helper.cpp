@@ -1,4 +1,5 @@
 #include "shm_helper.h"
+#include "log_macros.h"
 
 #include <cstdlib>
 #include <cstring>
@@ -8,7 +9,7 @@
 #include <sys/syscall.h>
 #include <fcntl.h>
 #include <unistd.h>
-#include <glog/logging.h>
+
 
 #include "utils.h"
 #include "config.h"

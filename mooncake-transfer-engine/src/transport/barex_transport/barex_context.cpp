@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include "transport/barex_transport/barex_context.h"
+#include "log_macros.h"
 
 namespace mooncake {
 

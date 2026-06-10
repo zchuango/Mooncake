@@ -1,4 +1,5 @@
 #include <ATen/cuda/CUDAContext.h>
+#include "log_macros.h"
 #include <cuda_runtime.h>
 #include <torch/torch.h>
 #include <torch/csrc/distributed/c10d/Backend.hpp>

@@ -13,9 +13,10 @@
 // limitations under the License.
 
 #include "transport/tcp_transport/tcp_transport.h"
+#include "log_macros.h"
 
 #include <bits/stdint-uintn.h>
-#include <glog/logging.h>
+
 #include <asio/ip/v6_only.hpp>
 
 #include <algorithm>

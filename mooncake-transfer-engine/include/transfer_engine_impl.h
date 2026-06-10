@@ -16,6 +16,7 @@
 #define MULTI_TRANSFER_ENGINE_IMPL_H_
 
 #include <limits.h>
+#include "log_macros.h"
 #include <string.h>
 
 #include <atomic>

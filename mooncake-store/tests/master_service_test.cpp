@@ -1,7 +1,8 @@
 #include "master_service.h"
+#include "log_macros.h"
 #include "rpc_service.h"
 
-#include <glog/logging.h>
+
 #include <gtest/gtest.h>
 #include <ylt/struct_json/json_reader.h>
 

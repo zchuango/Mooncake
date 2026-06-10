@@ -17,7 +17,8 @@
 #define HCCL_TRANSPORT_MEM_C_H
 
 #include <condition_variable>
-#include <glog/logging.h>
+#include "log_macros.h"
+
 #include <functional>
 #include "acl/acl.h"
 #include "adapter_hccp_common.h"

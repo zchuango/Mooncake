@@ -1,5 +1,6 @@
 #include "task_manager.h"
-#include <glog/logging.h>
+#include "log_macros.h"
+
 #include <msgpack.hpp>
 #include "utils/zstd_util.h"
 

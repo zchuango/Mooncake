@@ -13,9 +13,10 @@
 // limitations under the License.
 
 #include "tent/transport/bufio/bufio_transport.h"
+#include "log_macros.h"
 
 #include <fcntl.h>
-#include <glog/logging.h>
+
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <unistd.h>

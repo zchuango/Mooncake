@@ -1,7 +1,7 @@
 // Copyright 2026 KVCache.AI
 // Fallback-path tests for the global mmap allocator wrapper.
 
-#include <glog/logging.h>
+
 #include <gtest/gtest.h>
 
 #include <cstdint>

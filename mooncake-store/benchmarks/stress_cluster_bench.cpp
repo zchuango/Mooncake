@@ -20,7 +20,6 @@
 #include "gflags/gflags.h"
 #include "glog/logging.h"
 #include "logger.h"
-#include "mooncake_logging.h"
 #include "log_macros.h"
 #include "real_client.h"
 

@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include "tent/transport/rdma/buffers.h"
+#include "log_macros.h"
 #include "tent/transport/rdma/context.h"
 
 #include <algorithm>

@@ -6,7 +6,10 @@ if (NOT GLOBAL_CONFIG)
     message(FATAL_ERROR "Cannot enable USE_ETCD while building transfer engine independently")
   endif()
   include(../mooncake-common/FindJsonCpp.cmake)
-  include(../mooncake-common/FindGLOG.cmake)
+  include(../mooncake-common/Findspdlog.cmake)
+  add_subdirectory(../extern/spdlog
+                   ${CMAKE_CURRENT_BINARY_DIR}/extern-spdlog
+                   EXCLUDE_FROM_ALL)
   include(../mooncake-common/common.cmake)
 
   # Build asio_shared in mooncake-common for standalone builds.

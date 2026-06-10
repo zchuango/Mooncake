@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include "tent/transport/rdma/context.h"
+#include "log_macros.h"
 
 #include <dirent.h>
 #include <fcntl.h>
@@ -204,7 +205,7 @@ static inline GidNetworkState getBestGidIndex(const std::string& device_name,
     int first_nonzero_index = -1;  // priority-4 candidate
     GidNetworkState state = GidNetworkState::GID_NOT_FOUND;
 
-    VLOG(1) << "Scanning " << port_attr.gid_tbl_len << " GID entries for "
+    LOG(INFO) << "Scanning " << port_attr.gid_tbl_len << " GID entries for "
             << device_name << " port " << (int)port;
 
     for (i = 0; i < port_attr.gid_tbl_len; i++) {
@@ -232,7 +233,7 @@ static inline GidNetworkState getBestGidIndex(const std::string& device_name,
                              isOverlayIPv4((struct in6_addr*)gid_entry.gid.raw);
         bool is_overlay = has_ndev && (is_overlay_dev || is_overlay_ip);
 
-        VLOG(1) << "GID[" << i << "]: " << gidBytesToString(gid_entry.gid.raw)
+        LOG(INFO) << "GID[" << i << "]: " << gidBytesToString(gid_entry.gid.raw)
                 << " ndev=" << (has_ndev ? ndev : "<none>")
                 << (is_overlay_dev || is_overlay_ip ? " (overlay)" : "");
 

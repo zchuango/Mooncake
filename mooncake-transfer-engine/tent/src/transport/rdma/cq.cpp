@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include "tent/transport/rdma/cq.h"
+#include "log_macros.h"
 
 #include <fcntl.h>
 #include <sys/epoll.h>

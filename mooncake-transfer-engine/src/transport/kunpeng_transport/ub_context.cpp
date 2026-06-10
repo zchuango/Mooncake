@@ -19,7 +19,6 @@
 #include <cassert>
 #include <sys/epoll.h>
 #include "config.h"
-#include "mooncake_logging.h"
 #include "transport/kunpeng_transport/ub_context.h"
 #include "transport/kunpeng_transport/ub_endpoint.h"
 

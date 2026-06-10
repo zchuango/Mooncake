@@ -13,11 +13,12 @@
 // limitations under the License.
 
 #include "tent/runtime/transport_selector.h"
+#include "log_macros.h"
 #include "tent/runtime/transport.h"
 #include "tent/runtime/platform.h"
 #include "tent/thirdparty/nlohmann/json.h"
 
-#include <glog/logging.h>
+
 
 namespace mooncake {
 namespace tent {
@@ -393,7 +394,7 @@ SelectionResult TransportSelector::select(
             if (isTransportAvailable(type, context, available_transports)) {
                 if (priority_index-- <= 0) {
                     result.transport = type;
-                    VLOG(1) << "Selected transport " << transportTypeName(type)
+                    LOG(INFO) << "Selected transport " << transportTypeName(type)
                             << " for policy " << matching_policy->name
                             << ", device_mask=0x" << std::hex
                             << result.device_mask << std::dec;
@@ -410,7 +411,7 @@ SelectionResult TransportSelector::select(
             if (isTransportAvailable(type, context, available_transports)) {
                 if (transport_index-- <= 0) {
                     result.transport = type;
-                    VLOG(1) << "Selected transport " << transportTypeName(type)
+                    LOG(INFO) << "Selected transport " << transportTypeName(type)
                             << " from buffer_transports"
                             << ", device_mask=0x" << std::hex
                             << result.device_mask << std::dec;

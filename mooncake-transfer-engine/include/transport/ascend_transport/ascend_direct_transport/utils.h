@@ -17,6 +17,7 @@
 #define ASCEND_DIRECT_UTIL_H
 
 #include <atomic>
+#include "log_macros.h"
 #include <condition_variable>
 #include <functional>
 #include <mutex>

@@ -1,8 +1,12 @@
 #include "transport/rpc_communicator/rpc_communicator.h"
+#include "log_macros.h"
+#include "rpc_protocol.h"
 #include <iostream>
 #include <thread>
 #include <functional>
-#include <glog/logging.h>
+#include <type_traits>
+#include <variant>
+
 #include <ylt/coro_rpc/coro_rpc_client.hpp>
 #include <ylt/coro_rpc/coro_rpc_server.hpp>
 #include <ylt/coro_io/client_pool.hpp>
@@ -14,6 +18,104 @@
 
 namespace mooncake {
 namespace py = pybind11;
+
+namespace {
+
+template <typename Variant, typename T>
+struct variant_contains : std::false_type {};
+
+template <typename... Ts, typename T>
+struct variant_contains<std::variant<Ts...>, T>
+    : std::bool_constant<(std::is_same_v<Ts, T> || ...)> {};
+
+template <typename Variant, typename T>
+inline constexpr bool variant_contains_v =
+    variant_contains<std::decay_t<Variant>, T>::value;
+
+template <typename SocketConfigVariant>
+bool MaybeEnableRdmaSocketConfig(SocketConfigVariant& socket_config) {
+#ifdef YLT_ENABLE_IBV
+    if constexpr (variant_contains_v<SocketConfigVariant,
+                                     coro_io::ib_socket_t::config_t>) {
+        socket_config = coro_io::ib_socket_t::config_t{};
+        return true;
+    }
+#endif
+    return false;
+}
+
+template <typename SocketConfigVariant>
+bool MaybeEnableUrmaSocketConfig(SocketConfigVariant& socket_config) {
+#ifdef YLT_ENABLE_URMA
+    if constexpr (variant_contains_v<SocketConfigVariant,
+                                     coro_io::urma_socket_t::config_t>) {
+        socket_config = coro_io::urma_socket_t::config_t{};
+        return true;
+    }
+#endif
+    return false;
+}
+
+template <typename SocketConfigVariant>
+void ApplyRpcProtocolSocketConfig(SocketConfigVariant& socket_config) {
+    switch (GetRpcProtocolFromEnv()) {
+        case RpcProtocol::Urma:
+            if (!MaybeEnableUrmaSocketConfig(socket_config)) {
+                LOG(WARNING)
+                    << "MC_RPC_PROTOCOL=urma requested but yalantinglibs was "
+                       "not built with YLT_ENABLE_URMA; using TCP";
+            }
+            break;
+        case RpcProtocol::Rdma:
+            if (!MaybeEnableRdmaSocketConfig(socket_config)) {
+                if (MaybeEnableUrmaSocketConfig(socket_config)) {
+                    LOG(WARNING)
+                        << "MC_RPC_PROTOCOL=rdma requested but "
+                           "YLT_ENABLE_IBV is unavailable; using URMA";
+                } else {
+                    LOG(WARNING)
+                        << "MC_RPC_PROTOCOL=rdma requested but no RDMA RPC "
+                           "transport is enabled; using TCP";
+                }
+            }
+            break;
+        case RpcProtocol::Tcp:
+            break;
+    }
+}
+
+void ApplyRpcProtocolToServer(coro_rpc::coro_rpc_server& server) {
+    switch (GetRpcProtocolFromEnv()) {
+        case RpcProtocol::Urma:
+#ifdef YLT_ENABLE_URMA
+            server.init_urma();
+            LOG(INFO) << "URMA initialized successfully";
+#else
+            LOG(WARNING)
+                << "MC_RPC_PROTOCOL=urma requested but yalantinglibs was not "
+                   "built with YLT_ENABLE_URMA; using TCP";
+#endif
+            break;
+        case RpcProtocol::Rdma:
+#ifdef YLT_ENABLE_IBV
+            server.init_ibv();
+            LOG(INFO) << "RDMA initialized successfully";
+#elif defined(YLT_ENABLE_URMA)
+            LOG(WARNING) << "MC_RPC_PROTOCOL=rdma requested but YLT_ENABLE_IBV "
+                           "is unavailable; using URMA";
+            server.init_urma();
+            LOG(INFO) << "URMA initialized successfully";
+#else
+            LOG(WARNING) << "MC_RPC_PROTOCOL=rdma requested but no RDMA RPC "
+                           "transport is enabled; using TCP";
+#endif
+            break;
+        case RpcProtocol::Tcp:
+            break;
+    }
+}
+
+}  // namespace
 
 class py_rpc_context {
    public:
@@ -50,11 +152,7 @@ bool RpcCommunicator::initialize(const RpcCommunicatorConfig& config) {
 
     // Initialize client pools with proper configuration
     coro_io::client_pool<coro_rpc::coro_rpc_client>::pool_config pool_conf{};
-    const char* value = std::getenv("MC_RPC_PROTOCOL");
-    if (value && std::string_view(value) == "rdma") {
-        pool_conf.client_config.socket_config =
-            coro_io::ib_socket_t::config_t{};
-    }
+    ApplyRpcProtocolSocketConfig(pool_conf.client_config.socket_config);
     client_pools_ =
         std::make_shared<coro_io::client_pools<coro_rpc::coro_rpc_client>>(
             pool_conf);
@@ -68,23 +166,24 @@ bool RpcCommunicator::initialize(const RpcCommunicatorConfig& config) {
             config.thread_count, config.listen_address,
             std::chrono::seconds(config.timeout_seconds));
 
-        if (value && std::string_view(value) == "rdma") {
+        if (GetRpcProtocolFromEnv() != RpcProtocol::Tcp) {
             if (server_) {
                 try {
-                    server_->init_ibv();
-                    LOG(INFO) << "RDMA initialized successfully";
+                    ApplyRpcProtocolToServer(*server_);
                 } catch (const std::exception& e) {
-                    LOG(ERROR) << "RDMA initialization failed: " << e.what();
+                    LOG(ERROR) << "RPC transport initialization failed: "
+                              << e.what();
                     LOG(WARNING) << "Falling back to TCP mode";
-                    // Continue without RDMA - the server will use TCP
                 } catch (...) {
                     LOG(ERROR)
-                        << "RDMA initialization failed with unknown error";
+                        << "RPC transport initialization failed with unknown "
+                           "error";
                     LOG(WARNING) << "Falling back to TCP mode";
-                    // Continue without RDMA - the server will use TCP
                 }
             } else {
-                LOG(ERROR) << "Server pointer is null, cannot initialize RDMA";
+                LOG(ERROR)
+                    << "Server pointer is null, cannot initialize RPC "
+                       "transport";
                 LOG(WARNING) << "Falling back to TCP mode";
             }
         }
@@ -92,13 +191,12 @@ bool RpcCommunicator::initialize(const RpcCommunicatorConfig& config) {
         server_->register_handler<&RpcCommunicator::handleDataTransfer,
                                   &RpcCommunicator::handleTensorTransfer>(this);
     }
+    auto rpc_protocol_env = RpcProtocolEnvValue();
     LOG(INFO) << "Environment variable MC_RPC_PROTOCOL is set to "
-              << (value ? value : "not set");
-    if (value && std::string_view(value) == "rdma") {
-        LOG(INFO) << "Using RDMA transport for RPC communication";
-    } else {
-        LOG(INFO) << "Using TCP transport for RPC communication";
-    }
+              << (rpc_protocol_env.empty() ? std::string("not set")
+                                           : std::string(rpc_protocol_env));
+    LOG(INFO) << "Using " << RpcProtocolName(GetRpcProtocolFromEnv())
+              << " transport for RPC communication";
 
     LOG(INFO) << "Communicator initialized with client pool support";
     return true;

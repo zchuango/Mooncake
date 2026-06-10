@@ -1,6 +1,7 @@
-#include <glog/logging.h>
+
 
 #include "file_interface.h"
+#include "log_macros.h"
 #include <fcntl.h>
 #include <unistd.h>
 #include <sys/file.h>

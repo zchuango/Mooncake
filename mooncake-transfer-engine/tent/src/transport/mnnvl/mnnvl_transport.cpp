@@ -13,9 +13,10 @@
 // limitations under the License.
 
 #include "tent/transport/mnnvl/mnnvl_transport.h"
+#include "log_macros.h"
 
 #include <bits/stdint-uintn.h>
-#include <glog/logging.h>
+
 
 #include <algorithm>
 #include <cassert>

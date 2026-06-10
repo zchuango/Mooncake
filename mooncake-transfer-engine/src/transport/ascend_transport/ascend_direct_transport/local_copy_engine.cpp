@@ -14,8 +14,9 @@
 // limitations under the License.
 
 #include "transport/ascend_transport/ascend_direct_transport/local_copy_engine.h"
+#include "log_macros.h"
 
-#include <glog/logging.h>
+
 
 #include <algorithm>
 #include <chrono>
@@ -197,7 +198,7 @@ aclError LocalCopyEngine::CopyWithBatch(TransferRequest::OpCode opcode,
 
     if (ret != ACL_ERROR_RT_FEATURE_NOT_SUPPORT) {
         if (ret == ACL_ERROR_NONE) {
-            VLOG(1) << "Copy with aclrtMemcpyBatch suc.";
+            LOG(INFO) << "Copy with aclrtMemcpyBatch suc.";
             for (size_t i = 0; i < batch_num; i++) {
                 auto &slice = slice_list[slice_index + i];
                 slice->markSuccess();
@@ -231,7 +232,7 @@ void LocalCopyEngine::CopyWithSync(TransferRequest::OpCode opcode,
         }
 
         if (ret == ACL_ERROR_NONE) {
-            VLOG(1) << "Copy with aclrtMemcpy suc.";
+            LOG(INFO) << "Copy with aclrtMemcpy suc.";
             slice->markSuccess();
         } else {
             LOG(ERROR) << "aclrtMemcpy failed, ret:" << ret;
@@ -276,7 +277,7 @@ void LocalCopyEngine::CopyWithAsync(TransferRequest::OpCode opcode,
     aclError ret =
         aclrtSynchronizeStreamWithTimeout(stream_, transfer_timeout_);
     if (ret == ACL_ERROR_NONE) {
-        VLOG(1) << "Copy with aclrtMemcpyAsync suc.";
+        LOG(INFO) << "Copy with aclrtMemcpyAsync suc.";
         for (auto &slice : async_list) {
             slice->markSuccess();
         }

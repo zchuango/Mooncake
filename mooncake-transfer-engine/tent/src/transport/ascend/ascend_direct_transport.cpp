@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include "tent/transport/ascend/ascend_direct_transport.h"
+#include "log_macros.h"
 
 #include <algorithm>
 #include <cstddef>
@@ -23,7 +24,7 @@
 #include <string>
 
 #include <bits/stdint-uintn.h>
-#include <glog/logging.h>
+
 
 #include "tent/common/status.h"
 #include "tent/runtime/slab.h"
@@ -280,7 +281,7 @@ Status AscendDirectTransport::checkAndConnect(const std::string &remote_hixl) {
     std::lock_guard<std::mutex> lock(connection_mutex_);
     auto it = connected_segments_.find(remote_hixl);
     if (it != connected_segments_.end()) {
-        VLOG(1) << "Already connected to target hixl engine: " << remote_hixl;
+        LOG(INFO) << "Already connected to target hixl engine: " << remote_hixl;
     } else {
         auto status = hixl_->Connect(
             remote_hixl.c_str(), static_cast<int32_t>(connect_timeout_ / 1000));
@@ -318,7 +319,7 @@ void AscendDirectTransport::startTransfer(
     auto &detail = std::get<MemorySegmentDesc>(desc->detail);
     auto remote_hixl = detail.device_attrs["hixl_name"];
     if (remote_hixl == local_hixl_name_) {
-        VLOG(1) << "Target is local.";
+        LOG(INFO) << "Target is local.";
         auto start = std::chrono::steady_clock::now();
         localCopy(opcode, tasks);
         LOG(INFO) << "Local copy cost: "
@@ -645,7 +646,7 @@ aclError AscendDirectTransport::copyWithBatch(
     }
     if (ret != ACL_ERROR_RT_FEATURE_NOT_SUPPORT) {
         if (ret == ACL_ERROR_NONE) {
-            VLOG(1) << "Copy with aclrtMemcpyBatch suc.";
+            LOG(INFO) << "Copy with aclrtMemcpyBatch suc.";
             for (size_t i = 0; i < batch_num; i++) {
                 auto &task = tasks[task_index + i];
                 task->status_word = TransferStatusEnum::COMPLETED;
@@ -674,7 +675,7 @@ void AscendDirectTransport::copyWithSync(Request::OpCode opcode,
             ret = aclrtMemcpy(local_ptr, len, remote_ptr, len, kind);
         }
         if (ret == ACL_ERROR_NONE) {
-            VLOG(1) << "Copy with aclrtMemcpy suc.";
+            LOG(INFO) << "Copy with aclrtMemcpy suc.";
             task->status_word = TransferStatusEnum::COMPLETED;
         } else {
             LOG(ERROR) << "aclrtMemcpy failed, ret:" << ret;
@@ -708,7 +709,7 @@ void AscendDirectTransport::copyWithAsync(Request::OpCode opcode,
     ret = aclrtSynchronizeStreamWithTimeout(
         stream_, static_cast<int32_t>(transfer_timeout_));
     if (ret == ACL_ERROR_NONE) {
-        VLOG(1) << "Copy with aclrtMemcpyAsync suc.";
+        LOG(INFO) << "Copy with aclrtMemcpyAsync suc.";
         for (auto &task : async_list) {
             task->status_word = TransferStatusEnum::COMPLETED;
         }

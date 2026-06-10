@@ -73,11 +73,8 @@ private:
         int32_t count = 0;
     };
 
-    // Get or create window for trace, returns nullptr if rate limiting disabled
-    Window *GetOrCreateWindow(uint64_t traceHash);
-
     // Clean up stale windows periodically
-    void CleanupStaleWindows(int64_t nowMs);
+    void CleanupStaleWindowsLocked(int64_t nowMs);
 
     std::atomic<int32_t> rate_{ 0 };  // 0 = unlimited
     std::atomic<int64_t> lastCleanupMs_{ 0 };

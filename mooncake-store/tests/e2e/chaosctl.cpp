@@ -1,6 +1,7 @@
-#include <glog/logging.h>
+
 
 #include <chrono>
+#include "log_macros.h"
 #include <fstream>
 #include <map>
 #include <memory>

@@ -13,8 +13,9 @@
 // limitations under the License.
 
 #include "transport/nvmeof_transport/cufile_desc_pool.h"
+#include "log_macros.h"
 
-#include <glog/logging.h>
+
 
 #include <cstddef>
 #include <mutex>

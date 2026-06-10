@@ -1,6 +1,7 @@
 #include "segment.h"
+#include "log_macros.h"
 
-#include <glog/logging.h>
+
 #include <gtest/gtest.h>
 
 #include <boost/functional/hash.hpp>

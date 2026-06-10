@@ -15,7 +15,13 @@
  */
 
 #include "trace.h"
+#include "log_config.h"
+#include "logger.h"
+#include "log_macros.h"
+
+#include <atomic>
 #include <cstring>
+#include <unistd.h>
 
 namespace mooncake {
 
@@ -75,3 +81,54 @@ uint64_t Trace::FnvHash(const std::string &str)
 }
 
 }  // namespace mooncake
+
+namespace mooncake::logging {
+
+uint64_t NewTraceId()
+{
+    static std::atomic<uint64_t> counter{1};
+    const uint64_t pid = static_cast<uint64_t>(getpid()) & 0xffff;
+    return (pid << 48) ^ counter.fetch_add(1, std::memory_order_relaxed);
+}
+
+uint64_t CurrentTraceId()
+{
+    const auto trace_id = Trace::Instance().GetTraceID();
+    if (trace_id.empty()) {
+        return 0;
+    }
+    try {
+        return std::stoull(trace_id);
+    } catch (...) {
+        return Trace::Instance().GetTraceHash();
+    }
+}
+
+bool ShouldLog(LogLevel level)
+{
+    return mooncake::ShouldLog(level);
+}
+
+void ApplyMooncakeLogEnableToGlog()
+{
+    if (!Logger::Instance().IsInitialized()) {
+        Logger::Instance().Init(LogConfig());
+    }
+}
+
+ScopedTraceId::ScopedTraceId(uint64_t trace_id)
+    : previous_trace_id_(Trace::Instance().GetTraceID())
+{
+    Trace::Instance().SetTraceID(trace_id);
+}
+
+ScopedTraceId::~ScopedTraceId()
+{
+    if (previous_trace_id_.empty()) {
+        Trace::Instance().Invalidate();
+    } else {
+        Trace::Instance().SetTraceID(previous_trace_id_);
+    }
+}
+
+}  // namespace mooncake::logging

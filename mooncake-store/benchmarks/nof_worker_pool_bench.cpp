@@ -1,5 +1,6 @@
 #include <gflags/gflags.h>
-#include <glog/logging.h>
+#include "log_macros.h"
+
 
 #include <algorithm>
 #include <array>
@@ -653,9 +654,7 @@ void FreeThreadSlots(mooncake::SpdkWrapper &wrapper,
 
 }  // namespace
 
-int main(int argc, char **argv) {
-    google::InitGoogleLogging(argv[0]);
-    FLAGS_logtostderr = true;
+int main(int argc, char **argv) { 
     gflags::SetUsageMessage(
         "NoF worker pool benchmark. Use --helpshort to list benchmark "
         "parameters.");
@@ -1007,13 +1006,10 @@ int main(int argc, char **argv) {
             std::cout << "endpoint[" << endpoint_index << "].clat_p99="
                       << FormatLatencyNs(endpoint_latency.p99_ns) << "\n";
         }
-        std::cout << "==========================================\n";
-
-        google::ShutdownGoogleLogging();
+        std::cout << "==========================================\n"; 
         return 0;
     } catch (const std::exception &e) {
-        LOG(ERROR) << "Benchmark failed: " << e.what();
-        google::ShutdownGoogleLogging();
+        LOG(ERROR) << "Benchmark failed: " << e.what(); 
         return 1;
     }
 }

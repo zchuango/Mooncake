@@ -23,7 +23,6 @@
 #include "common.h"
 #include "config.h"
 #include "error.h"
-#include "mooncake_logging.h"
 #include "log_macros.h"
 #include "transfer_metadata_plugin.h"
 #define UBDIAG_PERF_DEF_FILE "mooncake_perf_points.def"

@@ -14,9 +14,10 @@
 // limitations under the License.
 
 #include "transport/ascend_transport/ascend_direct_transport/utils.h"
+#include "log_macros.h"
 
 #include <random>
-#include <glog/logging.h>
+
 
 #include "common.h"
 #include "config.h"

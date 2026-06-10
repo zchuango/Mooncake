@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include "tent/runtime/topology.h"
+#include "log_macros.h"
 
 #include <fstream>
 #include <iostream>

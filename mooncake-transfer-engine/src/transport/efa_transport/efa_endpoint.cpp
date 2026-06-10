@@ -13,8 +13,9 @@
 // limitations under the License.
 
 #include "transport/efa_transport/efa_endpoint.h"
+#include "log_macros.h"
 
-#include <glog/logging.h>
+
 
 #include <cstdlib>
 #include <sstream>
@@ -83,7 +84,7 @@ int EfaEndPoint::setupConnectionsByActive() {
     cached_peer_addr_ = peer_desc.efa_addr;
 
     status_.store(CONNECTED, std::memory_order_release);
-    VLOG(1) << "EFA connection established: " << toString()
+    LOG(INFO) << "EFA connection established: " << toString()
             << " peer_fi_addr=" << peer_fi_addr_;
     return 0;
 }
@@ -127,7 +128,7 @@ int EfaEndPoint::setupConnectionsByPassive(const HandShakeDesc& peer_desc,
     if (status_.load(std::memory_order_relaxed) == CONNECTED) {
         if (!cached_peer_addr_.empty() &&
             peer_desc.efa_addr == cached_peer_addr_) {
-            VLOG(1) << "EFA passive handshake (same peer addr): " << toString();
+            LOG(INFO) << "EFA passive handshake (same peer addr): " << toString();
         } else {
             LOG(WARNING) << "Re-establish EFA connection: " << toString();
         }
@@ -147,7 +148,7 @@ int EfaEndPoint::setupConnectionsByPassive(const HandShakeDesc& peer_desc,
     // reply_msg empty on success
 
     status_.store(CONNECTED, std::memory_order_release);
-    VLOG(1) << "EFA connection established (passive): " << toString();
+    LOG(INFO) << "EFA connection established (passive): " << toString();
     return 0;
 }
 

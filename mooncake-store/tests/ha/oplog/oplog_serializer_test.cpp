@@ -1,6 +1,6 @@
 #include "ha/oplog/oplog_serializer.h"
 
-#include <glog/logging.h>
+
 #include <gtest/gtest.h>
 #include <xxhash.h>
 

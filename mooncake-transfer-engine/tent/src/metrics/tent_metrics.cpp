@@ -13,8 +13,9 @@
 // limitations under the License.
 
 #include "tent/metrics/tent_metrics.h"
+#include "log_macros.h"
 
-#include <glog/logging.h>
+
 #include <tent/thirdparty/nlohmann/json.h>
 #include <sstream>
 #include <iomanip>

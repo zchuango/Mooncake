@@ -1,6 +1,7 @@
 #pragma once
 
 #include <algorithm>
+#include "log_macros.h"
 #include <cctype>
 #include <cstddef>
 #include <cstdlib>

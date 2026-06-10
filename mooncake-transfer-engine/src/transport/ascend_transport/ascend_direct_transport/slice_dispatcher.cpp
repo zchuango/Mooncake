@@ -14,12 +14,13 @@
 // limitations under the License.
 
 #include "transport/ascend_transport/ascend_direct_transport/slice_dispatcher.h"
+#include "log_macros.h"
 #include "transport/ascend_transport/ascend_direct_transport/transfer_executor_base.h"
 #include "transport/ascend_transport/ascend_direct_transport/utils.h"
 
 #include "common.h"
 
-#include <glog/logging.h>
+
 
 #include <cstdlib>
 #include <cstring>

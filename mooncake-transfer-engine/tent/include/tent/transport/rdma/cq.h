@@ -16,7 +16,7 @@
 #define TENT_CQ_H
 
 #include <gflags/gflags.h>
-#include <glog/logging.h>
+
 #include <infiniband/verbs.h>
 
 #include "tent/common/status.h"

@@ -1,10 +1,11 @@
 #include "ha/snapshot/catalog/backends/embedded/embedded_snapshot_catalog_store.h"
+#include "log_macros.h"
 
 #include <algorithm>
 #include <set>
 #include <string_view>
 
-#include <glog/logging.h>
+
 
 namespace mooncake {
 namespace ha {

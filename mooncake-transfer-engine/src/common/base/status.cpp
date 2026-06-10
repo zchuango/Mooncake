@@ -17,10 +17,11 @@
 // https://github.com/facebook/rocksdb/blob/main/util/status.cc
 
 #include "common/base/status.h"
+#include "log_macros.h"
 
 #include <cstring>
 
-#include "glog/logging.h"
+
 
 namespace mooncake {
 

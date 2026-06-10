@@ -14,8 +14,9 @@
 // limitations under the License.
 
 #include "transport/ascend_transport/ascend_direct_transport/sync_transfer_executor.h"
+#include "log_macros.h"
 
-#include <glog/logging.h>
+
 
 #include "common.h"
 #include "transfer_metadata.h"

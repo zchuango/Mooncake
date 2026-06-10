@@ -13,9 +13,10 @@
 // limitations under the License.
 
 #include "tent/transfer_engine.h"
+#include "log_macros.h"
 #include "tent/common/config.h"
 #include "tent/runtime/transfer_engine_impl.h"
-#include <glog/logging.h>
+
 
 namespace mooncake {
 namespace tent {

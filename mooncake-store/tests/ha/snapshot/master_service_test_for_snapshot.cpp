@@ -1,4 +1,5 @@
 #include "master_service_test_for_snapshot_base.h"
+#include "log_macros.h"
 
 #include <atomic>
 #include <random>

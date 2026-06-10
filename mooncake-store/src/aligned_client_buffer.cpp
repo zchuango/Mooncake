@@ -1,12 +1,12 @@
 #include "aligned_client_buffer.hpp"
 
-#include <glog/logging.h>
 #include <sys/mman.h>
 #include <cstdlib>
 #include <cstring>
 #include <string_view>
 
 #include "utils.h"
+#include "log_macros.h"
 
 namespace mooncake {
 namespace {

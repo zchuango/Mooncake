@@ -2,9 +2,10 @@
 #include <string>
 #include <sys/uio.h>
 #include <unistd.h>
-#include <glog/logging.h>
+
 
 #include "file_interface.h"
+#include "log_macros.h"
 
 namespace mooncake {
 PosixFile::PosixFile(const std::string &filename, int fd)

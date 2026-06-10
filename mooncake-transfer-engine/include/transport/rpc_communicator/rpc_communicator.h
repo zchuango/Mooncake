@@ -15,6 +15,7 @@
 #include <ylt/coro_io/coro_io.hpp>
 #include <async_simple/coro/Lazy.h>
 #include "config.h"
+#include "log_macros.h"
 
 namespace mooncake {
 

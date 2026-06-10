@@ -15,7 +15,7 @@
 #ifndef SEGMENT_TRACKER_H
 #define SEGMENT_TRACKER_H
 
-#include <glog/logging.h>
+
 #include <netdb.h>
 
 #include <atomic>

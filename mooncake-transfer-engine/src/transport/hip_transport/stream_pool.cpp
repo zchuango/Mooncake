@@ -13,8 +13,9 @@
 // limitations under the License.
 
 #include "transport/hip_transport/stream_pool.h"
+#include "log_macros.h"
 
-#include <glog/logging.h>
+
 
 namespace mooncake {
 

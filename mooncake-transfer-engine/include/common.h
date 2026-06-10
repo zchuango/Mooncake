@@ -15,11 +15,12 @@
 #ifndef COMMON_H
 #define COMMON_H
 
-#include <glog/logging.h>
+
 #include <numa.h>
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include <sys/mman.h>
+#include "log_macros.h"
 #include <sys/time.h>
 #include <unistd.h>
 
@@ -68,7 +69,7 @@ enum class HandShakeRequestType {
 static inline std::string getHostname() {
     char hostname[256];
     if (gethostname(hostname, 256)) {
-        PLOG(ERROR) << "Failed to get hostname";
+        LOG(ERROR) << "Failed to get hostname";
         return "";
     }
     return hostname;
@@ -107,7 +108,7 @@ static inline int64_t getCurrentTimeInNano() {
     const int64_t kNanosPerSecond = 1000 * 1000 * 1000;
     struct timespec ts;
     if (clock_gettime(CLOCK_REALTIME, &ts)) {
-        PLOG(ERROR) << "getCurrentTimeInNano: clock_gettime failed";
+        LOG(ERROR) << "getCurrentTimeInNano: clock_gettime failed";
         return ERR_CLOCK;
     }
     return (int64_t{ts.tv_sec} * kNanosPerSecond + int64_t{ts.tv_nsec});
@@ -317,7 +318,7 @@ static inline ssize_t writeFully(int fd, const void *buf, size_t len) {
         if (rc < 0 && (errno == EAGAIN || errno == EINTR))
             continue;
         else if (rc < 0) {
-            PLOG(ERROR) << "Socket write failed";
+            LOG(ERROR) << "Socket write failed";
             return rc;
         } else if (rc == 0) {
             LOG(WARNING) << "Socket write incompleted: expected " << len
@@ -342,7 +343,7 @@ static inline ssize_t readFully(int fd, void *buf, size_t len) {
         if (rc < 0 && (errno == EAGAIN || errno == EINTR))
             continue;
         else if (rc < 0) {
-            PLOG(ERROR) << "Socket read failed";
+            LOG(ERROR) << "Socket read failed";
             return rc;
         } else if (rc == 0) {
             LOG(WARNING) << "Socket read incompleted: expected " << len

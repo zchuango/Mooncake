@@ -2,9 +2,10 @@
 // Simple arena allocator implementation
 
 #include "mmap_arena.h"
+#include "log_macros.h"
 #include "utils.h"
 #include <sys/mman.h>
-#include <glog/logging.h>
+
 #include <cerrno>
 #include <cstring>
 #include <algorithm>
@@ -240,7 +241,7 @@ void* MmapArena::allocate(size_t size, size_t alignment) {
 
     void* ptr = static_cast<char*>(pool_base) + aligned_offset;
 
-    VLOG(2) << "[ARENA] Allocated: size=" << size
+    LOG(INFO) << "[ARENA] Allocated: size=" << size
             << ", aligned_size=" << aligned_size
             << ", aligned_offset=" << aligned_offset << ", ptr=" << ptr
             << ", utilization=" << (100.0 * next / pool_size) << "%";

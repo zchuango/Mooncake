@@ -13,12 +13,13 @@
 // limitations under the License.
 
 #include "tent/platform/ascend.h"
+#include "log_macros.h"
 #include "tent/common/status.h"
 #include "tent/common/utils/prefault.h"
 #include "tent/common/utils/random.h"
 
 #include <acl/acl.h>
-#include <glog/logging.h>
+
 #include <fstream>
 #include <iostream>
 #include <map>

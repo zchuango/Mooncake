@@ -1,4 +1,5 @@
 #include "ha/leadership/backends/k8s/k8s_leader_coordinator.h"
+#include "log_macros.h"
 
 #include <algorithm>
 #include <atomic>
@@ -8,7 +9,7 @@
 #include <string>
 #include <thread>
 
-#include <glog/logging.h>
+
 #include <ylt/util/tl/expected.hpp>
 
 namespace mooncake {

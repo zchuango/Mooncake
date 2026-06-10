@@ -1,8 +1,9 @@
 #include "ha/oplog/etcd_oplog_change_notifier.h"
+#include "log_macros.h"
 
 #include <algorithm>
 #include <chrono>
-#include <glog/logging.h>
+
 #include <sstream>
 #include <thread>
 
@@ -242,7 +243,7 @@ void EtcdOpLogChangeNotifier::HandleWatchEvent(const std::string& key,
     }
 
     if (event_type == 1) {
-        VLOG(1) << "OpLog entry deleted: " << key;
+        LOG(INFO) << "OpLog entry deleted: " << key;
         consecutive_errors_.store(0);
         return;
     }
@@ -292,7 +293,7 @@ void EtcdOpLogChangeNotifier::HandleWatchEvent(const std::string& key,
 
     consecutive_errors_.store(0);
     reconnect_count_.store(0);
-    VLOG(2) << "Delivered OpLog entry: sequence_id=" << entry.sequence_id
+    LOG(INFO) << "Delivered OpLog entry: sequence_id=" << entry.sequence_id
             << ", op_type=" << static_cast<int>(entry.op_type)
             << ", key=" << entry.object_key;
 }

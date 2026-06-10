@@ -15,7 +15,7 @@
 #ifndef TRANSFER_METADATA
 #define TRANSFER_METADATA
 
-#include <glog/logging.h>
+
 #if __has_include(<jsoncpp/json/json.h>)
 #include <jsoncpp/json/json.h>  // Ubuntu
 #else

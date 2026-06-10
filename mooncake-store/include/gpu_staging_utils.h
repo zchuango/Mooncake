@@ -7,7 +7,7 @@
 #endif
 
 #include <cstddef>
-#include <glog/logging.h>
+
 
 namespace mooncake {
 namespace gpu_staging {

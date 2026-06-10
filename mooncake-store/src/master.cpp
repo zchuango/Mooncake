@@ -14,7 +14,6 @@
 #include "http_metadata_server.h"
 #include "log_macros.h"
 #include "logger.h"
-#include "mooncake_logging.h"
 #include "rpc_service.h"
 #include "types.h"
 #include "utils.h"

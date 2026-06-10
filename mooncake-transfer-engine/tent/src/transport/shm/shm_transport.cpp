@@ -13,9 +13,10 @@
 // limitations under the License.
 
 #include "tent/transport/shm/shm_transport.h"
+#include "log_macros.h"
 
 #include <bits/stdint-uintn.h>
-#include <glog/logging.h>
+
 #include <sys/mman.h>
 
 #include <algorithm>

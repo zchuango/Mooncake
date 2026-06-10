@@ -20,7 +20,6 @@
 #include "transport/kunpeng_transport/ub_transport.h"
 #include "transport/kunpeng_transport/ub_endpoint.h"
 #include "transport/kunpeng_transport/urma/urma_endpoint.h"
-#include "mooncake_logging.h"
 #include "log_macros.h"
 
 namespace mooncake {

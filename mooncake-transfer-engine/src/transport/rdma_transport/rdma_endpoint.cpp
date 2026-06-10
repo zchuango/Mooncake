@@ -13,8 +13,9 @@
 // limitations under the License.
 
 #include "transport/rdma_transport/rdma_endpoint.h"
+#include "log_macros.h"
 
-#include <glog/logging.h>
+
 
 #include <cassert>
 #include <cstddef>
@@ -84,7 +85,7 @@ int RdmaEndPoint::construct(ibv_cq *cq, size_t num_qp_list,
         attr.cap.max_inline_data = max_inline_bytes;
         qp_list_[i] = ibv_create_qp(context_.pd(), &attr);
         if (!qp_list_[i]) {
-            PLOG(ERROR) << "Failed to create QP";
+            LOG(ERROR) << "Failed to create QP";
             return ERR_ENDPOINT;
         }
     }
@@ -148,7 +149,7 @@ int RdmaEndPoint::deconstructLocked() {
     for (size_t i = 0; i < qp_list_.size(); ++i) {
         if (!qp_list_[i]) continue;  // already destroyed in a previous call
         if (ibv_destroy_qp(qp_list_[i])) {
-            PLOG(ERROR) << "Failed to destroy QP[" << i << "]";
+            LOG(ERROR) << "Failed to destroy QP[" << i << "]";
             result = ERR_ENDPOINT;
         } else {
             qp_list_[i] = nullptr;
@@ -182,7 +183,7 @@ void RdmaEndPoint::beginDestroy() {
     attr.qp_state = IBV_QPS_ERR;
     for (size_t i = 0; i < qp_list_.size(); ++i) {
         if (ibv_modify_qp(qp_list_[i], &attr, IBV_QP_STATE)) {
-            PLOG(WARNING) << "Failed to modify QP to ERR during beginDestroy";
+            LOG(WARNING) << "Failed to modify QP to ERR during beginDestroy";
         }
     }
 }
@@ -525,7 +526,7 @@ int RdmaEndPoint::disconnectUnlocked() {
     for (size_t i = 0; i < qp_list_.size(); ++i) {
         int curr_ret = ibv_modify_qp(qp_list_[i], &attr, IBV_QP_STATE);
         if (curr_ret) {
-            PLOG(ERROR) << "Failed to modify QP to RESET";
+            LOG(ERROR) << "Failed to modify QP to RESET";
             ret = ERR_ENDPOINT;
         }
         // After resetting QP, the wr_depth_list_ won't change
@@ -643,7 +644,7 @@ int RdmaEndPoint::submitPostSend(
         __sync_fetch_and_add(cq_outstanding_, wr_count);
         int rc = ibv_post_send(qp_list_[qp_index], wr_list.data(), &bad_wr);
         if (rc) {
-            PLOG(ERROR) << "Failed to ibv_post_send";
+            LOG(ERROR) << "Failed to ibv_post_send";
             while (bad_wr) {
                 int i = bad_wr - wr_list.data();
                 failed_slice_list.push_back(slice_list[start + i]);
@@ -759,7 +760,7 @@ int RdmaEndPoint::doSetupConnection(int qp_index, const ibv_gid &peer_gid,
     int ret = ibv_modify_qp(qp, &attr, IBV_QP_STATE);
     if (ret) {
         std::string message = "Failed to modify QP to RESET";
-        PLOG(ERROR) << "[Handshake] " << message;
+        LOG(ERROR) << "[Handshake] " << message;
         if (reply_msg) *reply_msg = message + ": " + strerror(errno);
         return ERR_ENDPOINT;
     }
@@ -777,7 +778,7 @@ int RdmaEndPoint::doSetupConnection(int qp_index, const ibv_gid &peer_gid,
     if (ret) {
         std::string message =
             "Failed to modify QP to INIT, check local context port num";
-        PLOG(ERROR) << "[Handshake] " << message;
+        LOG(ERROR) << "[Handshake] " << message;
         if (reply_msg) *reply_msg = message + ": " + strerror(errno);
         return ERR_ENDPOINT;
     }
@@ -814,7 +815,7 @@ int RdmaEndPoint::doSetupConnection(int qp_index, const ibv_gid &peer_gid,
     if (ret) {
         std::string message =
             "Failed to modify QP to RTR, check mtu, gid, peer lid, peer qp num";
-        PLOG(ERROR) << "[Handshake] " << message;
+        LOG(ERROR) << "[Handshake] " << message;
         if (reply_msg) *reply_msg = message + ": " + strerror(errno);
         return ERR_ENDPOINT;
     }
@@ -833,7 +834,7 @@ int RdmaEndPoint::doSetupConnection(int qp_index, const ibv_gid &peer_gid,
                             IBV_QP_MAX_QP_RD_ATOMIC);
     if (ret) {
         std::string message = "Failed to modify QP to RTS";
-        PLOG(ERROR) << "[Handshake] " << message;
+        LOG(ERROR) << "[Handshake] " << message;
         if (reply_msg) *reply_msg = message + ": " + strerror(errno);
         return ERR_ENDPOINT;
     }
@@ -848,7 +849,7 @@ int RdmaEndPoint::doSetupConnection(int qp_index, const ibv_gid &peer_gid,
             uint8_t target = (uint8_t)(qp_index % n) + 1;
             int lag_ret = mlx5dv_modify_qp_lag_port(qp, target);
             if (lag_ret) {
-                LOG_FIRST_N(WARNING, 4)
+                LOG(WARNING)
                     << "[RDMA] mlx5dv_modify_qp_lag_port failed"
                     << " (qp_index=" << qp_index
                     << ", target_port=" << (int)target
@@ -856,19 +857,19 @@ int RdmaEndPoint::doSetupConnection(int qp_index, const ibv_gid &peer_gid,
             } else {
                 uint8_t cfg = 0, active = 0;
                 if (mlx5dv_query_qp_lag_port(qp, &cfg, &active) == 0) {
-                    VLOG(1)
+                    LOG(INFO)
                         << "[RDMA] QP[" << qp_index << "] qpn=" << qp->qp_num
                         << " lag_port cfg=" << (int)cfg
                         << " active=" << (int)active;
                 } else {
-                    LOG_FIRST_N(WARNING, 4)
+                    LOG(WARNING)
                         << "[RDMA] mlx5dv_query_qp_lag_port failed"
                         << " (qp_index=" << qp_index << ")";
                 }
             }
         }
 #else
-        LOG_FIRST_N(WARNING, 1)
+        LOG(WARNING) << "MC_MLX5_QP_LAG_PORT_BALANCE is set but binary was not built with USE_MLX5DV; ignoring"
             << "MC_MLX5_QP_LAG_PORT_BALANCE is set but binary was not built "
                "with USE_MLX5DV; ignoring";
 #endif
@@ -884,15 +885,15 @@ int RdmaEndPoint::doSetupConnection(int qp_index, const ibv_gid &peer_gid,
         uint16_t sport = sports[qp_index % sports.size()];
         int sp_ret = mlx5dv_modify_qp_udp_sport(qp, sport);
         if (sp_ret) {
-            LOG_FIRST_N(WARNING, 4)
+            LOG(WARNING)
                 << "[RDMA] mlx5dv_modify_qp_udp_sport failed (qp_index="
                 << qp_index << ", sport=" << sport << "): " << strerror(sp_ret);
         } else {
-            VLOG(1) << "[RDMA] QP[" << qp_index << "] qpn=" << qp->qp_num
+            LOG(INFO) << "[RDMA] QP[" << qp_index << "] qpn=" << qp->qp_num
                     << " udp_sport=" << sport;
         }
 #else
-        LOG_FIRST_N(WARNING, 1)
+        LOG(WARNING) << "MC_MLX5_QP_LAG_PORT_BALANCE is set but binary was not built with USE_MLX5DV; ignoring"
             << "MC_MLX5_QP_UDP_SPORTS is set but binary was not built with "
                "USE_MLX5DV; ignoring";
 #endif

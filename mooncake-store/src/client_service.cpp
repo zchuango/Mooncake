@@ -28,7 +28,6 @@
 #include "transfer_task.h"
 #include "transport/transport.h"
 #include "config.h"
-#include "mooncake_logging.h"
 #include "log_macros.h"
 #include "ha/leadership/leader_coordinator_factory.h"
 #include "types.h"

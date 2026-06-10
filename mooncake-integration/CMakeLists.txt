@@ -58,10 +58,10 @@ if(WITH_TE)
   target_link_libraries(engine PRIVATE ${Python3_LIBRARIES})
   target_include_directories(engine PRIVATE ${Python3_INCLUDE_DIRS})
   if(USE_ASCEND_DIRECT)
-    target_link_libraries(engine PUBLIC ascendcl transfer_engine glog::glog
+    target_link_libraries(engine PUBLIC ascendcl transfer_engine
                                         gflags::gflags)
   else()
-    target_link_libraries(engine PUBLIC transfer_engine glog::glog
+    target_link_libraries(engine PUBLIC transfer_engine
                                         gflags::gflags)
   endif()
 
@@ -107,11 +107,11 @@ if(WITH_STORE)
 
   if(USE_ASCEND_DIRECT)
     target_link_libraries(
-      store PUBLIC ascendcl transfer_engine glog::glog gflags::gflags
+      store PUBLIC ascendcl transfer_engine gflags::gflags
                    mooncake_store cachelib_memory_allocator)
   else()
     target_link_libraries(
-      store PUBLIC transfer_engine glog::glog gflags::gflags mooncake_store
+      store PUBLIC transfer_engine gflags::gflags mooncake_store
                    cachelib_memory_allocator)
   endif()
 endif()

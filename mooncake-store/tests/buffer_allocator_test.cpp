@@ -1,6 +1,7 @@
 // buffer_allocator_test.cpp
-#include <glog/logging.h>
+
 #include <gtest/gtest.h>
+#include "log_macros.h"
 
 #include <atomic>
 #include <cstddef>

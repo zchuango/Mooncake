@@ -5,7 +5,8 @@
 #include <cstdlib>
 #include <cstdint>
 #include <shared_mutex>
-#include <glog/logging.h>
+
+#include "log_macros.h"
 
 namespace mooncake {
 namespace {
@@ -342,7 +343,7 @@ bool LocalHotCacheHandler::SubmitPutTask(const std::string& key,
 }
 
 void LocalHotCacheHandler::workerThread() {
-    VLOG(2) << "LocalHotCacheHandler worker thread started";
+    LOG(INFO) << "LocalHotCacheHandler worker thread started";
 
     while (true) {
         HotCachePutTask task;
@@ -369,9 +370,9 @@ void LocalHotCacheHandler::workerThread() {
             try {
                 // Insert the pre-filled block into LRU
                 if (task.hot_cache->PutHotKey(task.block)) {
-                    VLOG(2) << "Put task completed: " << task.key;
+                    LOG(INFO) << "Put task completed: " << task.key;
                 } else {
-                    VLOG(2) << "Put task skipped: " << task.key;
+                    LOG(INFO) << "Put task skipped: " << task.key;
                 }
             } catch (const std::exception& e) {
                 LOG(ERROR) << "Exception during async hot cache put for key "
@@ -384,6 +385,6 @@ void LocalHotCacheHandler::workerThread() {
         }
     }
 
-    VLOG(2) << "LocalHotCacheHandler worker thread exiting";
+    LOG(INFO) << "LocalHotCacheHandler worker thread exiting";
 }
 }  // namespace mooncake

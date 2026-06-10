@@ -16,6 +16,7 @@
 #define TENT_PREFAULT_H
 
 #include <algorithm>
+#include "log_macros.h"
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
@@ -28,7 +29,7 @@
 #include <errno.h>
 #include <sys/mman.h>
 
-#include <glog/logging.h>
+
 
 namespace mooncake {
 namespace tent {
@@ -312,7 +313,7 @@ inline bool prefaultBeforeProbe(void** pages, int n, uintptr_t aligned_start,
                      << ", continuing with unprefaulted pages";
         return false;
     }
-    VLOG(1) << "[" << tag << "] Prefault succeeded: method=" << result.method
+    LOG(INFO) << "[" << tag << "] Prefault succeeded: method=" << result.method
             << " duration_ms=" << result.duration_ms
             << " threads=" << result.threads
             << " chunk_bytes=" << result.chunk_bytes;

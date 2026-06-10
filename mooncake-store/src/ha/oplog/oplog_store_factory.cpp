@@ -1,6 +1,7 @@
 #include "ha/oplog/oplog_store_factory.h"
+#include "log_macros.h"
 
-#include <glog/logging.h>
+
 
 #ifdef STORE_USE_ETCD
 #include "ha/oplog/etcd_oplog_store.h"

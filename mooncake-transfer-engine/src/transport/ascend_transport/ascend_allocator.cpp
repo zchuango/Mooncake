@@ -1,9 +1,10 @@
 #include <algorithm>
+#include "log_macros.h"
 #include <mutex>
 #include <unordered_map>
 #include <vector>
 
-#include <glog/logging.h>
+
 #include "config.h"
 #include "acl/acl.h"
 #include "transport/ascend_transport/ascend_direct_transport/adxl_compat.h"

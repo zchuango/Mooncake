@@ -13,9 +13,10 @@
 // limitations under the License.
 
 #include "transport/cxl_transport/cxl_transport.h"
+#include "log_macros.h"
 
 #include <bits/stdint-uintn.h>
-#include <glog/logging.h>
+
 
 #include <algorithm>
 #include <cassert>

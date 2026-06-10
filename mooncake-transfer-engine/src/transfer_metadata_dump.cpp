@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include "config.h"
+#include "log_macros.h"
 #include "transfer_metadata.h"
 
 namespace mooncake {

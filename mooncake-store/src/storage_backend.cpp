@@ -19,6 +19,7 @@
 
 #include "mutex.h"
 #include "utils.h"
+#include "log_macros.h"
 
 #include <ylt/util/tl/expected.hpp>
 
@@ -580,7 +581,7 @@ void StorageBackend::RemoveByRegex(const std::string& regex_pattern) {
         for (const auto& path : paths_to_remove) {
             std::error_code ec;
             if (fs::remove(path, ec)) {
-                VLOG(1) << "Removed file by regex: " << path;
+                LOG(INFO) << "Removed file by regex: " << path;
             } else {
                 LOG(ERROR) << "Failed to delete file: " << path
                            << ", error: " << ec.message();
@@ -608,7 +609,7 @@ void StorageBackend::RemoveByRegex(const std::string& regex_pattern) {
         if (fs::remove(record.path, ec)) {
             RemoveFileFromWriteQueue(record.path);
             total_freed_space += record.size;
-            VLOG(1) << "Removed file by regex: " << record.path;
+            LOG(INFO) << "Removed file by regex: " << record.path;
         } else {
             if (ec && ec == std::errc::no_such_file_or_directory) {
                 RemoveFileFromWriteQueue(record.path);
@@ -829,7 +830,7 @@ bool StorageBackend::CheckDiskSpace(size_t required_size) {
     if (has_enough_space) {
         used_space_ += required_size;
         available_space_ -= required_size;
-        VLOG(2) << "Reserved space. New available: " << available_space_
+        LOG(INFO) << "Reserved space. New available: " << available_space_
                 << ", New used (this session): " << used_space_;
     }
 
@@ -894,7 +895,7 @@ void StorageBackend::RemoveFileFromWriteQueue(const std::string& path) {
     if (it != file_queue_map_.end()) {
         file_write_queue_.erase(it->second);
         file_queue_map_.erase(it);
-        VLOG(2) << "Removed file from eviction queue: " << path
+        LOG(INFO) << "Removed file from eviction queue: " << path
                 << ". New queue size: " << file_write_queue_.size();
     }
 }
@@ -1894,7 +1895,7 @@ tl::expected<void, ErrorCode> BucketStorageBackend::GroupOffloadingKeysByBucket(
                 bucket_keys.push_back(ungrouped_it.first);
                 bucket_objects.emplace(ungrouped_it.first, ungrouped_it.second);
             }
-            VLOG(1) << "Ungrouped offloading objects have been processed and "
+            LOG(INFO) << "Ungrouped offloading objects have been processed and "
                        "cleared; count="
                     << ungrouped_offloading_objects.size();
             ungrouped_offloading_objects.clear();
@@ -1907,7 +1908,7 @@ tl::expected<void, ErrorCode> BucketStorageBackend::GroupOffloadingKeysByBucket(
                     ungrouped_offloading_objects.emplace(bucket_object.first,
                                                          bucket_object.second);
                 }
-                VLOG(1) << "Add offloading objects to ungrouped pool. "
+                LOG(INFO) << "Add offloading objects to ungrouped pool. "
                         << "Total ungrouped count: "
                         << ungrouped_offloading_objects.size();
                 return {};
@@ -1951,7 +1952,7 @@ tl::expected<void, ErrorCode> BucketStorageBackend::GroupOffloadingKeysByBucket(
         auto bucket_keys_count = static_cast<int64_t>(bucket_keys.size());
         residue_count -= bucket_keys_count;
         buckets_keys.push_back(std::move(bucket_keys));
-        VLOG(1) << "Group objects with total object count: " << total_count
+        LOG(INFO) << "Group objects with total object count: " << total_count
                 << ", current bucket object count: " << bucket_keys_count
                 << ", current bucket data size: " << bucket_data_size
                 << ", grouped bucket count: " << buckets_keys.size()

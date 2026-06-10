@@ -28,7 +28,8 @@
 //       --transfer_mb 368
 
 #include <gflags/gflags.h>
-#include <glog/logging.h>
+#include "log_macros.h"
+
 #include <signal.h>
 #include <sys/mman.h>
 

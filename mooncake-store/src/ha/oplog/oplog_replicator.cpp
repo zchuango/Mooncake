@@ -1,6 +1,7 @@
 #include "ha/oplog/oplog_replicator.h"
+#include "log_macros.h"
 
-#include <glog/logging.h>
+
 
 #include "ha/oplog/oplog_applier.h"
 

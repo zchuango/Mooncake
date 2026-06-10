@@ -16,7 +16,7 @@
 #include "tent/common/utils/os.h"
 #include "tent/common/types.h"
 
-#include <glog/logging.h>
+
 #include <unistd.h>
 
 namespace mooncake {

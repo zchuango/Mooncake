@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include "utils.h"
+#include "log_macros.h"
 
 #include "bench_runner.h"
 #include "te_backend.h"

@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include "tent/runtime/segment_manager.h"
+#include "log_macros.h"
 
 #include <cassert>
 #include <filesystem>

@@ -3,7 +3,8 @@
 // correctness tests
 
 #include <gtest/gtest.h>
-#include <glog/logging.h>
+#include "log_macros.h"
+
 #include "mmap_arena.h"
 #include "utils.h"
 #include <thread>

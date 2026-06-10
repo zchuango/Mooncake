@@ -19,73 +19,38 @@
  */
 #pragma once
 
-#include <cstdint>
-#include <cstdlib>
-#include <sstream>
-#include <cstring>
-#include <cerrno>
 #include <atomic>
-#include <string>
+#include <cerrno>
+#include <cstring>
+#include <cstdlib>
+#include <iosfwd>
+#include <sstream>
 
 #include "trace.h"
-#include "rate_limiter.h"
-#include <spdlog/spdlog.h>
-
-// Forward declaration: trace-id helper lives in mooncake_logging.h. Forward
-// declaring (instead of including) keeps glog out of every logging TU, while
-// letting the LogStream destructor stamp the current trace id into the payload
-// on the *producing* thread — the only reliable place for an async logger.
-namespace mooncake {
-namespace logging {
-uint64_t CurrentTraceId();
-}  // namespace logging
-}  // namespace mooncake
 
 namespace mooncake {
 
-bool DetailLogEnabledFromEnv();
-
-// Returns the always-on CLOG logger (created by Logger::Init), or nullptr
-// before init. Backs the CLOG_* macros, whose output must always reach both
-// the terminal and the log file regardless of MC_LOG_ENABLE.
-spdlog::logger *ConsoleLogger();
-
-// Build the "trace_id[<id>] " prefix on the calling thread. Mirrors the legacy
-// MC_LOG / AsyncLogMessage output format so log consumers stay unchanged.
-inline std::string TraceIdPrefix()
-{
-    uint64_t tid = ::mooncake::logging::CurrentTraceId();
-    if (tid != 0) {
-        return "trace_id[" + std::to_string(tid) + "] ";
-    }
-    return "trace_id[none] ";
-}
+enum class LogLevel {
+    kDebug,
+    kInfo,
+    kWarning,
+    kError,
+    kFatal,
+};
 
 /**
  * @brief Internal log stream builder - RAII object that logs on destruction.
  */
 class LogStream {
 public:
-    LogStream(spdlog::logger *logger, spdlog::level::level_enum level, const char *file, int line,
-              bool with_trace_prefix = true)
-        : logger_(logger), level_(level), with_trace_prefix_(with_trace_prefix)
-    {
-        loc_.filename = file;
-        loc_.line = static_cast<size_t>(line);
-    }
+    LogStream(LogLevel level, const char *file, int line, bool fatal = false,
+              int saved_errno = 0);
+    LogStream(const LogStream &) = delete;
+    LogStream &operator=(const LogStream &) = delete;
+    LogStream(LogStream &&other) noexcept;
+    LogStream &operator=(LogStream &&other) = delete;
 
-    ~LogStream()
-    {
-        if (logger_ && !skip_) {
-            // Pass the message via the non-formatting string_view overload so
-            // that '{' / '}' in payloads (e.g. JSON) are never parsed by fmt.
-            if (with_trace_prefix_) {
-                logger_->log(loc_, level_, TraceIdPrefix() + stream_.str());
-            } else {
-                logger_->log(loc_, level_, stream_.str());
-            }
-        }
-    }
+    ~LogStream();
 
     std::ostream &Stream()
     {
@@ -98,257 +63,145 @@ public:
     }
 
 private:
-    spdlog::logger *logger_;
-    spdlog::level::level_enum level_;
-    spdlog::source_loc loc_;
+    LogLevel level_;
+    const char *file_;
+    int line_;
     std::ostringstream stream_;
     bool skip_ = false;
-    bool with_trace_prefix_ = true;
+    bool fatal_ = false;
+    int saved_errno_ = 0;
 };
 
-/**
- * @brief Fatal log stream - logs at critical, flushes, then aborts the process.
- *
- * Mirrors glog LOG(FATAL) / MC_LOG(FATAL) semantics: the message is always
- * emitted (no admission gate) and the process terminates once the temporary
- * is destroyed at the end of the full expression.
- */
-class FatalLogStream {
+class LogStreamVoidify {
 public:
-    FatalLogStream(const char *file, int line)
+    void operator&(std::ostream &)
     {
-        loc_.filename = file;
-        loc_.line = static_cast<size_t>(line);
     }
-
-    [[noreturn]] ~FatalLogStream()
-    {
-        auto *logger = spdlog::default_logger().get();
-        if (logger) {
-            logger->log(loc_, spdlog::level::critical,
-                        TraceIdPrefix() + stream_.str());
-            logger->flush();
-        }
-        std::abort();
-    }
-
-    std::ostream &Stream()
-    {
-        return stream_;
-    }
-
-private:
-    spdlog::source_loc loc_;
-    std::ostringstream stream_;
-};
-
-/**
- * @brief errno-aware log stream (glog PLOG parity).
- *
- * Snapshots errno at construction — the very first thing after the macro is
- * entered — so later stream operations cannot clobber it. On destruction the
- * textual strerror of the saved errno is appended after the user's message,
- * exactly like glog's PLOG. Emission still respects the target logger's level.
- */
-class PlogStream {
-public:
-    PlogStream(spdlog::logger *logger, spdlog::level::level_enum level, const char *file, int line)
-        : saved_errno_(errno), logger_(logger), level_(level)
-    {
-        loc_.filename = file;
-        loc_.line = static_cast<size_t>(line);
-    }
-
-    ~PlogStream()
-    {
-        if (logger_ && logger_->should_log(level_)) {
-            logger_->log(loc_, level_,
-                         TraceIdPrefix() + stream_.str() + ": " +
-                             std::strerror(saved_errno_));
-        }
-    }
-
-    std::ostream &Stream()
-    {
-        return stream_;
-    }
-
-private:
-    int saved_errno_;
-    spdlog::logger *logger_;
-    spdlog::level::level_enum level_;
-    spdlog::source_loc loc_;
-    std::ostringstream stream_;
 };
 
 /**
  * @brief Check if log should be admitted based on rate limiting and trace sampling.
  */
-inline bool ShouldLog(spdlog::level::level_enum level)
-{
-    // Level gate first: lets disabled DEBUG/TRACE (mapped from MC_VLOG) skip
-    // building the stream entirely, preserving the old VLOG_IS_ON cheapness.
-    auto *logger = spdlog::default_logger().get();
-    if (logger && !logger->should_log(level)) {
-        return false;
-    }
+bool ShouldLog(LogLevel level);
+bool ShouldVLog(int level);
+int GetLogVerbosity();
+void SetLogVerbosity(int verbosity);
 
-    // For now, check rate limiting if enabled
-    uint64_t traceHash = Trace::Instance().GetTraceHash();
-
-    // If rate limiting is enabled, check ShouldLog
-    if (RateLimiter::Instance().IsEnabled()) {
-        auto nowMs = std::chrono::duration_cast<std::chrono::milliseconds>(
-            std::chrono::steady_clock::now().time_since_epoch()).count();
-        if (!RateLimiter::Instance().ShouldLog(traceHash, nowMs)) {
-            return false;
-        }
-    }
-
-    // Check request sampling decision if trace is marked for sampling
-    if (Trace::Instance().IsRequestLogTrace()) {
-        bool admitted = false;
-        if (Trace::Instance().GetRequestSampleDecision(admitted)) {
-            return admitted;
-        }
-    }
-
-    return true;
-}
-
-inline bool ShouldDetailLog(spdlog::level::level_enum level)
-{
-    return DetailLogEnabledFromEnv() && ShouldLog(level);
-}
-
-// Voidify: lowers a LogStream's ostream& back to void with an operator& whose
-// precedence sits between << and ?:. This makes the LOG_* macros expand to a
-// single conditional expression, so `if (c) LOG_X << ...; else ...;` is parsed
-// correctly (no dangling-else). Same idiom glog uses for LOG_IF.
-class LogVoidify {
-public:
-    LogVoidify() = default;
-    void operator&(std::ostream &) {}
-};
+LogStream MakeLogStream(LogLevel level, const char *file, int line,
+                        bool fatal = false, int saved_errno = 0);
 
 }  // namespace mooncake
 
-// User-facing log macros. Expand to one conditional expression (dangling-else
-// safe). The trailing `<< args` binds inside the false branch via << / & / ?:
-// precedence (<<  >  &  >  ?:).
-#define MC_LOG_STREAM_AT(spdlog_level)                                      \
-    mooncake::LogVoidify() &                                                \
-        mooncake::LogStream(spdlog::default_logger().get(), spdlog_level,   \
-                            __FILE__, __LINE__).Stream()
+#define MOONCAKE_SPDLOG_LEVEL_DEBUG mooncake::LogLevel::kDebug
+#define MOONCAKE_SPDLOG_LEVEL_INFO mooncake::LogLevel::kInfo
+#define MOONCAKE_SPDLOG_LEVEL_WARNING mooncake::LogLevel::kWarning
+#define MOONCAKE_SPDLOG_LEVEL_WARN mooncake::LogLevel::kWarning
+#define MOONCAKE_SPDLOG_LEVEL_ERROR mooncake::LogLevel::kError
+#define MOONCAKE_SPDLOG_LEVEL_ERR mooncake::LogLevel::kError
+#define MOONCAKE_SPDLOG_LEVEL_FATAL mooncake::LogLevel::kFatal
 
-#define LOG_TRACE                                                           \
-    !mooncake::ShouldLog(spdlog::level::trace)                              \
-        ? (void)0                                                           \
-        : MC_LOG_STREAM_AT(spdlog::level::trace)
+#define MOONCAKE_LOG_IS_FATAL_DEBUG false
+#define MOONCAKE_LOG_IS_FATAL_INFO false
+#define MOONCAKE_LOG_IS_FATAL_WARNING false
+#define MOONCAKE_LOG_IS_FATAL_WARN false
+#define MOONCAKE_LOG_IS_FATAL_ERROR false
+#define MOONCAKE_LOG_IS_FATAL_ERR false
+#define MOONCAKE_LOG_IS_FATAL_FATAL true
 
-#define LOG_DEBUG                                                           \
-    !mooncake::ShouldLog(spdlog::level::debug)                              \
-        ? (void)0                                                           \
-        : MC_LOG_STREAM_AT(spdlog::level::debug)
+#define MOONCAKE_LOG_STREAM_IF(level, fatal, saved_errno, condition)       \
+    (!(condition) || (!mooncake::ShouldLog(level) && !(fatal)))            \
+        ? (void)0                                                          \
+        : mooncake::LogStreamVoidify() &                                   \
+              mooncake::MakeLogStream(level, __FILE__, __LINE__, fatal,    \
+                                      saved_errno)                         \
+                  .Stream()
 
-#define LOG_INFO                                                            \
-    !mooncake::ShouldLog(spdlog::level::info)                               \
-        ? (void)0                                                           \
-        : MC_LOG_STREAM_AT(spdlog::level::info)
+#define MOONCAKE_LOG_STREAM(level, fatal, saved_errno)                     \
+    MOONCAKE_LOG_STREAM_IF(level, fatal, saved_errno, true)
 
-#define LOG_WARNING                                                         \
-    !mooncake::ShouldLog(spdlog::level::warn)                               \
-        ? (void)0                                                           \
-        : MC_LOG_STREAM_AT(spdlog::level::warn)
+// User-facing log macros
+#define LOG_DEBUG MOONCAKE_LOG_STREAM(mooncake::LogLevel::kDebug, false, 0)
+#define LOG_INFO MOONCAKE_LOG_STREAM(mooncake::LogLevel::kInfo, false, 0)
+#define LOG_WARNING MOONCAKE_LOG_STREAM(mooncake::LogLevel::kWarning, false, 0)
+#define LOG_WARN LOG_WARNING
+#define LOG_ERROR MOONCAKE_LOG_STREAM(mooncake::LogLevel::kError, false, 0)
+#define LOG_FATAL MOONCAKE_LOG_STREAM(mooncake::LogLevel::kFatal, true, 0)
 
-#define LOG_ERROR                                                           \
-    !mooncake::ShouldLog(spdlog::level::err)                                \
-        ? (void)0                                                           \
-        : MC_LOG_STREAM_AT(spdlog::level::err)
+#define PLOG_DEBUG MOONCAKE_LOG_STREAM(mooncake::LogLevel::kDebug, false, errno)
+#define PLOG_INFO MOONCAKE_LOG_STREAM(mooncake::LogLevel::kInfo, false, errno)
+#define PLOG_WARNING MOONCAKE_LOG_STREAM(mooncake::LogLevel::kWarning, false, errno)
+#define PLOG_WARN PLOG_WARNING
+#define PLOG_ERROR MOONCAKE_LOG_STREAM(mooncake::LogLevel::kError, false, errno)
+#define PLOG_FATAL MOONCAKE_LOG_STREAM(mooncake::LogLevel::kFatal, true, errno)
 
-#define DLOG_TRACE                                                          \
-    !mooncake::ShouldDetailLog(spdlog::level::trace)                        \
-        ? (void)0                                                           \
-        : MC_LOG_STREAM_AT(spdlog::level::trace)
+#define LOG(severity)                                                      \
+    MOONCAKE_LOG_STREAM(MOONCAKE_SPDLOG_LEVEL_##severity,                  \
+                        MOONCAKE_LOG_IS_FATAL_##severity, 0)
+#define PLOG(severity)                                                     \
+    MOONCAKE_LOG_STREAM(MOONCAKE_SPDLOG_LEVEL_##severity,                  \
+                        MOONCAKE_LOG_IS_FATAL_##severity, errno)
+#define VLOG(level)                                                        \
+    MOONCAKE_LOG_STREAM_IF(mooncake::LogLevel::kInfo, false, 0,            \
+                           mooncake::ShouldVLog(level))
 
-#define DLOG_DEBUG                                                          \
-    !mooncake::ShouldDetailLog(spdlog::level::debug)                        \
-        ? (void)0                                                           \
-        : MC_LOG_STREAM_AT(spdlog::level::debug)
+// Conditional logging
+#define LOG_IF(severity, condition)                                        \
+    MOONCAKE_LOG_STREAM_IF(MOONCAKE_SPDLOG_LEVEL_##severity,               \
+                           MOONCAKE_LOG_IS_FATAL_##severity, 0, condition)
 
-#define DLOG_INFO                                                           \
-    !mooncake::ShouldDetailLog(spdlog::level::info)                         \
-        ? (void)0                                                           \
-        : MC_LOG_STREAM_AT(spdlog::level::info)
+#define PLOG_IF(severity, condition)                                       \
+    MOONCAKE_LOG_STREAM_IF(MOONCAKE_SPDLOG_LEVEL_##severity,               \
+                           MOONCAKE_LOG_IS_FATAL_##severity, errno,        \
+                           condition)
 
-#define DLOG_WARNING                                                        \
-    !mooncake::ShouldDetailLog(spdlog::level::warn)                         \
-        ? (void)0                                                           \
-        : MC_LOG_STREAM_AT(spdlog::level::warn)
+#define VLOG_IF(level, condition)                                          \
+    MOONCAKE_LOG_STREAM_IF(mooncake::LogLevel::kInfo, false, 0,            \
+                           (condition) && mooncake::ShouldVLog(level))
 
-#define DLOG_ERROR                                                          \
-    !mooncake::ShouldDetailLog(spdlog::level::err)                          \
-        ? (void)0                                                           \
-        : MC_LOG_STREAM_AT(spdlog::level::err)
+#define MOONCAKE_CONCAT_INNER(x, y) x##y
+#define MOONCAKE_CONCAT(x, y) MOONCAKE_CONCAT_INNER(x, y)
 
-// Fatal: always emitted, then aborts the process (glog LOG(FATAL) parity).
-// Unconditional, so already a single expression — dangling-else safe as-is.
-#define LOG_FATAL                                                          \
-    mooncake::FatalLogStream(__FILE__, __LINE__).Stream()
+#define LOG_EVERY_N(severity, n)                                           \
+    static std::atomic<uint64_t> MOONCAKE_CONCAT(_mooncake_log_every_n_,    \
+                                                 __LINE__){0};             \
+    LOG_IF(severity,                                                       \
+           (MOONCAKE_CONCAT(_mooncake_log_every_n_, __LINE__)              \
+                .fetch_add(1, std::memory_order_relaxed) %                 \
+            static_cast<uint64_t>(n)) == 0)
 
-// NOTE: LOG_IF and CHECK macros were intentionally removed — their names
-// collide with glog's macros of the same name, and glog is still included by
-// files that use raw LOG()/CHECK(). Reintroduce as MC_-prefixed variants if
-// a spdlog-backed conditional/check is ever needed.
+// CHECK macro - logs and aborts if condition is false
+#define CHECK(condition)                                                   \
+    if (condition) {                                                       \
+    } else                                                                 \
+        mooncake::MakeLogStream(mooncake::LogLevel::kFatal, __FILE__,      \
+                                __LINE__, true, 0).Stream()                \
+            << "CHECK FAILED: " #condition " -- "
 
-// ---------------------------------------------------------------------------
-// MC_-prefixed variants of glog-only macros (PLOG / LOG_IF / LOG_EVERY_N).
-// MC_ prefix avoids colliding with glog's same-named macros in TUs that still
-// include <glog/logging.h>. All three target the default (file) logger and are
-// therefore gated by MC_LOG_ENABLE / MC_LOG_LEVEL exactly like LOG_*.
-// ---------------------------------------------------------------------------
-
-// PLOG parity: appends ": <strerror(errno)>". No ShouldLog pre-gate so errno is
-// snapshotted (in PlogStream's ctor) before anything can clobber it; emission
-// still honors the logger level inside PlogStream's destructor.
-#define MC_PLOG_ERROR                                                       \
-    mooncake::PlogStream(spdlog::default_logger().get(), spdlog::level::err, \
-                         __FILE__, __LINE__).Stream()
-
-#define MC_PLOG_WARNING                                                     \
-    mooncake::PlogStream(spdlog::default_logger().get(),                    \
-                         spdlog::level::warn, __FILE__, __LINE__).Stream()
-
-// Conditional log (glog LOG_IF parity). Single conditional expression, so it is
-// dangling-else safe. Usage: MC_LOG_IF(spdlog::level::info, cond) << msg;
-#define MC_LOG_IF(level, cond)                                              \
-    (!(cond) || !mooncake::ShouldLog(level))                               \
-        ? (void)0                                                           \
-        : MC_LOG_STREAM_AT(level)
-
-// Throttled log (glog LOG_EVERY_N parity). Expands to multiple statements, so —
-// like glog's own LOG_EVERY_N — it must be used as a standalone statement, not
-// inside an unbraced if/else. Each expansion gets its own counter via __LINE__.
-#define MC_LOG_EVERY_N_IMPL(level, n, counter)                             \
-    static std::atomic<uint64_t> counter{0};                               \
-    if ((counter.fetch_add(1, std::memory_order_relaxed) % (n)) == 0)      \
-    MC_LOG_STREAM_AT(level)
-#define MC_LOG_EVERY_N_CAT(a, b) a##b
-#define MC_LOG_EVERY_N_NAME(line) MC_LOG_EVERY_N_CAT(_mc_log_occ_, line)
-#define MC_LOG_EVERY_N(level, n)                                            \
-    MC_LOG_EVERY_N_IMPL(level, n, MC_LOG_EVERY_N_NAME(__LINE__))
+#define LOG_ASSERT(condition) CHECK(condition)
 
 // ---------------------------------------------------------------------------
-// CLOG_*: always-on stderr + file logging, independent of the default logger.
-// Routes to the dedicated CLOG logger (mooncake::ConsoleLogger()) which is
-// NOT gated by MC_LOG_ENABLE / MC_LOG_DIR — used for init banners and benchmark
-// output that must always reach the terminal and file. No trace-id prefix.
+// Compatibility shims for the spdlog-branch macros (ported during the
+// lx/supercache_dev merge).
+//   DLOG_*  : "detail" logs, additionally gated by MC_LOG_DETAIL_ENABLE
+//             (LOG_IF already applies the per-level ShouldLog() check, so the
+//             combined semantics equal the old ShouldDetailLog()).
+//   CLOG_*  : on the spdlog branch these bypassed MC_LOG_ENABLE and always
+//             reached the file; under this tree they map to the normal level
+//             macros (note: MC_LOG_ENABLE here is honored centrally in
+//             ShouldLog(), so a dedicated bypass logger is no longer needed).
+// trace.h's enclosing namespace re-declaration keeps this self-contained for
+// any TU that only includes log_macros.h.
 // ---------------------------------------------------------------------------
-#define CLOG_AT(level)                                                      \
-    mooncake::LogVoidify() &                                                \
-        mooncake::LogStream(mooncake::ConsoleLogger(), level, __FILE__,     \
-                            __LINE__, /*with_trace_prefix=*/false).Stream()
+namespace mooncake {
+bool DetailLogEnabledFromEnv();
+}  // namespace mooncake
 
-#define CLOG_INFO    CLOG_AT(spdlog::level::info)
-#define CLOG_WARNING CLOG_AT(spdlog::level::warn)
-#define CLOG_ERROR   CLOG_AT(spdlog::level::err)
+#define DLOG_TRACE   LOG_IF(DEBUG, ::mooncake::DetailLogEnabledFromEnv())
+#define DLOG_DEBUG   LOG_IF(DEBUG, ::mooncake::DetailLogEnabledFromEnv())
+#define DLOG_INFO    LOG_IF(INFO, ::mooncake::DetailLogEnabledFromEnv())
+#define DLOG_WARNING LOG_IF(WARNING, ::mooncake::DetailLogEnabledFromEnv())
+#define DLOG_ERROR   LOG_IF(ERROR, ::mooncake::DetailLogEnabledFromEnv())
+
+#define CLOG_INFO    LOG_INFO
+#define CLOG_WARNING LOG_WARNING
+#define CLOG_ERROR   LOG_ERROR

@@ -15,7 +15,7 @@
 #ifndef EFA_ENDPOINT_H
 #define EFA_ENDPOINT_H
 
-#include <glog/logging.h>
+
 #include <rdma/fabric.h>
 #include <rdma/fi_domain.h>
 #include <rdma/fi_endpoint.h>

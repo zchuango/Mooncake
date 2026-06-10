@@ -13,8 +13,9 @@
 // limitations under the License.
 
 #include "transport/barex_transport/barex_transport.h"
+#include "log_macros.h"
 
-#include <glog/logging.h>
+
 #include <sys/mman.h>
 #include <sys/time.h>
 

@@ -1,4 +1,5 @@
 #include "engram/engram_store.h"
+#include "log_macros.h"
 
 #include <cstring>
 #include <limits>

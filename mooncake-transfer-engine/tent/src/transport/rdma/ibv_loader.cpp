@@ -13,9 +13,10 @@
 // limitations under the License.
 
 #include "tent/transport/rdma/ibv_loader.h"
+#include "log_macros.h"
 
 #include <dlfcn.h>
-#include <glog/logging.h>
+
 
 namespace mooncake {
 namespace tent {

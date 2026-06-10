@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include "tent/transport/rdma/workers.h"
+#include "log_macros.h"
 
 #include <sys/epoll.h>
 

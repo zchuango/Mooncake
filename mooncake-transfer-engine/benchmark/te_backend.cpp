@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <fstream>
+#include "log_macros.h"
 
 #include "te_backend.h"
 #include "utils.h"

@@ -23,7 +23,8 @@
 // matching the customer's /dev/shm mmap pattern.
 
 #include <gflags/gflags.h>
-#include <glog/logging.h>
+#include "log_macros.h"
+
 #include <sys/mman.h>
 
 #include <chrono>

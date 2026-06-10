@@ -4,10 +4,11 @@
 #include <stdexcept>
 #include <string_view>
 
-#include <glog/logging.h>
+
 
 #include "config_helper.h"
 #include "types.h"
+#include "log_macros.h"
 
 namespace mooncake {
 

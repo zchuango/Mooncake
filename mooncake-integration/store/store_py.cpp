@@ -1,4 +1,5 @@
 #include <pybind11/gil.h>  // For GIL management
+#include "log_macros.h"
 #include <pybind11/stl.h>
 #include <numa.h>
 

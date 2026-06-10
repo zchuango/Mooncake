@@ -13,12 +13,13 @@
 // limitations under the License.
 
 #include "tent/device_plugin.h"
+#include "log_macros.h"
 
 #include <hip/hip_runtime.h>
 #include <string.h>
 #include <stdio.h>
 #include <string>
-#include <glog/logging.h>
+
 
 struct rocm_plugin_ctx_t {
     // reserved

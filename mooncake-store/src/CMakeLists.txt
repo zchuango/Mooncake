@@ -1,6 +1,9 @@
 # Find Python package
 add_subdirectory(cachelib_memory_allocator)
 
+
+
+
 set(MOONCAKE_STORE_SOURCES
     allocator.cpp
     master_service.cpp
@@ -243,7 +246,7 @@ endif()
 # mooncake_master). Targets that need transfer_engine should link it explicitly.
 target_link_libraries(
   mooncake_store
-  PUBLIC cachelib_memory_allocator ${ETCD_WRAPPER_LIB} glog::glog gflags::gflags
+  PUBLIC cachelib_memory_allocator ${ETCD_WRAPPER_LIB} gflags::gflags
          ${EXTRA_LIBS} ${SPDK_STATIC_LIBS} asio_shared mooncake_common
   PRIVATE transfer_engine)
 
@@ -301,9 +304,13 @@ endif()
 
 # Client server binary
 add_executable(mooncake_client real_client_main.cpp)
-# Client needs transfer_engine for data transfer operations
-target_link_libraries(mooncake_client PRIVATE mooncake_store transfer_engine
-                                              asio_shared UbDiag::ubdiag_lib)
+# Force linker to resolve spdlog/fmt symbols even if they seem unused
+target_link_options(mooncake_client PRIVATE -Wl,--no-as-needed)
+target_link_libraries(mooncake_client PRIVATE
+    mooncake_store transfer_engine
+    asio_shared UbDiag::ubdiag_lib
+    spdlog pthread
+)
 
 # Optimize binary sizes only in Release mode
 string(TOUPPER "${CMAKE_BUILD_TYPE}" CMAKE_BUILD_TYPE_UPPER)

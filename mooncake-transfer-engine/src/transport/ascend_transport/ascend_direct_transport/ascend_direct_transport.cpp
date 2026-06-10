@@ -14,10 +14,11 @@
 // limitations under the License.
 
 #include "transport/ascend_transport/ascend_direct_transport/ascend_direct_transport.h"
+#include "log_macros.h"
 #include "transport/ascend_transport/ascend_direct_transport/context_manager.h"
 #include "transport/ascend_transport/ascend_direct_transport/utils.h"
 
-#include <glog/logging.h>
+
 
 #include <cassert>
 #include <memory>

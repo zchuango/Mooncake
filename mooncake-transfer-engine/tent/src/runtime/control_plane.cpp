@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include "tent/runtime/control_plane.h"
+#include "log_macros.h"
 #include "tent/runtime/transfer_engine_impl.h"
 
 #include <cassert>
@@ -345,7 +346,7 @@ void ControlService::onSegmentUpdated(const std::string_view& request,
 
     manager_->invalidateAllCacheForRemote(segment_name);
 
-    VLOG(1) << "Invalidated cache for segment " << segment_name
+    LOG(INFO) << "Invalidated cache for segment " << segment_name
             << " due to remote update notification";
 }
 

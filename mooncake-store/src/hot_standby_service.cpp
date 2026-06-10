@@ -1,6 +1,7 @@
 #include "hot_standby_service.h"
+#include "log_macros.h"
 
-#include <glog/logging.h>
+
 
 #include <chrono>
 #include <thread>
@@ -56,7 +57,7 @@ bool HotStandbyService::StandbyMetadataStore::PutMetadata(
     const std::string& key, const StandbyObjectMetadata& metadata) {
     std::lock_guard<std::mutex> lock(mutex_);
     store_[key] = metadata;
-    VLOG(2) << "StandbyMetadataStore: stored metadata for key=" << key
+    LOG(INFO) << "StandbyMetadataStore: stored metadata for key=" << key
             << ", replicas=" << metadata.replicas.size()
             << ", size=" << metadata.size;
     return true;
@@ -749,7 +750,7 @@ void HotStandbyService::VerificationLoop() {
         // 2) calculate checksums,
         // 3) send a verification request to the Primary, and
         // 4) handle any mismatches that are detected.
-        VLOG(1)
+        LOG(INFO)
             << "Verification check skipped (feature not implemented), state="
             << StandbyStateToString(GetState());
     }
@@ -767,7 +768,7 @@ void HotStandbyService::ApplyOpLogEntry(const OpLogEntry& entry) {
     applied_seq_id_.store(entry.sequence_id);
 
     // The actual application is handled by OpLogApplier via OpLogReplicator
-    VLOG(2) << "ApplyOpLogEntry called (deprecated), sequence_id="
+    LOG(INFO) << "ApplyOpLogEntry called (deprecated), sequence_id="
             << entry.sequence_id
             << ", op_type=" << static_cast<int>(entry.op_type)
             << ", key=" << entry.object_key;

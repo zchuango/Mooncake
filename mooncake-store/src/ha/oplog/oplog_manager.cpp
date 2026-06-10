@@ -1,9 +1,10 @@
 #include "ha/oplog/oplog_manager.h"
+#include "log_macros.h"
 
 #include <algorithm>
 #include <chrono>
 #include <xxhash.h>
-#include <glog/logging.h>
+
 
 #include "ha/oplog/oplog_store.h"
 

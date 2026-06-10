@@ -1,4 +1,5 @@
 #include "ha/snapshot/catalog_backed_snapshot_provider.h"
+#include "log_macros.h"
 
 #include <chrono>
 #include <memory>
@@ -8,7 +9,7 @@
 #include <utility>
 #include <vector>
 
-#include <glog/logging.h>
+
 #include <msgpack.hpp>
 
 #include "ha/snapshot/catalog/backends/embedded/embedded_snapshot_catalog_store.h"

@@ -11,10 +11,8 @@
 #include <unistd.h>
 #include <vector>
 
-#include <glog/logging.h>
-#include <liburing.h>
-
 #include "file_interface.h"
+#include "log_macros.h"
 
 namespace mooncake {
 

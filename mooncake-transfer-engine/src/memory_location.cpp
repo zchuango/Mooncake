@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include "memory_location.h"
+#include "log_macros.h"
 
 #include "cuda_alike.h"
 

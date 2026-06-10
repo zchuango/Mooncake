@@ -1,4 +1,5 @@
 #include "master_service.h"
+#include "log_macros.h"
 #include "master_metric_manager.h"
 #include "ha/snapshot/catalog/snapshot_catalog_store.h"
 #include "ha/snapshot/object/snapshot_object_store.h"
@@ -8,7 +9,7 @@
 #include "ha/oplog/etcd_oplog_store.h"
 #endif
 
-#include <glog/logging.h>
+
 #include <gtest/gtest.h>
 
 #include <chrono>

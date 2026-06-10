@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include "transfer_engine_py.h"
+#include "log_macros.h"
 
 #include <cassert>
 #include <numeric>

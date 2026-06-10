@@ -1,6 +1,7 @@
 #include "ha/oplog/localfs_oplog_store.h"
+#include "log_macros.h"
 
-#include <glog/logging.h>
+
 
 #include <algorithm>
 #include <cstring>

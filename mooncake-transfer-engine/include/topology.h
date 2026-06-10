@@ -15,7 +15,7 @@
 #ifndef TOPOLOGY_H
 #define TOPOLOGY_H
 
-#include <glog/logging.h>
+
 #if __has_include(<jsoncpp/json/json.h>)
 #include <jsoncpp/json/json.h>  // Ubuntu
 #else

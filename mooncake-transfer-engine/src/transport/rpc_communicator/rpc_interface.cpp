@@ -1,11 +1,12 @@
 #include "transport/rpc_communicator/rpc_interface.h"
+#include "log_macros.h"
 #include "transport/rpc_communicator/rpc_communicator.h"
 #include "config.h"
 #include <memory>
 #include <thread>
 #include <future>
 #include <vector>
-#include <glog/logging.h>
+
 #include "async_simple/coro/SyncAwait.h"
 
 namespace mooncake {

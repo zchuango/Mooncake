@@ -2,6 +2,7 @@
 #define MOONCAKE_BACKEND_H
 
 #include <cstdint>
+#include "log_macros.h"
 #include <memory>
 #include <string>
 #include <vector>

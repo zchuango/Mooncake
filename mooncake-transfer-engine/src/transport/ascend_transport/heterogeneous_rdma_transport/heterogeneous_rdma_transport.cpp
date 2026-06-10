@@ -1,4 +1,5 @@
 #include "transport/ascend_transport/heterogeneous_rdma_transport.h"
+#include "log_macros.h"
 #include <chrono>
 
 namespace mooncake {

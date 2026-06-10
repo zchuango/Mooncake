@@ -13,8 +13,9 @@
 // limitations under the License.
 
 #include "transport/efa_transport/efa_transport.h"
+#include "log_macros.h"
 
-#include <glog/logging.h>
+
 #include <sys/mman.h>
 #include <sys/time.h>
 #include <unistd.h>
@@ -714,7 +715,7 @@ int EfaTransport::warmupSegment(const std::string& segment_name) {
         }
     }
     if (already_ready == n_pairs) {
-        VLOG(1) << "EfaTransport::warmupSegment('" << segment_name << "'): all "
+        LOG(INFO) << "EfaTransport::warmupSegment('" << segment_name << "'): all "
                 << n_pairs << " endpoints already connected, "
                 << "skipping";
         return 0;

@@ -14,9 +14,10 @@
 // limitations under the License.
 
 #include "transport/ascend_transport/ubshmem_transport/stream_pool.h"
+#include "log_macros.h"
 
 #include <thread>
-#include <glog/logging.h>
+
 
 namespace mooncake {
 

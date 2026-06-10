@@ -1,4 +1,5 @@
 #include "client_wrapper.h"
+#include "log_macros.h"
 
 #include <cstring>
 #include <stdexcept>

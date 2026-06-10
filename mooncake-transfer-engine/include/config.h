@@ -15,7 +15,7 @@
 #ifndef CONFIG_H
 #define CONFIG_H
 
-#include <glog/logging.h>
+
 #include <infiniband/verbs.h>
 
 #include <cstddef>
@@ -24,6 +24,7 @@
 #include <string>
 #include <utility>
 #include <vector>
+#include "log_macros.h"
 
 namespace mooncake {
 
@@ -52,7 +53,7 @@ struct GlobalConfig {
     int retry_cnt = 9;
     int handshake_listen_backlog = 128;
     bool metacache = true;
-    int log_level = google::INFO;
+    int log_level = 2;  // info
     bool trace = false;
     int64_t slice_timeout = -1;
     uint16_t rpc_min_port = 15000;

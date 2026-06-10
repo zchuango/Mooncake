@@ -37,7 +37,6 @@
 #ifdef USE_NOF
 #include "spdk/spdk_wrapper.h"
 #endif
-#include "mooncake_logging.h"
 #include "log_macros.h"
 #define UBDIAG_PERF_DEF_FILE "mooncake_perf_points.def"
 #define UBDIAG_PROGRAM_NAME "mooncake_store"

@@ -16,11 +16,12 @@
 #define XFER_UTILS_H
 
 #include <string>
+#include "log_macros.h"
 #include <unordered_map>
 #include <cmath>
 #include <sstream>
 #include <iomanip>
-#include <glog/logging.h>
+
 #include <vector>
 #include <algorithm>
 #include <numeric>

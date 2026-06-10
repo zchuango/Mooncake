@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include "tent/runtime/metastore.h"
+#include "log_macros.h"
 #ifdef USE_ETCD
 #include "tent/metastore/etcd.h"
 #endif
@@ -23,7 +24,7 @@
 #include "tent/metastore/http.h"
 #endif
 
-#include <glog/logging.h>
+
 
 namespace mooncake {
 namespace tent {

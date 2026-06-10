@@ -1,10 +1,12 @@
 #include "etcd_helper.h"
 
+#include "log_macros.h"
+
 #ifdef STORE_USE_ETCD
 #include "libetcd_wrapper.h"
 #endif
 
-#include <glog/logging.h>
+
 
 namespace mooncake {
 
@@ -77,7 +79,7 @@ ErrorCode EtcdHelper::CreateWithLease(const char* key, const size_t key_size,
         const_cast<char*>(key), (int)key_size, const_cast<char*>(value),
         (int)value_size, lease_id, &revision_id, &err_msg);
     if (ret == -2) {
-        VLOG(1) << "key=" << std::string(key, key_size)
+        LOG(INFO) << "key=" << std::string(key, key_size)
                 << ", lease_id=" << lease_id << ", error=" << err_msg;
         free(err_msg);
         return ErrorCode::ETCD_TRANSACTION_FAIL;

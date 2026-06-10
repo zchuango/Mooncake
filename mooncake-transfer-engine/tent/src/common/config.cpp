@@ -13,8 +13,9 @@
 // limitations under the License.
 
 #include "tent/common/config.h"
+#include "log_macros.h"
 
-#include <glog/logging.h>
+
 
 #include <sstream>
 

@@ -1,6 +1,7 @@
 #include "ha/oplog/etcd_oplog_store.h"
+#include "log_macros.h"
 
-#include <glog/logging.h>
+
 #include <sstream>
 #include <iomanip>
 
@@ -303,7 +304,7 @@ void EtcdOpLogStore::FlushBatch() {
                     << "HA Strategy: Group Commit flush success. batch_size="
                     << batch_to_write.size() << ", max_seq=" << max_seq;
             } else {
-                VLOG(3)
+                LOG(INFO)
                     << "HA Strategy: Group Commit flush success. batch_size=1, "
                        "max_seq="
                     << max_seq;
@@ -692,7 +693,7 @@ void EtcdOpLogStore::DoBatchUpdate() {
         pending_count_.fetch_add(count);
     } else {
         last_update_time_ = std::chrono::steady_clock::now();
-        VLOG(2) << "Batch updated latest_sequence_id=" << seq_id_to_update
+        LOG(INFO) << "Batch updated latest_sequence_id=" << seq_id_to_update
                 << " (count=" << count << " entries)";
     }
 }

@@ -1,4 +1,5 @@
 #include <c10/util/Exception.h>
+#include "log_macros.h"
 #include <connection_poller.h>
 #include <ATen/cuda/CUDAContext.h>
 #include <cuda.h>

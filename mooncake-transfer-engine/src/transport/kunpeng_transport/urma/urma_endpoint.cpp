@@ -16,7 +16,6 @@
 #include <chrono>
 #include <cstddef>
 #include "config.h"
-#include "mooncake_logging.h"
 #include "log_macros.h"
 #include "transport/kunpeng_transport/urma/urma_endpoint.h"
 #define UBDIAG_PERF_DEF_FILE "mooncake_perf_points.def"

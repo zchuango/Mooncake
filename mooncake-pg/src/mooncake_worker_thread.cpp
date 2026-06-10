@@ -1,7 +1,8 @@
 #include <cuda_runtime.h>
+#include "log_macros.h"
 #include <thread>
 #include <mooncake_worker.cuh>
-#include <glog/logging.h>
+
 #include <transfer_engine.h>
 #include "pg_utils.h"
 

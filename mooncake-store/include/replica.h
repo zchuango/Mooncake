@@ -1,6 +1,6 @@
 #pragma once
 
-#include <glog/logging.h>
+
 
 #include <boost/functional/hash.hpp>
 
@@ -19,6 +19,7 @@
 #include "types.h"
 #include "allocator.h"
 #include "master_metric_manager.h"
+#include "log_macros.h"
 
 namespace mooncake {
 

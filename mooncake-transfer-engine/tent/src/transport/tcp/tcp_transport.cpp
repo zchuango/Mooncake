@@ -13,9 +13,10 @@
 // limitations under the License.
 
 #include "tent/transport/tcp/tcp_transport.h"
+#include "log_macros.h"
 
 #include <bits/stdint-uintn.h>
-#include <glog/logging.h>
+
 
 #include <algorithm>
 #include <cassert>
@@ -189,7 +190,7 @@ Status TcpTransport::removeMemoryBuffer(BufferDesc &desc) {
 void TcpTransport::startTransfer(TcpTask *task) {
     if (task->request.target_id == LOCAL_SEGMENT_ID &&
         IsLoopbackEndpoint(local_segment_name_)) {
-        LOG_FIRST_N(WARNING, 1)
+        LOG(WARNING)
             << "TCP transfer targets LOCAL_SEGMENT_ID on loopback endpoint "
             << local_segment_name_
             << ". When running multiple store instances on the same host with "

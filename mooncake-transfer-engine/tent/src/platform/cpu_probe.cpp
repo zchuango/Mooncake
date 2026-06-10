@@ -13,11 +13,12 @@
 // limitations under the License.
 
 #include "tent/platform/cpu.h"
+#include "log_macros.h"
 #include "tent/common/status.h"
 #include "tent/common/utils/prefault.h"
 #include "tent/common/utils/random.h"
 
-#include <glog/logging.h>
+
 #include <fstream>
 #include <iostream>
 #include <map>

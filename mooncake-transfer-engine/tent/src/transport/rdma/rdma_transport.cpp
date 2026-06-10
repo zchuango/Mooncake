@@ -13,10 +13,11 @@
 // limitations under the License.
 
 #include "tent/transport/rdma/rdma_transport.h"
+#include "log_macros.h"
 #include "tent/transport/rdma/ibv_loader.h"
 #include "tent/transport/rdma/quota.h"
 
-#include <glog/logging.h>
+
 #include <sys/mman.h>
 #include <sys/time.h>
 
@@ -460,7 +461,7 @@ bool RdmaTransport::warmupMemory(void* addr, size_t length) {
                      << "), falling back to cold registration";
         return false;
     }
-    VLOG(1) << "MR warm-up succeeded for " << length << " bytes";
+    LOG(INFO) << "MR warm-up succeeded for " << length << " bytes";
     return true;
 }
 

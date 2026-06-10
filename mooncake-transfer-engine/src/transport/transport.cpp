@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include "transport/transport.h"
+#include "log_macros.h"
 
 #include "error.h"
 #include "transfer_engine.h"

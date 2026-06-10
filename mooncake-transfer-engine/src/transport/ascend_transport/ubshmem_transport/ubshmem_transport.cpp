@@ -14,8 +14,9 @@
 // limitations under the License.
 
 #include "transport/ascend_transport/ubshmem_transport/ubshmem_transport.h"
+#include "log_macros.h"
 
-#include <glog/logging.h>
+
 
 #include <cassert>
 #include <cstddef>

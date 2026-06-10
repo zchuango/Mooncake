@@ -14,12 +14,13 @@
 // limitations under the License.
 
 #include "transport/ascend_transport/ascend_direct_transport/transfer_executor_base.h"
+#include "log_macros.h"
 #include "transport/ascend_transport/ascend_direct_transport/async_transfer_executor.h"
 #include "transport/ascend_transport/ascend_direct_transport/local_copy_engine.h"
 #include "transport/ascend_transport/ascend_direct_transport/sync_transfer_executor.h"
 #include "transport/ascend_transport/ascend_direct_transport/utils.h"
 
-#include <glog/logging.h>
+
 
 #include <chrono>
 #include <cstdlib>
@@ -248,7 +249,7 @@ int TransferExecutorBase::checkAndConnect(
     auto& engine_connections = connected_segments_[engine_idx];
     auto it = engine_connections.find(target_adxl_engine_name);
     if (it != engine_connections.end()) {
-        VLOG(1) << "Already connected to target adxl engine: "
+        LOG(INFO) << "Already connected to target adxl engine: "
                 << target_adxl_engine_name;
         return 0;
     }
@@ -520,7 +521,7 @@ void TransferExecutorBase::processSliceList(
     }
     size_t local_engine_idx =
         params_.dummy_real_mode ? slice_list[0]->ascend_direct.engine_id : 0;
-    VLOG(1) << "processSliceList for dev:" << local_engine_idx;
+    LOG(INFO) << "processSliceList for dev:" << local_engine_idx;
     auto local_segment_desc = metadata_->getSegmentDescByID(LOCAL_SEGMENT_ID);
     if (!local_segment_desc ||
         local_engine_idx >= local_segment_desc->rank_info.endpoints.size()) {
@@ -569,7 +570,7 @@ void TransferExecutorBase::processSliceList(
         if (need_local_copy && local_copy_engine_) {
             auto start = std::chrono::steady_clock::now();
             local_copy_engine_->Copy(slice_list[0]->opcode, slice_list);
-            VLOG(1) << "Local copy time: "
+            LOG(INFO) << "Local copy time: "
                     << std::chrono::duration_cast<std::chrono::microseconds>(
                            std::chrono::steady_clock::now() - start)
                            .count()

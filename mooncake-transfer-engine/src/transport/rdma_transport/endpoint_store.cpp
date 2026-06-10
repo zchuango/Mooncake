@@ -13,8 +13,9 @@
 // limitations under the License.
 
 #include "transport/rdma_transport/endpoint_store.h"
+#include "log_macros.h"
 
-#include <glog/logging.h>
+
 
 #include <atomic>
 #include <cassert>

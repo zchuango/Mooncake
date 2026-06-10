@@ -1,10 +1,11 @@
 #pragma once
 
 #include <memory>
+#include "log_macros.h"
 #include <string>
 #include <cstring>
 #include <cstdint>
-#include <glog/logging.h>
+
 
 #include "types.h"
 

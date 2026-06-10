@@ -1,11 +1,12 @@
 #include "ha/snapshot/catalog/backends/redis/redis_snapshot_catalog_store.h"
+#include "log_macros.h"
 
 #include <exception>
 #include <memory>
 #include <optional>
 #include <string_view>
 
-#include <glog/logging.h>
+
 #ifdef STORE_USE_REDIS
 #include <hiredis/hiredis.h>
 #endif

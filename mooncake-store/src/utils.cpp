@@ -1,4 +1,5 @@
 #include "utils.h"
+#include "log_macros.h"
 #include "mmap_arena.h"
 #include "config.h"
 #include "common.h"
@@ -6,7 +7,7 @@
 
 #include <Slab.h>
 #include <gflags/gflags.h>
-#include <glog/logging.h>
+
 #include <ifaddrs.h>
 #include <net/if.h>
 #include <netdb.h>
@@ -241,7 +242,7 @@ void *allocate_buffer_mmap_memory(size_t total_size, size_t alignment) {
     if (g_mmap_arena && g_mmap_arena->isInitialized()) {
         void *ptr = g_mmap_arena->allocate(total_size, alignment);
         if (ptr != nullptr) {
-            VLOG(1) << "Allocated " << total_size << " bytes from arena at "
+            LOG(INFO) << "Allocated " << total_size << " bytes from arena at "
                     << ptr;
             return ptr;
         }
@@ -249,7 +250,7 @@ void *allocate_buffer_mmap_memory(size_t total_size, size_t alignment) {
         const uint64_t fallback_count =
             g_arena_oom_fallback_count.fetch_add(1, std::memory_order_relaxed) +
             1;
-        LOG_FIRST_N(WARNING, 3)
+        LOG(WARNING)
             << "Arena OOM, falling back to mmap() for size=" << total_size
             << " (count=" << fallback_count << ")"
             << " (further warnings suppressed)";
@@ -262,7 +263,7 @@ void *allocate_buffer_mmap_memory(size_t total_size, size_t alignment) {
     const size_t guaranteed_alignment =
         hugepage_size > 0 ? hugepage_size : static_cast<size_t>(getpagesize());
     if (alignment > guaranteed_alignment) {
-        LOG_FIRST_N(WARNING, 3)
+        LOG(WARNING)
             << "Fallback mmap cannot honor alignment=" << alignment
             << " (guaranteed=" << guaranteed_alignment
             << "); pointer may be under-aligned"
@@ -276,7 +277,7 @@ void *allocate_buffer_mmap_memory(size_t total_size, size_t alignment) {
         return nullptr;
     }
 
-    VLOG(1) << "Allocated " << total_size << " bytes via mmap() at " << ptr;
+    LOG(INFO) << "Allocated " << total_size << " bytes via mmap() at " << ptr;
     return ptr;
 }
 
@@ -291,7 +292,7 @@ void free_buffer_mmap_memory(void *ptr, size_t total_size) {
     if (g_mmap_arena && g_mmap_arena->owns(ptr)) {
         const uint64_t noop_free_count =
             g_arena_noop_free_count.fetch_add(1, std::memory_order_relaxed) + 1;
-        LOG_FIRST_N(WARNING, 3)
+        LOG(WARNING)
             << "free_buffer_mmap_memory() does not individually release "
                "arena-owned pointer "
             << ptr << "; the global arena releases its pool at process shutdown"
@@ -307,7 +308,7 @@ void free_buffer_mmap_memory(void *ptr, size_t total_size) {
         LOG(ERROR) << "munmap hugepage failed, size=" << map_size
                    << ", errno=" << errno << " (" << strerror(errno) << ")";
     } else {
-        VLOG(1) << "Freed direct mmap allocation at " << ptr
+        LOG(INFO) << "Freed direct mmap allocation at " << ptr
                 << ", size=" << map_size;
     }
 }

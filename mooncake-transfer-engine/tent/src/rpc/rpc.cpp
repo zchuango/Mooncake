@@ -12,8 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 #include "tent/rpc/rpc.h"
+#include "log_macros.h"
 
-#include <glog/logging.h>
+
 #include <async_simple/executors/SimpleExecutor.h>
 
 #include "tent/common/utils/ip.h"

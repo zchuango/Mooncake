@@ -1,7 +1,7 @@
 // client_buffer_test.cpp
 #include "client_buffer.hpp"
 
-#include <glog/logging.h>
+
 #include <gtest/gtest.h>
 
 #include <atomic>

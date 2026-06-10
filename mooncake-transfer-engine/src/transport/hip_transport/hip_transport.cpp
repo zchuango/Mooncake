@@ -13,8 +13,9 @@
 // limitations under the License.
 
 #include "transport/hip_transport/hip_transport.h"
+#include "log_macros.h"
 
-#include <glog/logging.h>
+
 
 #include <cassert>
 #include <cstddef>

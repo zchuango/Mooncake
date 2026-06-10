@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include "tent_backend.h"
+#include "log_macros.h"
 #include "utils.h"
 #include "tent/common/types.h"
 #include "tent/runtime/platform.h"

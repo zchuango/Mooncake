@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include "transport/rdma_transport/worker_pool.h"
+#include "log_macros.h"
 
 #include <sys/epoll.h>
 
@@ -512,7 +513,7 @@ void WorkerPool::monitorWorker() {
         int num_events = epoll_wait(context_.eventFd(), &event, 1, 100);
         if (num_events < 0) {
             if (errno != EWOULDBLOCK && errno != EINTR)
-                PLOG(ERROR) << "Worker: epoll_wait()";
+                LOG(ERROR) << "Worker: epoll_wait()";
             continue;
         }
 

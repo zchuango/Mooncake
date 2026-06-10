@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include "multi_transport.h"
+#include "log_macros.h"
 #include <algorithm>
 #include <sstream>
 #include <string>

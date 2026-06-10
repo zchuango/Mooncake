@@ -16,7 +16,6 @@
 
 #include "master_metric_manager.h"
 #include "master_perf.h"
-#include "mooncake_logging.h"
 #include "log_macros.h"
 #include "segment.h"
 #ifdef USE_NOF

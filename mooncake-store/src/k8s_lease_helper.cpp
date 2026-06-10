@@ -1,10 +1,11 @@
 #include "k8s_lease_helper.h"
+#include "log_macros.h"
 
 #ifdef STORE_USE_K8S_LEASE
 #include "libk8s_lease_wrapper.h"
 #endif
 
-#include <glog/logging.h>
+
 
 namespace mooncake {
 

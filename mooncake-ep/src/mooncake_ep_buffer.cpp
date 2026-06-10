@@ -1,6 +1,6 @@
 #include <mooncake_ep_buffer.h>
 #include <arpa/inet.h>
-#include <glog/logging.h>
+
 
 namespace mooncake {
 

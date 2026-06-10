@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include "tent/runtime/proxy_manager.h"
+#include "log_macros.h"
 #include "tent/runtime/transfer_engine_impl.h"
 #include <algorithm>
 #include <cstring>

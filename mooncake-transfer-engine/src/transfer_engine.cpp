@@ -14,6 +14,7 @@
 
 #ifndef USE_TENT
 #include "transfer_engine.h"
+#include "log_macros.h"
 #include "transfer_engine_impl.h"
 #include <utility>
 

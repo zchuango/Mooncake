@@ -1,4 +1,5 @@
 #include "ha/leadership/backends/redis/redis_leader_coordinator.h"
+#include "log_macros.h"
 
 #include <chrono>
 #include <exception>
@@ -10,7 +11,7 @@
 #include <string_view>
 #include <thread>
 
-#include <glog/logging.h>
+
 #ifdef STORE_USE_REDIS
 #include <hiredis/hiredis.h>
 #endif

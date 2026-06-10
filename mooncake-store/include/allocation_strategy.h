@@ -13,6 +13,7 @@
 #include "allocator.h"  // Contains BufferAllocator declaration
 #include "replica.h"
 #include "types.h"
+#include "log_macros.h"
 
 namespace mooncake {
 
@@ -784,7 +785,7 @@ class CxlAllocationStrategy : public AllocationStrategy {
 
         const std::string& cxl_segment_name = preferred_segments[0];
 
-        VLOG(1) << "Do cxl allocate, overwritten segment=" << cxl_segment_name;
+        LOG(INFO) << "Do cxl allocate, overwritten segment=" << cxl_segment_name;
 
         const auto cxl_allocators =
             allocator_manager.getAllocators(cxl_segment_name);
@@ -811,7 +812,7 @@ class CxlAllocationStrategy : public AllocationStrategy {
         replicas.emplace_back(std::move(buffer), ReplicaStatus::PROCESSING,
                               replica_type);
 
-        VLOG(1) << "Successfully allocated " << replicas.size()
+        LOG(INFO) << "Successfully allocated " << replicas.size()
                 << " CXL replica.";
         return replicas;
     }

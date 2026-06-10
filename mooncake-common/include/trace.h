@@ -24,6 +24,8 @@
 
 namespace mooncake {
 
+enum class LogLevel;
+
 /**
  * @brief Simplified trace context for request tracking.
  *
@@ -126,3 +128,24 @@ private:
 };
 
 }  // namespace mooncake
+
+namespace mooncake::logging {
+
+uint64_t NewTraceId();
+uint64_t CurrentTraceId();
+bool ShouldLog(LogLevel level);
+void ApplyMooncakeLogEnableToGlog();
+
+class ScopedTraceId {
+public:
+    explicit ScopedTraceId(uint64_t trace_id);
+    ~ScopedTraceId();
+
+    ScopedTraceId(const ScopedTraceId &) = delete;
+    ScopedTraceId &operator=(const ScopedTraceId &) = delete;
+
+private:
+    std::string previous_trace_id_;
+};
+
+}  // namespace mooncake::logging

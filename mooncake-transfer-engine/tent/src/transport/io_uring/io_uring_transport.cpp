@@ -13,9 +13,10 @@
 // limitations under the License.
 
 #include "tent/transport/io_uring/io_uring_transport.h"
+#include "log_macros.h"
 
 #include <cstdint>
-#include <glog/logging.h>
+
 
 #include <algorithm>
 #include <cassert>

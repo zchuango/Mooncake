@@ -1,10 +1,11 @@
 // buffer_allocator.cpp
 #include "allocator.h"
 
-#include <glog/logging.h>
+
 
 #include <memory>
 
+#include "log_macros.h"
 #include "master_metric_manager.h"
 
 namespace mooncake {
@@ -24,7 +25,7 @@ AllocatedBuffer::~AllocatedBuffer() {
     auto alloc = allocator_.lock();
     if (alloc) {
         alloc->deallocate(this);
-        VLOG(1) << "buf_handle_deallocated size=" << size_;
+        LOG(INFO) << "buf_handle_deallocated size=" << size_;
     }
 }
 
@@ -81,7 +82,7 @@ CachelibBufferAllocator::CachelibBufferAllocator(std::string segment_name,
       cur_size_(0),
       transport_endpoint_(std::move(transport_endpoint)),
       replica_type_(replica_type) {
-    VLOG(1) << "initializing_buffer_allocator segment_name=" << segment_name
+    LOG(INFO) << "initializing_buffer_allocator segment_name=" << segment_name
             << " base_address=" << reinterpret_cast<void*>(base)
             << " size=" << size;
 
@@ -107,7 +108,7 @@ CachelibBufferAllocator::CachelibBufferAllocator(std::string segment_name,
 
     // Add the main pool to the allocator.
     pool_id_ = memory_allocator_->addPool("main", size);
-    VLOG(1) << "buffer_allocator_initialized pool_id="
+    LOG(INFO) << "buffer_allocator_initialized pool_id="
             << static_cast<int>(pool_id_);
 }
 
@@ -129,7 +130,7 @@ std::unique_ptr<AllocatedBuffer> CachelibBufferAllocator::allocate(
         size_t padding_size = std::max(size, kMinSliceSize);
         buffer = memory_allocator_->allocate(pool_id_, padding_size);
         if (!buffer) {
-            VLOG(1) << "allocation_failed size=" << size
+            LOG(INFO) << "allocation_failed size=" << size
                     << " segment=" << segment_name_
                     << " current_size=" << cur_size_;
             return nullptr;
@@ -141,7 +142,7 @@ std::unique_ptr<AllocatedBuffer> CachelibBufferAllocator::allocate(
         LOG(ERROR) << "allocation_unknown_exception";
         return nullptr;
     }
-    VLOG(1) << "allocation_succeeded size=" << size
+    LOG(INFO) << "allocation_succeeded size=" << size
             << " segment=" << segment_name_ << " address=" << buffer;
     cur_size_.fetch_add(size);
     if (replica_type_ == ReplicaType::MEMORY) {
@@ -171,7 +172,7 @@ void CachelibBufferAllocator::deallocate(AllocatedBuffer* handle) {
             MasterMetricManager::instance().dec_allocated_nof_size(
                 segment_name_, freed_size);
         }
-        VLOG(1) << "deallocation_succeeded address=" << handle->buffer_ptr_
+        LOG(INFO) << "deallocation_succeeded address=" << handle->buffer_ptr_
                 << " size=" << freed_size << " segment=" << segment_name_;
     } catch (const std::exception& e) {
         LOG(ERROR) << "deallocation_exception error=" << e.what();
@@ -191,7 +192,7 @@ OffsetBufferAllocator::OffsetBufferAllocator(std::string segment_name,
       cur_size_(0),
       transport_endpoint_(std::move(transport_endpoint)),
       replica_type_(replica_type) {
-    VLOG(1) << "initializing_offset_buffer_allocator segment_name="
+    LOG(INFO) << "initializing_offset_buffer_allocator segment_name="
             << segment_name << " base_address=" << reinterpret_cast<void*>(base)
             << " size=" << size;
 
@@ -216,7 +217,7 @@ OffsetBufferAllocator::OffsetBufferAllocator(std::string segment_name,
             throw std::runtime_error("Failed to create offset allocator");
         }
 
-        VLOG(1) << "offset_buffer_allocator_initialized segment_name="
+        LOG(INFO) << "offset_buffer_allocator_initialized segment_name="
                 << segment_name;
     } catch (const std::exception& e) {
         LOG(ERROR) << "offset_allocator_init_exception error=" << e.what();
@@ -245,7 +246,7 @@ std::unique_ptr<AllocatedBuffer> OffsetBufferAllocator::allocate(size_t size) {
         // Allocate memory using OffsetAllocator
         auto allocation_handle = offset_allocator_->allocate(size);
         if (!allocation_handle) {
-            VLOG(1) << "allocation_failed size=" << size
+            LOG(INFO) << "allocation_failed size=" << size
                     << " segment=" << segment_name_
                     << " current_size=" << cur_size_;
             return nullptr;
@@ -258,7 +259,7 @@ std::unique_ptr<AllocatedBuffer> OffsetBufferAllocator::allocate(size_t size) {
         // OffsetAllocationHandle
         allocated_buffer = std::make_unique<AllocatedBuffer>(
             shared_from_this(), buffer_ptr, size, std::move(allocation_handle));
-        VLOG(1) << "allocation_succeeded size=" << size
+        LOG(INFO) << "allocation_succeeded size=" << size
                 << " segment=" << segment_name_ << " address=" << buffer_ptr;
     } catch (const std::exception& e) {
         LOG(ERROR) << "allocation_exception error=" << e.what();
@@ -293,7 +294,7 @@ void OffsetBufferAllocator::deallocate(AllocatedBuffer* handle) {
             MasterMetricManager::instance().dec_allocated_nof_size(
                 segment_name_, freed_size);
         }
-        VLOG(1) << "deallocation_succeeded address=" << handle->data()
+        LOG(INFO) << "deallocation_succeeded address=" << handle->data()
                 << " size=" << freed_size << " segment=" << segment_name_;
     } catch (const std::exception& e) {
         LOG(ERROR) << "deallocation_exception error=" << e.what();
@@ -406,7 +407,7 @@ void* SimpleAllocator::allocate(size_t size) {
             LOG(WARNING) << "allocation_failed size=" << size;
             return nullptr;
         }
-        VLOG(1) << "allocation_succeeded size=" << size << " address=" << ptr;
+        LOG(INFO) << "allocation_succeeded size=" << size << " address=" << ptr;
         return ptr;
     } catch (const std::exception& e) {
         LOG(ERROR) << "allocation_exception error=" << e.what();
@@ -427,7 +428,7 @@ void SimpleAllocator::deallocate(void* ptr, size_t size) {
 
     try {
         memory_allocator_->free(ptr);
-        VLOG(1) << "deallocation_succeeded size=" << size << " address=" << ptr;
+        LOG(INFO) << "deallocation_succeeded size=" << size << " address=" << ptr;
     } catch (const std::exception& e) {
         LOG(ERROR) << "deallocation_exception error=" << e.what();
     } catch (...) {

@@ -33,7 +33,8 @@
  */
 
 #include <gflags/gflags.h>
-#include <glog/logging.h>
+#include "log_macros.h"
+
 #include <gtest/gtest.h>
 #include <numa.h>
 #include <sys/time.h>

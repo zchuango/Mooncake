@@ -1,6 +1,7 @@
 #include "standby_state_machine.h"
+#include "log_macros.h"
 
-#include <glog/logging.h>
+
 
 namespace mooncake {
 
@@ -251,7 +252,7 @@ StateTransitionResult StandbyStateMachine::ProcessEvent(StandbyEvent event) {
         // the lock to avoid deadlock (callbacks may re-enter ProcessEvent).
         callbacks_copy = callbacks_;
     } else if (!result.allowed) {
-        VLOG(1) << "Standby state transition rejected: " << result.reason;
+        LOG(INFO) << "Standby state transition rejected: " << result.reason;
     }
 
     // Notify callbacks outside the lock to avoid deadlock when callbacks

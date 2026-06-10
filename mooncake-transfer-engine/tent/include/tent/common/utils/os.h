@@ -15,8 +15,9 @@
 #ifndef TENT_OS_H
 #define TENT_OS_H
 
-#include <glog/logging.h>
+
 #include <numa.h>
+#include "log_macros.h"
 #include <sys/mman.h>
 #include <sys/time.h>
 #include <unistd.h>

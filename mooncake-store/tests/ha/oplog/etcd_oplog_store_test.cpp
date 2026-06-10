@@ -1,7 +1,8 @@
 #include "ha/oplog/etcd_oplog_store.h"
+#include "log_macros.h"
 
 #include <gflags/gflags.h>
-#include <glog/logging.h>
+
 #include <gtest/gtest.h>
 
 #include <chrono>

@@ -5,7 +5,8 @@ project(mooncake CXX C)
 set(GLOBAL_CONFIG "true")
 
 include(mooncake-common/FindJsonCpp.cmake)
-include(mooncake-common/FindGLOG.cmake)
+include(mooncake-common/Findspdlog.cmake)
+add_subdirectory(extern/spdlog EXCLUDE_FROM_ALL)
 include(mooncake-common/common.cmake)
 # unit test
 if (BUILD_UNIT_TESTS)

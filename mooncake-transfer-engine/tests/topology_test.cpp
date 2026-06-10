@@ -1,6 +1,7 @@
 #include "topology.h"
+#include "log_macros.h"
 
-#include <glog/logging.h>
+
 #include <gtest/gtest.h>
 
 #include "transfer_metadata.h"

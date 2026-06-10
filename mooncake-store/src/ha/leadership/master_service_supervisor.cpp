@@ -1,4 +1,5 @@
 #include "ha/leadership/master_service_supervisor.h"
+#include "log_macros.h"
 
 #include <atomic>
 #include <chrono>
@@ -8,10 +9,11 @@
 #include <string_view>
 #include <thread>
 
-#include <glog/logging.h>
+
 #include <ylt/coro_rpc/coro_rpc_server.hpp>
 
 #include "ha/leadership/leader_coordinator_factory.h"
+#include "rpc_protocol.h"
 #include "ha/standby_controller.h"
 #include "rpc_service.h"
 
@@ -23,6 +25,34 @@ namespace {
 constexpr auto kAcquireRetryInterval = std::chrono::seconds(1);
 constexpr auto kRenewCheckInterval = std::chrono::seconds(1);
 constexpr auto kSupervisorRetryInterval = std::chrono::seconds(1);
+
+void ApplyRpcProtocolToServer(coro_rpc::coro_rpc_server& server) {
+    switch (GetRpcProtocolFromEnv()) {
+        case RpcProtocol::Urma:
+#ifdef YLT_ENABLE_URMA
+            server.init_urma();
+#else
+            LOG(WARNING)
+                << "MC_RPC_PROTOCOL=urma requested but yalantinglibs was not "
+                   "built with YLT_ENABLE_URMA; using TCP";
+#endif
+            break;
+        case RpcProtocol::Rdma:
+#ifdef YLT_ENABLE_IBV
+            server.init_ibv();
+#elif defined(YLT_ENABLE_URMA)
+            LOG(WARNING) << "MC_RPC_PROTOCOL=rdma requested but YLT_ENABLE_IBV "
+                           "is unavailable; using URMA";
+            server.init_urma();
+#else
+            LOG(WARNING) << "MC_RPC_PROTOCOL=rdma requested but no RDMA RPC "
+                           "transport is enabled; using TCP";
+#endif
+            break;
+        case RpcProtocol::Tcp:
+            break;
+    }
+}
 
 std::string ResolveHABackendConnstring(
     const MasterServiceSupervisorConfig& config) {
@@ -344,10 +374,7 @@ int RunSupervisorLoop(const HABackendSpec& spec,
         coro_rpc::coro_rpc_server server(
             config.rpc_thread_num, config.rpc_port, config.rpc_address,
             config.rpc_conn_timeout, config.rpc_enable_tcp_no_delay);
-        const char* protocol = std::getenv("MC_RPC_PROTOCOL");
-        if (protocol && std::string_view(protocol) == "rdma") {
-            server.init_ibv();
-        }
+        ApplyRpcProtocolToServer(server);
 
         auto wrapped_master_service = std::make_shared<WrappedMasterService>(
             mooncake::WrappedMasterServiceConfig(

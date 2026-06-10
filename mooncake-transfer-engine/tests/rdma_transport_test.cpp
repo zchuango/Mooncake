@@ -26,7 +26,8 @@
 //   --expect_remote_location=maca:0
 
 #include <gflags/gflags.h>
-#include <glog/logging.h>
+#include "log_macros.h"
+
 #include <sys/time.h>
 
 #include <cstdlib>

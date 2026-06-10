@@ -1,6 +1,6 @@
 find_package(yaml-cpp REQUIRED)
 
-find_package(spdlog REQUIRED)
+find_package(fmt REQUIRED)
 
 find_package(asio QUIET)
 
@@ -27,10 +27,10 @@ endif()
 set(MOONCAKE_COMMON_SOURCES
     default_config.cpp
     environ.cpp
-    mooncake_logging.cpp
     logger.cpp
-    trace.cpp
+    log_macros.cpp
     rate_limiter.cpp
+    trace.cpp
 )
 
 add_library(asio_shared SHARED asio_impl.cpp)
@@ -66,13 +66,15 @@ target_include_directories(mooncake_common PUBLIC
 target_link_libraries(mooncake_common PUBLIC
     yaml-cpp
     jsoncpp
-    glog::glog
+
     gflags::gflags
-    spdlog::spdlog
+    spdlog_submodule
+    fmt::fmt
 )
 
 if (BUILD_SHARED_LIBS)
   install(TARGETS mooncake_common DESTINATION lib)
+  target_link_options(mooncake_common PRIVATE -Wl,--no-as-needed)
 endif()
 
 install(TARGETS asio_shared DESTINATION lib)

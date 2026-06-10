@@ -1,6 +1,7 @@
 #include "ha/oplog/oplog_serializer.h"
+#include "log_macros.h"
 
-#include <glog/logging.h>
+
 #include <sstream>
 
 #if __has_include(<jsoncpp/json/json.h>)

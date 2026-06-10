@@ -13,7 +13,6 @@
 #include <ylt/util/tl/expected.hpp>
 
 #include "master_perf.h"
-#include "mooncake_logging.h"
 #include "log_macros.h"
 #include "types.h"
 #include "utils/scoped_vlog_timer.h"

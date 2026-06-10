@@ -13,9 +13,10 @@
 // limitations under the License.
 
 #include "tent/transport/sunrise_link/sunrise_link_transport.h"
+#include "log_macros.h"
 
 #include <dlfcn.h>
-#include <glog/logging.h>
+
 
 #include <cassert>
 #include <cstddef>

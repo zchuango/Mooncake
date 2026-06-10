@@ -1,11 +1,12 @@
 #include "ha/standby_controller.h"
+#include "log_macros.h"
 
 #include <memory>
 #include <mutex>
 #include <optional>
 #include <string>
 
-#include <glog/logging.h>
+
 
 #include "ha/snapshot/catalog_backed_snapshot_provider.h"
 #include "hot_standby_service.h"

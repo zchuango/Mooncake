@@ -14,6 +14,7 @@
 // limitations under the License.
 
 #include <cassert>
+#include "log_macros.h"
 #include <iostream>
 #include <fstream>
 #include <unistd.h>

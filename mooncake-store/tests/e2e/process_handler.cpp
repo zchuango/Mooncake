@@ -1,8 +1,9 @@
 #include "process_handler.h"
+#include "log_macros.h"
 
 #include <fcntl.h>
 #include <gflags/gflags.h>
-#include <glog/logging.h>
+
 #include <signal.h>
 #include <sys/stat.h>
 #include <sys/wait.h>

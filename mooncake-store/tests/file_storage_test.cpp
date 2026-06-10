@@ -1,5 +1,6 @@
-#include <glog/logging.h>
+
 #include <gtest/gtest.h>
+#include "log_macros.h"
 
 #include <filesystem>
 #include <thread>

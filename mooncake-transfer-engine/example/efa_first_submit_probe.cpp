@@ -35,7 +35,8 @@
 //                   --warmup=1 --iters=5
 
 #include <gflags/gflags.h>
-#include <glog/logging.h>
+#include "log_macros.h"
+
 #include <numa.h>
 
 #include <chrono>

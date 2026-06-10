@@ -13,10 +13,11 @@
 // limitations under the License.
 
 #include "tent/platform/rocm.h"
+#include "log_macros.h"
 #include "tent/common/status.h"
 #include "tent/common/utils/prefault.h"
 
-#include <glog/logging.h>
+
 #include <fstream>
 #include <map>
 #include <set>

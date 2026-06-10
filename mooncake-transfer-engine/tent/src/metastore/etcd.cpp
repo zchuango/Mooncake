@@ -13,7 +13,7 @@
 // limitations under the License.
 
 #include "tent/metastore/etcd.h"
-#include <glog/logging.h>
+
 
 namespace mooncake {
 namespace tent {

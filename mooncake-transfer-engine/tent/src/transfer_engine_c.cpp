@@ -13,8 +13,9 @@
 // limitations under the License.
 
 #include "tent/transfer_engine.h"
+#include "log_macros.h"
 
-#include <glog/logging.h>
+
 
 #include "tent/runtime/transfer_engine_impl.h"
 

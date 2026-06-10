@@ -3,7 +3,8 @@
 // including hot-cache shm path and allocator fallback path.
 
 #include <gflags/gflags.h>
-#include <glog/logging.h>
+#include "log_macros.h"
+
 #include <gtest/gtest.h>
 
 #include <chrono>

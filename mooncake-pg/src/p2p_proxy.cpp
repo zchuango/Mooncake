@@ -1,4 +1,5 @@
 #include <memory>
+#include "log_macros.h"
 #include <mutex>
 #include <p2p_proxy.h>
 #include <ATen/cuda/CUDAContext.h>

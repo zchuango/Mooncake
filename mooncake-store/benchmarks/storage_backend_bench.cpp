@@ -64,6 +64,7 @@
  */
 
 #include <algorithm>
+#include "log_macros.h"
 #include <atomic>
 #include <cerrno>
 #include <chrono>
@@ -91,7 +92,7 @@
 #endif
 
 #include "gflags/gflags.h"
-#include "glog/logging.h"
+
 #include "storage_backend.h"
 
 namespace fs = std::filesystem;
@@ -2365,9 +2366,7 @@ void RunAllBenchmarks(const std::string& storage_path, size_t capacity) {
 // Main
 // ============================================================================
 
-int main(int argc, char** argv) {
-    google::InitGoogleLogging("StorageBackendBench");
-    FLAGS_logtostderr = true;
+int main(int argc, char** argv) { 
     gflags::ParseCommandLineFlags(&argc, &argv, true);
 
     std::string storage_path = FLAGS_storage_path;
@@ -2451,9 +2450,7 @@ int main(int argc, char** argv) {
     // Cleanup
     if (!FLAGS_skip_cleanup) {
         CleanupStoragePath(storage_path);
-    }
-
-    google::ShutdownGoogleLogging();
+    } 
 
     // Return non-zero if corruption detected
     return total_failures > 0 ? 1 : 0;

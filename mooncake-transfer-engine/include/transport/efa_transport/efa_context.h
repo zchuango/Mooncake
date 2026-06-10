@@ -16,7 +16,7 @@
 #define EFA_CONTEXT_H
 
 #include <gflags/gflags.h>
-#include <glog/logging.h>
+
 #include <rdma/fabric.h>
 #include <rdma/fi_domain.h>
 #include <rdma/fi_endpoint.h>

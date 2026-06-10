@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include "tent/runtime/transfer_engine_impl.h"
+#include "log_macros.h"
 #include "tent/runtime/control_plane.h"
 
 #include <algorithm>

@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include "tent/runtime/memory_prober.h"
+#include "log_macros.h"
 #include "tent/device_plugin.h"
 #include "tent/common/utils/prefault.h"
 

@@ -1,6 +1,7 @@
-#include <glog/logging.h>
+
 
 #include <atomic>
+#include "log_macros.h"
 #include <cerrno>
 #include <chrono>
 #include <cstring>

@@ -20,10 +20,6 @@
 #include <string>
 #include "log_config.h"
 
-namespace spdlog {
-class logger;
-}
-
 namespace mooncake {
 
 /**
@@ -68,10 +64,9 @@ public:
     void Shutdown();
 
     /**
-     * @brief Get the underlying spdlog logger.
-     * @return Shared pointer to spdlog logger.
+     * @brief Flush pending log messages.
      */
-    std::shared_ptr<spdlog::logger> GetSpdlogger();
+    void Flush();
 
     /**
      * @brief Set log level at runtime.

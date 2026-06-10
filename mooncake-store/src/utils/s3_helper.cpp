@@ -1,4 +1,5 @@
 #include "utils/s3_helper.h"
+#include "log_macros.h"
 
 #include <aws/s3/model/PutObjectRequest.h>
 #include <aws/s3/model/GetObjectRequest.h>
@@ -17,7 +18,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <cctype>
-#include <glog/logging.h>
+
 #include <thread>
 #include <mutex>
 #include <atomic>

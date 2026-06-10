@@ -16,6 +16,7 @@
 #define UB_CONTEXT_H
 
 #include <atomic>
+#include "log_macros.h"
 #include <fcntl.h>
 #include <fstream>
 #include <list>

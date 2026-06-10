@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include "transport/efa_transport/efa_context.h"
+#include "log_macros.h"
 
 #include <fcntl.h>
 #include <sys/epoll.h>

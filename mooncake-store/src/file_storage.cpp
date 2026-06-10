@@ -1,4 +1,5 @@
 #include "file_storage.h"
+#include "log_macros.h"
 
 #include <memory>
 #include <vector>
@@ -333,7 +334,7 @@ tl::expected<FileStorage::BatchGetResult, ErrorCode> FileStorage::BatchGet(
     auto elapsed_time = std::chrono::duration_cast<std::chrono::microseconds>(
                             end_time - start_time)
                             .count();
-    VLOG(1) << "Time taken for FileStorage::BatchGet: " << elapsed_time
+    LOG(INFO) << "Time taken for FileStorage::BatchGet: " << elapsed_time
             << "us, key size: " << keys.size() << ", batch_id: " << batch_id;
     return batch_result;
 }
@@ -365,7 +366,7 @@ tl::expected<void, ErrorCode> FileStorage::OffloadObjects(
     auto complete_handler =
         [this](const std::vector<std::string>& keys,
                std::vector<StorageObjectMetadata>& metadatas) -> ErrorCode {
-        VLOG(1) << "Success to store objects, keys count: " << keys.size();
+        LOG(INFO) << "Success to store objects, keys count: " << keys.size();
         for (auto& metadata : metadatas) {
             metadata.transport_endpoint = local_rpc_addr_;
         }
@@ -623,7 +624,7 @@ tl::expected<void, ErrorCode> FileStorage::ProcessPromotionTasks() {
         return {};
     }
 
-    VLOG(1) << "ProcessPromotionTasks pulled " << promotion_objects.size()
+    LOG(INFO) << "ProcessPromotionTasks pulled " << promotion_objects.size()
             << " promotion candidate(s) from master";
 
     // No segment preference from the client: let master pick from any
@@ -654,12 +655,12 @@ tl::expected<void, ErrorCode> FileStorage::ProcessPromotionTasks() {
             // reaper TTL (~10 min default), turning transient DRAM
             // pressure into a sustained outage of promotion_queue_limit_.
             // Notify is idempotent and handles alloc_id == 0 correctly.
-            VLOG(1) << "PromotionAllocStart failed for key=" << key
+            LOG(INFO) << "PromotionAllocStart failed for key=" << key
                     << ", error=" << alloc_result.error()
                     << " (likely no free DRAM); releasing master slot";
             auto release = client_->NotifyPromotionFailure(key);
             if (!release) {
-                VLOG(1) << "Promotion: NotifyPromotionFailure failed for key="
+                LOG(INFO) << "Promotion: NotifyPromotionFailure failed for key="
                         << key << ", error=" << release.error()
                         << "; master reaper will reclaim on TTL expiry";
             }
@@ -676,7 +677,7 @@ tl::expected<void, ErrorCode> FileStorage::ProcessPromotionTasks() {
         auto release_master_state = [this, &key]() {
             auto release = client_->NotifyPromotionFailure(key);
             if (!release) {
-                VLOG(1) << "Promotion: NotifyPromotionFailure failed for key="
+                LOG(INFO) << "Promotion: NotifyPromotionFailure failed for key="
                         << key << ", error=" << release.error()
                         << "; master reaper will reclaim on TTL expiry";
             }
@@ -739,7 +740,7 @@ tl::expected<void, ErrorCode> FileStorage::ProcessPromotionTasks() {
             continue;
         }
 
-        VLOG(1) << "Promotion completed for key=" << key << ", size=" << size;
+        LOG(INFO) << "Promotion completed for key=" << key << ", size=" << size;
     }
 
     return {};
@@ -753,7 +754,7 @@ tl::expected<void, ErrorCode> FileStorage::BatchLoad(
     auto elapsed_time = std::chrono::duration_cast<std::chrono::microseconds>(
                             end_time - start_time)
                             .count();
-    VLOG(1) << "Time taken for BatchStore: " << elapsed_time
+    LOG(INFO) << "Time taken for BatchStore: " << elapsed_time
             << "us,with keys count: " << batch_object.size();
     if (!result) {
         LOG(ERROR) << "Batch load object failed,err_code = " << result.error();
@@ -906,7 +907,7 @@ void FileStorage::ClientBufferGCThreadFunc() {
                 for (auto it = client_buffer_allocated_batches_.begin();
                      it != client_buffer_allocated_batches_.end();) {
                     if (now >= it->second->lease_timeout) {
-                        VLOG(1) << "GC releasing batch_id: " << it->first
+                        LOG(INFO) << "GC releasing batch_id: " << it->first
                                 << " (lease expired)";
                         it = client_buffer_allocated_batches_.erase(it);
                     } else {
@@ -925,12 +926,12 @@ bool FileStorage::ReleaseBuffer(uint64_t batch_id) {
     MutexLocker locker(&client_buffer_mutex_);
     auto it = client_buffer_allocated_batches_.find(batch_id);
     if (it != client_buffer_allocated_batches_.end()) {
-        VLOG(1) << "Releasing buffer for batch_id: " << batch_id
+        LOG(INFO) << "Releasing buffer for batch_id: " << batch_id
                 << " (transfer completed)";
         client_buffer_allocated_batches_.erase(it);
         return true;
     }
-    VLOG(1) << "batch_id " << batch_id
+    LOG(INFO) << "batch_id " << batch_id
             << " not found (may have been GC'd already)";
     return false;
 }

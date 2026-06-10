@@ -13,10 +13,11 @@
 // limitations under the License.
 
 #include "transport/nvlink_transport/nvlink_transport.h"
+#include "log_macros.h"
 
 #include <bits/stdint-uintn.h>
 #include "cuda_alike.h"
-#include <glog/logging.h>
+
 
 #include <algorithm>
 #include <cassert>
