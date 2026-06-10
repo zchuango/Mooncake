@@ -779,7 +779,6 @@ void PrintUsage(const char* program_name) {
 }
 
 int main(int argc, char* argv[]) {
-    google::InitGoogleLogging(argv[0]);
 
     BenchmarkConfig config;
 

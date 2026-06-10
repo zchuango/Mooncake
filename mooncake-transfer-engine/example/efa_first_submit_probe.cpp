@@ -189,8 +189,6 @@ static int runInitiator() {
 
 int main(int argc, char **argv) {
     gflags::ParseCommandLineFlags(&argc, &argv, false);
-    google::InitGoogleLogging(argv[0]);
-    FLAGS_logtostderr = 1;
 
     if (FLAGS_mode == "target") return runTarget();
     if (FLAGS_mode == "initiator") return runInitiator();
