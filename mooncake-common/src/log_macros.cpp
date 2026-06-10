@@ -104,7 +104,7 @@ LogStream::~LogStream()
     }
 }
 
-// MC_LOG_DETAIL_ENABLE secondary switch, backs the DLOG_* compatibility macros.
+// MC_LOG_DETAIL_ENABLE secondary switch, backs the DLOG() detail-log macros.
 // Default OFF; only an explicit truthy value enables detail logs.
 bool DetailLogEnabledFromEnv()
 {
