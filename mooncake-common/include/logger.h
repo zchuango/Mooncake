@@ -20,7 +20,19 @@
 #include <string>
 #include "log_config.h"
 
+namespace spdlog {
+class logger;
+}  // namespace spdlog
+
 namespace mooncake {
+
+/**
+ * @brief Dedicated console logger backing the CLOG() macros: its output reaches
+ *        the terminal (stderr) AND the log file, independent of the default
+ *        logger's level and the MC_LOG_ENABLE kill switch. Returns nullptr
+ *        before Logger::Init (callers then fall back to the default logger).
+ */
+spdlog::logger *ConsoleLogger();
 
 /**
  * @brief Build a LogConfig from environment variables, preserving the legacy

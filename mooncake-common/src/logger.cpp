@@ -21,6 +21,8 @@
 #include <spdlog/spdlog.h>
 #include <spdlog/async.h>
 #include <spdlog/sinks/rotating_file_sink.h>
+#include <spdlog/sinks/stdout_color_sinks.h>
+#include <vector>
 #include <cstdlib>
 #include <stdexcept>
 #include <map>
@@ -66,11 +68,25 @@ LogConfig LogConfigFromEnv()
     return config;
 }
 
+// Dedicated console logger backing CLOG(): terminal (stderr) + file. Created in
+// Logger::Impl::Init. Before init it is null; ConsoleLogger() then returns the
+// spdlog default logger so early CLOG() output still reaches stderr.
+static std::shared_ptr<spdlog::logger> g_console_logger;
+
+spdlog::logger *ConsoleLogger()
+{
+    if (g_console_logger) {
+        return g_console_logger.get();
+    }
+    return spdlog::default_logger().get();
+}
+
 class Logger::Impl {
 public:
     bool Init(const LogConfig &config)
     {
         spdlog::drop_all();
+        g_console_logger.reset();
 
         // Create log directory if not exists
         std::error_code ec;
@@ -107,6 +123,21 @@ public:
         // Set as default logger
         spdlog::set_default_logger(logger_);
 
+        // Dedicated console logger for CLOG(): writes to BOTH the rotating file
+        // and the terminal (stderr), so critical/operational messages always
+        // appear on screen regardless of the default logger's level or
+        // MC_LOG_ENABLE. Kept synchronous (low frequency) to avoid async
+        // teardown races.
+        auto consoleSink =
+            std::make_shared<spdlog::sinks::stderr_color_sink_mt>();
+        std::vector<spdlog::sink_ptr> clogSinks{ fileSink, consoleSink };
+        g_console_logger = std::make_shared<spdlog::logger>(
+            "mooncake_console", clogSinks.begin(), clogSinks.end());
+        g_console_logger->set_pattern(config.pattern,
+                                      spdlog::pattern_time_type::local);
+        g_console_logger->set_level(spdlog::level::trace);  // gating in ShouldLogAlways
+        g_console_logger->flush_on(spdlog::level::warn);
+
         // Configure rate limiter
         RateLimiter::Instance().SetRate(config.rateLimit);
 
@@ -124,6 +155,10 @@ public:
     {
         if (logger_) {
             logger_->flush();
+        }
+        if (g_console_logger) {
+            g_console_logger->flush();
+            g_console_logger.reset();
         }
         spdlog::shutdown();
         initialized_ = false;

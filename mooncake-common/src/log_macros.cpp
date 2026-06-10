@@ -11,6 +11,7 @@
 
 #include "rate_limiter.h"
 #include "trace.h"
+#include "logger.h"
 
 namespace mooncake {
 
@@ -57,12 +58,13 @@ spdlog::level::level_enum ToSpdlogLevel(LogLevel level)
 }  // namespace
 
 LogStream::LogStream(LogLevel level, const char *file, int line, bool fatal,
-                     int saved_errno)
+                     int saved_errno, bool to_console)
     : level_(level),
       file_(file),
       line_(line),
       fatal_(fatal),
-      saved_errno_(saved_errno)
+      saved_errno_(saved_errno),
+      to_console_(to_console)
 {
 }
 
@@ -73,7 +75,8 @@ LogStream::LogStream(LogStream &&other) noexcept
       stream_(std::move(other.stream_)),
       skip_(other.skip_),
       fatal_(other.fatal_),
-      saved_errno_(other.saved_errno_)
+      saved_errno_(other.saved_errno_),
+      to_console_(other.to_console_)
 {
     other.skip_ = true;
     other.fatal_ = false;
@@ -81,7 +84,8 @@ LogStream::LogStream(LogStream &&other) noexcept
 
 LogStream::~LogStream()
 {
-    auto logger = spdlog::default_logger();
+    spdlog::logger *logger =
+        to_console_ ? ConsoleLogger() : spdlog::default_logger().get();
     if (logger && !skip_) {
         auto msg = stream_.str();
         if (saved_errno_ != 0) {
@@ -153,12 +157,13 @@ bool ShouldLog(LogLevel level)
 }
 
 // Backs the CLOG(severity) macros: always emit regardless of MC_LOG_ENABLE,
-// rate-limiting and request sampling; honor only spdlog's own level filter.
+// rate-limiting and request sampling; honor only the console logger's own level
+// filter (which is set to trace, i.e. never filters CLOG in practice).
 bool ShouldLogAlways(LogLevel level)
 {
     auto spdlog_level = ToSpdlogLevel(level);
-    auto logger = spdlog::default_logger();
-    return !(logger && !logger->should_log(spdlog_level));
+    auto logger = ConsoleLogger();
+    return logger != nullptr && logger->should_log(spdlog_level);
 }
 
 bool ShouldVLog(int level)
@@ -180,6 +185,12 @@ LogStream MakeLogStream(LogLevel level, const char *file, int line, bool fatal,
                         int saved_errno)
 {
     return LogStream(level, file, line, fatal, saved_errno);
+}
+
+LogStream MakeConsoleLogStream(LogLevel level, const char *file, int line,
+                               bool fatal, int saved_errno)
+{
+    return LogStream(level, file, line, fatal, saved_errno, /*to_console=*/true);
 }
 
 }  // namespace mooncake

@@ -44,7 +44,7 @@ enum class LogLevel {
 class LogStream {
 public:
     LogStream(LogLevel level, const char *file, int line, bool fatal = false,
-              int saved_errno = 0);
+              int saved_errno = 0, bool to_console = false);
     LogStream(const LogStream &) = delete;
     LogStream &operator=(const LogStream &) = delete;
     LogStream(LogStream &&other) noexcept;
@@ -70,6 +70,7 @@ private:
     bool skip_ = false;
     bool fatal_ = false;
     int saved_errno_ = 0;
+    bool to_console_ = false;
 };
 
 class LogStreamVoidify {
@@ -89,6 +90,11 @@ void SetLogVerbosity(int verbosity);
 
 LogStream MakeLogStream(LogLevel level, const char *file, int line,
                         bool fatal = false, int saved_errno = 0);
+
+// Builds a LogStream that emits via ConsoleLogger() (terminal + file). Backs
+// the CLOG() macros.
+LogStream MakeConsoleLogStream(LogLevel level, const char *file, int line,
+                               bool fatal = false, int saved_errno = 0);
 
 }  // namespace mooncake
 
@@ -209,7 +215,8 @@ bool ShouldLogAlways(LogLevel level);
     !::mooncake::ShouldLogAlways(level)                                      \
         ? (void)0                                                            \
         : ::mooncake::LogStreamVoidify() &                                   \
-              ::mooncake::MakeLogStream(level, __FILE__, __LINE__, fatal, 0) \
+              ::mooncake::MakeConsoleLogStream(level, __FILE__, __LINE__,     \
+                                               fatal, 0)                     \
                   .Stream()
 
 #define CLOG(severity)                                                       \
