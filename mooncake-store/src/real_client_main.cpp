@@ -99,10 +99,9 @@ int main(int argc, char *argv[]) {
     mooncake::ResourceTracker::getInstance();
 
     gflags::ParseCommandLineFlags(&argc, &argv, true);
-    if (!FLAGS_log_dir.empty() && !google::IsGoogleLoggingInitialized()) {
-        google::InitGoogleLogging(argv[0]);
-    }
     // Initialize the spdlog async logger that backs LOG_* macros.
+    // (Logging is fully spdlog-based now; the legacy glog init was removed.
+    //  Log directory is honored via MC_LOG_DIR inside LogConfigFromEnv().)
     mooncake::Logger::Instance().Init(mooncake::LogConfigFromEnv());
 
     size_t global_segment_size = string_to_byte_size(FLAGS_global_segment_size);

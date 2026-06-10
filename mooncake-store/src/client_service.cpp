@@ -1,6 +1,5 @@
 #include "client_service.h"
 
-#include <glog/logging.h>
 
 #include "allocator.h"
 #include "segment.h"

@@ -37,6 +37,7 @@
 #ifdef USE_NOF
 #include "spdk/spdk_wrapper.h"
 #endif
+#include <gflags/gflags.h>
 #include "log_macros.h"
 #define UBDIAG_PERF_DEF_FILE "mooncake_perf_points.def"
 #define UBDIAG_PROGRAM_NAME "mooncake_store"
@@ -2646,7 +2647,7 @@ std::shared_ptr<BufferHandle> RealClient::get_buffer_internal(
     // Per-step latency is already recorded unconditionally by the ubdiag
     // PerfPoints (GET_INTERNAL_QUERY/SELECT_REPLICA/ALLOC_BUFFER/...), which
     // are unaffected by this gate.
-    const bool breakdown_log = mooncake::ShouldLog(spdlog::level::info);
+    const bool breakdown_log = mooncake::ShouldLog(mooncake::LogLevel::kInfo);
     auto t0 = breakdown_log ? std::chrono::steady_clock::now()
                             : std::chrono::steady_clock::time_point{};
     auto t0_wall = breakdown_log ? std::chrono::system_clock::now()
@@ -3014,7 +3015,7 @@ RealClient::batch_get_buffer_internal(
 
     // The fine-grained timestamps below only feed the INFO breakdown log, so
     // skip the steady_clock::now() calls entirely when INFO logging is off.
-    const bool breakdown_log = mooncake::ShouldLog(spdlog::level::info);
+    const bool breakdown_log = mooncake::ShouldLog(mooncake::LogLevel::kInfo);
     auto t0 = breakdown_log ? std::chrono::steady_clock::now()
                             : std::chrono::steady_clock::time_point{};
     auto t0_wall = breakdown_log ? std::chrono::system_clock::now()
@@ -3663,7 +3664,7 @@ tl::expected<int64_t, ErrorCode> RealClient::get_into_range_internal(
     size_t size, bool size_is_buffer_capacity) {
     // The fine-grained timestamps below only feed the INFO breakdown log, so
     // skip the steady_clock::now() calls entirely when INFO logging is off.
-    const bool breakdown_log = mooncake::ShouldLog(spdlog::level::info);
+    const bool breakdown_log = mooncake::ShouldLog(mooncake::LogLevel::kInfo);
     auto t0 = breakdown_log ? std::chrono::steady_clock::now()
                             : std::chrono::steady_clock::time_point{};
     auto t0_wall = breakdown_log ? std::chrono::system_clock::now()
@@ -4745,7 +4746,7 @@ RealClient::batch_get_into_internal(const std::vector<std::string> &keys,
                                     const std::vector<size_t> &sizes) {
     // The fine-grained timestamps below only feed the INFO breakdown log, so
     // skip the steady_clock::now() calls entirely when INFO logging is off.
-    const bool breakdown_log = mooncake::ShouldLog(spdlog::level::info);
+    const bool breakdown_log = mooncake::ShouldLog(mooncake::LogLevel::kInfo);
     auto start_time = breakdown_log ? std::chrono::steady_clock::now()
                                     : std::chrono::steady_clock::time_point{};
     auto t0_wall = breakdown_log ? std::chrono::system_clock::now()

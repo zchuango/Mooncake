@@ -1440,15 +1440,9 @@ class StressBenchmark {
 };
 
 int main(int argc, char* argv[]) {
-    if (!google::IsGoogleLoggingInitialized()) {
-        google::InitGoogleLogging(argv[0]);
-    }
     gflags::ParseCommandLineFlags(&argc, &argv, true);
-
-    if (std::getenv("MC_LOG_DIR") == nullptr) {
-        FLAGS_logtostderr = true;
-    }
     // Initialize the spdlog async logger that backs LOG_* macros.
+    // (Logging is fully spdlog-based now; the legacy glog init was removed.)
     mooncake::Logger::Instance().Init(mooncake::LogConfigFromEnv());
 
     CLOG(INFO) << "Mooncake Stress Cluster Benchmark";

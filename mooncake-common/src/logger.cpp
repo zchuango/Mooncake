@@ -25,6 +25,9 @@
 #include <stdexcept>
 #include <map>
 #include <filesystem>
+#include <algorithm>
+#include <cctype>
+#include <string>
 
 namespace mooncake {
 
@@ -34,6 +37,34 @@ static std::map<std::string, spdlog::level::level_enum> LEVEL_MAP = {
     { "WARNING", spdlog::level::warn },
     { "ERROR", spdlog::level::err }
 };
+
+// Build a LogConfig from MC_LOG_* environment variables. Declared in logger.h
+// and used by service entry points (master.cpp, real_client_main.cpp, ...).
+// NOTE: deliberately does NOT lower the level when MC_LOG_ENABLE is off — that
+// kill switch is enforced centrally in ShouldLog() for LOG_*/DLOG, while CLOG
+// must still emit, so we must not suppress logging via spdlog's level here.
+LogConfig LogConfigFromEnv()
+{
+    LogConfig config;
+    if (const char *dir = std::getenv("MC_LOG_DIR"); dir && *dir != '\0') {
+        config.logDir = dir;
+    }
+    if (const char *level = std::getenv("MC_LOG_LEVEL"); level && *level != '\0') {
+        std::string upper(level);
+        std::transform(upper.begin(), upper.end(), upper.begin(),
+                       [](unsigned char ch) { return std::toupper(ch); });
+        config.level = upper;
+    }
+    if (const char *maxSize = std::getenv("MC_LOG_MAX_SIZE");
+        maxSize && *maxSize != '\0') {
+        config.maxSizeMB = static_cast<uint32_t>(std::atoi(maxSize));
+    }
+    if (const char *bufSecs = std::getenv("MC_LOG_BUFFER_SECS");
+        bufSecs && *bufSecs != '\0') {
+        config.flushIntervalSecs = std::atoi(bufSecs);
+    }
+    return config;
+}
 
 class Logger::Impl {
 public:

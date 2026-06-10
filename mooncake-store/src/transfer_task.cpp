@@ -1,6 +1,5 @@
 #include "transfer_task.h"
 
-#include <glog/logging.h>
 
 #include <algorithm>
 #include <atomic>
