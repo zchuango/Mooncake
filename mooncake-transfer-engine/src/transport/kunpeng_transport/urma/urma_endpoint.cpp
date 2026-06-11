@@ -28,7 +28,7 @@ static urma_transport_mode_t parseTransMode(const std::string& mode) {
     if (mode == "RC") return URMA_TM_RC;
     if (mode == "UM") return URMA_TM_UM;
     if (mode != "RM")
-        LOG_WARNING << "Unknown MC_URMA_TRANS_MODE \"" << mode
+        LOG(WARNING) << "Unknown MC_URMA_TRANS_MODE \"" << mode
                      << "\", falling back to RM";
     return URMA_TM_RM;
 }
@@ -59,11 +59,11 @@ UrmaContext::UrmaContext(UbTransport& engine, std::string device_name,
 UrmaContext::~UrmaContext() {
     auto thisString = toString();
     worker_pool_.reset();
-    LOG_INFO << "destroy worker pool done.";
+    LOG(INFO) << "destroy worker pool done.";
     endpoint_store_->destroy();
-    LOG_INFO << "destroy endpoint store done.";
+    LOG(INFO) << "destroy endpoint store done.";
     if (urma_context_) deconstruct();
-    LOG_WARNING << "finished destroy context : " << thisString;
+    LOG(WARNING) << "finished destroy context : " << thisString;
 }
 
 std::string UrmaContext::toString() {
@@ -91,7 +91,7 @@ int UrmaContext::construct(GlobalConfig& config) {
     // meaning one JFC is bound to one JFCE.
     // max_jfc_e uses the default value DEFAULT_DEPTH.
     if (openDevice(device_name_, port_, eid_index)) {
-        LOG_ERROR << "Failed to open device : " << device_name_
+        LOG(ERROR) << "Failed to open device : " << device_name_
                    << " with EID index : " << eid_index;
         return ERR_CONTEXT;
     }
@@ -107,14 +107,14 @@ int UrmaContext::construct(GlobalConfig& config) {
             return ERR_CONTEXT;
         }
     }
-    LOG_INFO << "create jfce done";
+    LOG(INFO) << "create jfce done";
     if (joinNonblockingPollList(event_fd_, urma_context_->async_fd)) {
-        LOG_ERROR << "Failed to register context async fd to epoll";
+        LOG(ERROR) << "Failed to register context async fd to epoll";
         close(event_fd_);
         return ERR_CONTEXT;
     }
 
-    LOG_INFO << "join blocking list done";
+    LOG(INFO) << "join blocking list done";
     jfc_list_.resize(num_jfc_list);
     urma_jfc_cfg_t jfc_s_cfg[num_jfc_list] = {};
     for (size_t i = 0; i < num_jfc_list; ++i) {
@@ -128,7 +128,7 @@ int UrmaContext::construct(GlobalConfig& config) {
             return ERR_CONTEXT;
         }
         jfc_list_[i].native = jfc;
-        LOG_INFO << "create jfc(send) done, jfc id : " << jfc->jfc_id.id;
+        LOG(INFO) << "create jfc(send) done, jfc id : " << jfc->jfc_id.id;
     }
     urma_jfc_cfg_t jfc_r_cfg = {};
     jfc_r_cfg.depth = max_jfc_e;
@@ -143,7 +143,7 @@ int UrmaContext::construct(GlobalConfig& config) {
             return ERR_CONTEXT;
         }
         jfc_r_list_[i] = jfc;
-        LOG_INFO << "create jfc(send) done, jfc id : " << jfc->jfc_id.id;
+        LOG(INFO) << "create jfc(send) done, jfc id : " << jfc->jfc_id.id;
     }
     jfr_list_.resize(num_jfc_list);
     urma_jfr_cfg_t jfr_cfg[num_jfc_list] = {};
@@ -166,15 +166,15 @@ int UrmaContext::construct(GlobalConfig& config) {
         }
         jfr_list_[i].native = jfr;
     }
-    LOG_INFO << "create jfr done";
-    LOG_INFO << "URMA device: " << urma_context_->dev->name
+    LOG(INFO) << "create jfr done";
+    LOG(INFO) << "URMA device: " << urma_context_->dev->name
               << ", EID: (EID_Index " << eid_index_ << ") " << eid()
               << ", transport mode: " << transModeToString(trans_mode_);
 
-    LOG_INFO << "context_ == NULL ? "
+    LOG(INFO) << "context_ == NULL ? "
               << (urma_context_ == nullptr ? "TRUE" : "FALSE");
     worker_pool_ = std::make_shared<UbWorkerPool>(*this, socketId());
-    LOG_INFO << "create workerpool done";
+    LOG(INFO) << "create workerpool done";
     return 0;
 }
 
@@ -233,7 +233,7 @@ int UrmaContext::deconstruct() {
     jfc_r_list_.clear();
 
     if (event_fd_ >= 0) {
-        if (close(event_fd_)) LOG_ERROR << "Failed to close epoll fd";
+        if (close(event_fd_)) LOG(ERROR) << "Failed to close epoll fd";
         event_fd_ = -1;
     }
 
@@ -241,7 +241,7 @@ int UrmaContext::deconstruct() {
         for (size_t i = 0; i < num_JFCE_; ++i)
             if (jfce_[i])
                 if (urma_delete_jfce(jfce_[i]))
-                    LOG_ERROR
+                    LOG(ERROR)
                         << "Failed to destroy jetty for completion event queue";
         delete[] jfce_;
         jfce_ = nullptr;
@@ -265,7 +265,7 @@ urma_target_seg_t* UrmaContext::seg(uint64_t addr) {
             addr < (*iter).first->seg.ubva.va + (*iter).second)
             return (*iter).first;
 
-    LOG_ERROR << "Address " << addr << " seg not found for " << deviceName();
+    LOG(ERROR) << "Address " << addr << " seg not found for " << deviceName();
     return 0;
 }
 
@@ -288,7 +288,7 @@ int UrmaContext::registerMemoryRegion(uint64_t va, size_t length) {
                       << "shrink it to " << globalConfig().max_seg_size;
         length = (size_t)globalConfig().max_seg_size;
     }
-    LOG_INFO << "Register memory region " << va << " length " << length;
+    LOG(INFO) << "Register memory region " << va << " length " << length;
     urma_reg_seg_flag_t flag = {};
     flag.bs.token_policy = URMA_TOKEN_NONE;
     flag.bs.cacheable = URMA_NON_CACHEABLE;
@@ -310,7 +310,7 @@ int UrmaContext::registerMemoryRegion(uint64_t va, size_t length) {
         PLOG_ERROR << "Failed to register segment " << seg_cfg.va;
         return ERR_CONTEXT;
     }
-    LOG_INFO << "Local seg token id : " << seg->seg.token_id;
+    LOG(INFO) << "Local seg token id : " << seg->seg.token_id;
     local_tseg_list_.push_back(seg);
 
     RWSpinlock::WriteGuard guard(seg_region_lock_);
@@ -328,7 +328,7 @@ int UrmaContext::unregisterMemoryRegion(uint64_t addr) {
             if ((*iter).first->seg.ubva.va <= addr &&
                 addr < (*iter).first->seg.ubva.va + (*iter).second) {
                 if (urma_unregister_seg((*iter).first)) {
-                    LOG_ERROR << "Failed to unregister memory "
+                    LOG(ERROR) << "Failed to unregister memory "
                                << (*iter).first->seg.ubva.va;
                     return ERR_CONTEXT;
                 }
@@ -346,11 +346,11 @@ std::string UrmaContext::getEid() { return eid(); }
 int UrmaContext::doProcessContextEvents() {
     urma_async_event_t event;
     if (urma_get_async_event(urma_context_, &event) < 0) return ERR_CONTEXT;
-    LOG_WARNING << "Worker: Received context async event " << event.event_type
+    LOG(WARNING) << "Worker: Received context async event " << event.event_type
                  << " for context " << device_name_;
     if (event.event_type == URMA_EVENT_JETTY_ERR ||
         event.event_type == URMA_EVENT_JETTY_LIMIT) {
-        LOG_WARNING << "JETTY ERR OR LIMIT" << event.event_type
+        LOG(WARNING) << "JETTY ERR OR LIMIT" << event.event_type
                      << device_name_;
     } else if (event.event_type == URMA_EVENT_DEV_FATAL ||
                event.event_type == URMA_EVENT_JFC_ERR ||
@@ -358,10 +358,10 @@ int UrmaContext::doProcessContextEvents() {
                event.event_type == URMA_EVENT_EID_CHANGE) {
         set_active(false);
         disconnectAllEndpoints();
-        LOG_INFO << "Worker: Context " << device_name_ << " is now inactive";
+        LOG(INFO) << "Worker: Context " << device_name_ << " is now inactive";
     } else if (event.event_type == URMA_EVENT_PORT_ACTIVE) {
         set_active(true);
-        LOG_INFO << "Worker: Context " << device_name_ << " is now active";
+        LOG(INFO) << "Worker: Context " << device_name_ << " is now active";
     }
     urma_ack_async_event(&event);
     return 0;
@@ -379,7 +379,7 @@ void* UrmaContext::retrieveRemoteSeg(const std::string& remoteSegmentStr) {
     auto import_tseg =
         urma_import_seg(urma_context_, handle, &urma_token, 0, import_flag_);
     if (import_tseg == NULL) {
-        LOG_ERROR << "Import segment Failed With " << remoteSegmentStr;
+        LOG(ERROR) << "Import segment Failed With " << remoteSegmentStr;
         free(handle);
         return nullptr;
     }
@@ -397,15 +397,15 @@ int UrmaContext::openDevice(const std::string& device_name, uint8_t port,
     int ret;
     uint32_t eid_cnt;
     if (!devices) {
-        LOG_ERROR << "urma_get_device_list failed";
+        LOG(ERROR) << "urma_get_device_list failed";
         return ERR_DEVICE_NOT_FOUND;
     }
     if (devices && num_devices <= 0) {
-        LOG_ERROR << "urma_get_device_list failed";
+        LOG(ERROR) << "urma_get_device_list failed";
         urma_free_device_list(devices);
         return ERR_DEVICE_NOT_FOUND;
     }
-    LOG_INFO << "found " << num_devices << " devices.";
+    LOG(INFO) << "found " << num_devices << " devices.";
     for (int i = 0; i < num_devices; ++i) {
         if (device_name != devices[i]->name) continue;
 
@@ -416,7 +416,7 @@ int UrmaContext::openDevice(const std::string& device_name, uint8_t port,
             return ERR_CONTEXT;
         }
         for (uint32_t j = 0; eid_list != NULL && j < eid_cnt; j++) {
-            LOG_INFO << "device_name : " << device_name
+            LOG(INFO) << "device_name : " << device_name
                       << " EID : " << eid(eid_list[j].eid);
         }
         if (eid_cnt > 0) {
@@ -427,13 +427,13 @@ int UrmaContext::openDevice(const std::string& device_name, uint8_t port,
 
         context = urma_create_context(devices[i], eid_index);
         if (!context) {
-            LOG_ERROR << "Urma_create_device context(" << device_name
+            LOG(ERROR) << "Urma_create_device context(" << device_name
                        << ")  failed failed";
             urma_free_device_list(devices);
             return ERR_CONTEXT;
         }
         if (globalConfig().urma_bonding_multipath) {
-            LOG_INFO << "Try change binding mode balance";
+            LOG(INFO) << "Try change binding mode balance";
             bondp_set_bonding_mode_in_t mode{ .bonding_mode = BONDP_BONDING_MODE_STANDALONE,
                                               .bonding_level = BONDP_BONDING_LEVEL_IODIE };
             urma_user_ctl_in_t in{ .addr = reinterpret_cast<uint64_t>(&mode),
@@ -443,7 +443,7 @@ int UrmaContext::openDevice(const std::string& device_name, uint8_t port,
             memset(&out, 0, sizeof(out));
             auto ret = urma_user_ctl(context, &in, &out);
             if (ret != URMA_SUCCESS) {
-                LOG_ERROR << "Failed to set bonding balance mode, ret = " << ret;
+                LOG(ERROR) << "Failed to set bonding balance mode, ret = " << ret;
                 return ERR_CONTEXT;
             }
         }
@@ -468,7 +468,7 @@ int UrmaContext::openDevice(const std::string& device_name, uint8_t port,
         if (dev_attr_.port_cnt != 0 &&
             dev_attr_.port_attr[port_].state != URMA_PORT_ACTIVE &&
             dev_attr_.port_attr[port_].state != URMA_PORT_ACTIVE_DEFER) {
-            LOG_WARNING << "Device " << device_name
+            LOG(WARNING) << "Device " << device_name
                          << " not found active port";
             if (urma_delete_context(context)) {
                 PLOG_ERROR
@@ -482,7 +482,7 @@ int UrmaContext::openDevice(const std::string& device_name, uint8_t port,
 
 #ifndef CONFIG_SKIP_NULL_GID_CHECK
         if (isNullEid(&eid_)) {
-            LOG_WARNING << "GID is NULL, please check your EID index by "
+            LOG(WARNING) << "GID is NULL, please check your EID index by "
                             "specifying MC_EID_INDEX";
             if (urma_delete_context(context)) {
                 PLOG_ERROR
@@ -508,7 +508,7 @@ int UrmaContext::openDevice(const std::string& device_name, uint8_t port,
     }
 
     urma_free_device_list(devices);
-    LOG_ERROR << "No matched device found: " << device_name;
+    LOG(ERROR) << "No matched device found: " << device_name;
     return ERR_DEVICE_NOT_FOUND;
 }
 
@@ -559,7 +559,7 @@ int UrmaContext::poll(int num_entries, Transport::Slice** slices,
     urma_cr_t cr[num_entries];
     int nr_poll = urma_poll_jfc(jfc_list_[jfc_index].native, num_entries, cr);
     if (nr_poll < 0) {
-        LOG_ERROR << "Failed to poll JFC " << jfc_index << " of device "
+        LOG(ERROR) << "Failed to poll JFC " << jfc_index << " of device "
                    << device_name_;
         return ERR_CONTEXT;
     }
@@ -576,7 +576,7 @@ int UrmaContext::poll(int num_entries, Transport::Slice** slices,
         }
         if (cr[i].status != URMA_CR_WR_FLUSH_ERR ||
             show_work_request_flushed_error_)
-            LOG_ERROR << "Worker: Process failed for slice (opcode: "
+            LOG(ERROR) << "Worker: Process failed for slice (opcode: "
                        << slice->opcode
                        << ", source_addr: " << slice->source_addr
                        << ", length: " << slice->length
@@ -625,10 +625,10 @@ bool UrmaContext::init() {
     urma_init_attr_t init_attr = {};
     auto ret = urma_init(&init_attr);
     if (ret != URMA_SUCCESS && ret != URMA_EEXIST) {
-        LOG_ERROR << "Failed to urma init, ret = " << ret;
+        LOG(ERROR) << "Failed to urma init, ret = " << ret;
         return false;
     }
-    LOG_INFO << "URMA module init success";
+    LOG(INFO) << "URMA module init success";
     return true;
 }
 
@@ -641,7 +641,7 @@ int UrmaEndpoint::construct(GlobalConfig& config) {
     size_t num_jetty_list = config.num_jetty_per_ep;
     size_t max_wr_depth = config.max_wr;
     if (status_.load(std::memory_order_relaxed) != INITIALIZING) {
-        LOG_ERROR << "Endpoint has already been constructed";
+        LOG(ERROR) << "Endpoint has already been constructed";
         pt_construct.End(-1);
         return ERR_ENDPOINT;
     }
@@ -653,7 +653,7 @@ int UrmaEndpoint::construct(GlobalConfig& config) {
     max_wr_depth_ = (int)max_wr_depth;  // work request
     wr_depth_list_ = new volatile int[num_jetty_list];
     if (!wr_depth_list_) {
-        LOG_ERROR << "Failed to allocate memory for work request depth list";
+        LOG(ERROR) << "Failed to allocate memory for work request depth list";
         pt_construct.End(-1);
         return ERR_MEMORY;
     }
@@ -688,16 +688,16 @@ int UrmaEndpoint::construct(GlobalConfig& config) {
         pt_create.End(jetty_list_[i] ? 0 : -1);
         if (!jetty_list_[i]) {
             PLOG_ERROR << "Failed to create jetty";
-            LOG_INFO << "urma_create_jetty_breakdown index[" << i
+            LOG(INFO) << "urma_create_jetty_breakdown index[" << i
                          << "] create_us[" << create_us << "] status[-1]";
             pt_construct.End(-1);
             return ERR_ENDPOINT;
         }
-        LOG_INFO << "Create jetty success, jetty id = "
+        LOG(INFO) << "Create jetty success, jetty id = "
                      << jetty_list_[i]->jetty_id.id << " ,jetty jfc id = "
                      << jetty_list_[i]->jetty_cfg.jfs_cfg.jfc->jfc_id.id
                      << " : " << jfc->jfc_id.id;
-        LOG_INFO << "urma_create_jetty_breakdown index[" << i
+        LOG(INFO) << "urma_create_jetty_breakdown index[" << i
                      << "] jetty_id[" << jetty_list_[i]->jetty_id.id
                      << "] jfc_id["
                      << jetty_list_[i]->jetty_cfg.jfs_cfg.jfc->jfc_id.id
@@ -708,7 +708,7 @@ int UrmaEndpoint::construct(GlobalConfig& config) {
     auto construct_us = std::chrono::duration_cast<std::chrono::microseconds>(
                             std::chrono::steady_clock::now() - t0)
                             .count();
-    LOG_INFO << "urma_endpoint_construct_breakdown local_nic["
+    LOG(INFO) << "urma_endpoint_construct_breakdown local_nic["
                  << context_->nicPath() << "] jetty_count[" << num_jetty_list
                  << "] construct_us[" << construct_us << "] status[0]";
     pt_construct.End(0);
@@ -736,7 +736,7 @@ int UrmaEndpoint::deconstruct() {
         bool displayed = false;
         if (wr_depth_list_[i] != 0) {
             if (!displayed) {
-                LOG_WARNING << "Outstanding work requests found, CQ will not "
+                LOG(WARNING) << "Outstanding work requests found, CQ will not "
                                 "be generated";
                 displayed = true;
             }
@@ -753,7 +753,7 @@ int UrmaEndpoint::deconstruct() {
 void UrmaEndpoint::setPeerNicPath(const std::string& peer_nic_path) {
     RWSpinlock::WriteGuard guard(lock_);
     if (connected()) {
-        LOG_WARNING << "Previous connection will be discarded";
+        LOG(WARNING) << "Previous connection will be discarded";
         disconnectUnlocked();
     }
     peer_nic_path_ = peer_nic_path;
@@ -775,7 +775,7 @@ int UrmaEndpoint::setupConnectionsByActive() {
     pt_active.Start();
     RWSpinlock::WriteGuard guard(lock_);
     if (connected()) {
-        LOG_INFO << "Connection has been established";
+        LOG(INFO) << "Connection has been established";
         pt_active.End(0);
         return 0;
     }
@@ -791,7 +791,7 @@ int UrmaEndpoint::setupConnectionsByActive() {
                         std::chrono::duration_cast<std::chrono::microseconds>(
                             std::chrono::steady_clock::now() - t0)
                             .count();
-                    LOG_INFO
+                    LOG(INFO)
                         << "urma_active_setup_breakdown local_nic["
                         << context_->nicPath() << "] peer_nic["
                         << peer_nic_path_ << "] local_peer[1]"
@@ -803,7 +803,7 @@ int UrmaEndpoint::setupConnectionsByActive() {
                 }
             }
         }
-        LOG_ERROR << "Peer NIC " << context_->deviceName()
+        LOG(ERROR) << "Peer NIC " << context_->deviceName()
                    << " not found in localhost";
         pt_active.End(-1);
         return ERR_DEVICE_NOT_FOUND;
@@ -818,7 +818,7 @@ int UrmaEndpoint::setupConnectionsByActive() {
     auto peer_server_name = getServerNameFromNicPath(peer_nic_path_);
     auto peer_nic_name = getNicNameFromNicPath(peer_nic_path_);
     if (peer_server_name.empty() || peer_nic_name.empty()) {
-        LOG_ERROR << "Parse peer nic path failed: " << peer_nic_path_;
+        LOG(ERROR) << "Parse peer nic path failed: " << peer_nic_path_;
         pt_active.End(-1);
         return ERR_INVALID_ARGUMENT;
     }
@@ -838,7 +838,7 @@ int UrmaEndpoint::setupConnectionsByActive() {
         auto total_us = std::chrono::duration_cast<std::chrono::microseconds>(
                             std::chrono::steady_clock::now() - t0)
                             .count();
-        LOG_INFO << "urma_active_setup_breakdown local_nic["
+        LOG(INFO) << "urma_active_setup_breakdown local_nic["
                      << context_->nicPath() << "] peer_nic[" << peer_nic_path_
                      << "] local_peer[0] handshake_us[" << handshake_us
                      << "] do_setup_us[0] total_us[" << total_us << "] status["
@@ -847,7 +847,7 @@ int UrmaEndpoint::setupConnectionsByActive() {
         return rc;
     }
     if (!peer_desc.reply_msg.empty()) {
-        LOG_ERROR << "Reject the handshake request by peer "
+        LOG(ERROR) << "Reject the handshake request by peer "
                    << local_desc.peer_nic_path;
         pt_active.End(-1);
         return ERR_REJECT_HANDSHAKE;
@@ -855,7 +855,7 @@ int UrmaEndpoint::setupConnectionsByActive() {
 
     if (peer_desc.local_nic_path != peer_nic_path_ ||
         peer_desc.peer_nic_path != local_desc.local_nic_path) {
-        LOG_ERROR << "Invalid argument: received packet mismatch"
+        LOG(ERROR) << "Invalid argument: received packet mismatch"
                    << ", local.local_nic_path: " << local_desc.local_nic_path
                    << ", local.peer_nic_path: " << local_desc.peer_nic_path
                    << ", peer.local_nic_path: " << peer_desc.local_nic_path
@@ -879,7 +879,7 @@ int UrmaEndpoint::setupConnectionsByActive() {
                     std::chrono::duration_cast<std::chrono::microseconds>(
                         std::chrono::steady_clock::now() - t0)
                         .count();
-                LOG_INFO << "urma_active_setup_breakdown local_nic["
+                LOG(INFO) << "urma_active_setup_breakdown local_nic["
                              << context_->nicPath() << "] peer_nic["
                              << peer_nic_path_ << "] local_peer[0]"
                              << " handshake_us[" << handshake_us
@@ -890,7 +890,7 @@ int UrmaEndpoint::setupConnectionsByActive() {
             }
         }
     }
-    LOG_ERROR << "Peer NIC " << peer_nic_name << " not found in "
+    LOG(ERROR) << "Peer NIC " << peer_nic_name << " not found in "
                << peer_server_name;
     pt_active.End(-1);
     return ERR_DEVICE_NOT_FOUND;
@@ -915,7 +915,7 @@ void UrmaEndpoint::disconnectUnlocked() {
         bool displayed = false;
         if (wr_depth_list_[i] != 0) {
             if (!displayed) {
-                LOG_WARNING << "Outstanding work requests found, JFC will not "
+                LOG(WARNING) << "Outstanding work requests found, JFC will not "
                                 "be generated";
                 displayed = true;
             }
@@ -934,7 +934,7 @@ int UrmaEndpoint::setupConnectionsByPassive(const HandShakeDesc& peer_desc,
     pt_passive.Start();
     RWSpinlock::WriteGuard guard(lock_);
     if (connected()) {
-        LOG_WARNING << "Re-establish connection: " << toString();
+        LOG(WARNING) << "Re-establish connection: " << toString();
         disconnectUnlocked();
     }
 
@@ -945,7 +945,7 @@ int UrmaEndpoint::setupConnectionsByPassive(const HandShakeDesc& peer_desc,
             context_->nicPath() + " + " + peer_nic_path_ + ", while got " +
             peer_desc.peer_nic_path + " + " + peer_desc.local_nic_path;
 
-        LOG_ERROR << local_desc.reply_msg;
+        LOG(ERROR) << local_desc.reply_msg;
         pt_passive.End(-1);
         return ERR_REJECT_HANDSHAKE;
     }
@@ -954,7 +954,7 @@ int UrmaEndpoint::setupConnectionsByPassive(const HandShakeDesc& peer_desc,
     auto peer_nic_name = getNicNameFromNicPath(peer_nic_path_);
     if (peer_server_name.empty() || peer_nic_name.empty()) {
         local_desc.reply_msg = "Parse peer nic path failed: " + peer_nic_path_;
-        LOG_ERROR << local_desc.reply_msg;
+        LOG(ERROR) << local_desc.reply_msg;
         pt_passive.End(-1);
         return ERR_INVALID_ARGUMENT;
     }
@@ -975,7 +975,7 @@ int UrmaEndpoint::setupConnectionsByPassive(const HandShakeDesc& peer_desc,
                     std::chrono::duration_cast<std::chrono::microseconds>(
                         std::chrono::steady_clock::now() - t0)
                         .count();
-                LOG_INFO << "urma_passive_setup_breakdown local_nic["
+                LOG(INFO) << "urma_passive_setup_breakdown local_nic["
                              << context_->nicPath() << "] peer_nic["
                              << peer_nic_path_ << "] total_us[" << total_us
                              << "] status[" << rc << "]";
@@ -985,7 +985,7 @@ int UrmaEndpoint::setupConnectionsByPassive(const HandShakeDesc& peer_desc,
     }
     local_desc.reply_msg =
         "Peer nic not found in that server: " + peer_nic_path_;
-    LOG_ERROR << local_desc.reply_msg;
+    LOG(ERROR) << local_desc.reply_msg;
     pt_passive.End(-1);
     return ERR_DEVICE_NOT_FOUND;
 }
@@ -1041,7 +1041,7 @@ int UrmaEndpoint::submitPostSend(
         // Check if the jetty is in the imported_jetty_map_
         auto it = imported_jetty_map_.find(jetty_list_[jetty_index]);
         if (it == imported_jetty_map_.end()) {
-            LOG_ERROR << "Jetty not imported for endpoint, tjetty is nullptr"
+            LOG(ERROR) << "Jetty not imported for endpoint, tjetty is nullptr"
                        << jetty_index << ", local_nic=";
         }
         if (it != imported_jetty_map_.end()) {
@@ -1064,7 +1064,7 @@ int UrmaEndpoint::submitPostSend(
         PLOG_ERROR << "Failed to urma_post_jetty_send_wr";
         while (bad_wr) {
             int i = bad_wr - wr_list;
-            LOG_ERROR << "slice (" << i << ") post send failed.";
+            LOG(ERROR) << "slice (" << i << ") post send failed.";
             failed_slice_list.push_back(slice_list[i]);
             __sync_fetch_and_sub(&wr_depth_list_[jetty_index], 1);
             __sync_fetch_and_sub(jfc_outstanding_, 1);
@@ -1094,7 +1094,7 @@ int UrmaEndpoint::doSetupConnection(const std::string& peer_eid,
         std::string message =
             "jetty count mismatch in peer and local endpoints, check "
             "MC_MAX_EP_PER_CTX";
-        LOG_ERROR << "[Handshake] " << message;
+        LOG(ERROR) << "[Handshake] " << message;
         if (reply_msg) *reply_msg = message;
         pt_setup_all.End(-1);
         return ERR_INVALID_ARGUMENT;
@@ -1114,7 +1114,7 @@ int UrmaEndpoint::doSetupConnection(const std::string& peer_eid,
     auto total_us = std::chrono::duration_cast<std::chrono::microseconds>(
                         std::chrono::steady_clock::now() - t0)
                         .count();
-    LOG_INFO << "urma_do_setup_all_breakdown local_nic["
+    LOG(INFO) << "urma_do_setup_all_breakdown local_nic["
                  << context_->nicPath() << "] peer_nic[" << peer_nic_path_
                  << "] jetty_count[" << jetty_list_.size() << "] total_us["
                  << total_us << "] status[0]";
@@ -1142,7 +1142,7 @@ int UrmaEndpoint::doSetupConnection(int jetty_index,
     rjetty.type = URMA_JETTY;
     rjetty.tp_type = URMA_CTP;
     rjetty.flag.value = 0;
-    LOG_INFO << "Peer jetty id = " << peer_jetty_num;
+    LOG(INFO) << "Peer jetty id = " << peer_jetty_num;
     auto t_import_start = std::chrono::steady_clock::now();
     UbDiag::PerfPoint pt_import(PerfKey::UB_ENDPOINT_IMPORT_JETTY,
                                 UbDiag::PerfLevel::DEBUG);
@@ -1153,7 +1153,7 @@ int UrmaEndpoint::doSetupConnection(int jetty_index,
                 std::chrono::steady_clock::now() - t_import_start)
                 .count();
     pt_import.End(imported_jetty ? 0 : -1);
-    LOG_INFO << "urma_import_jetty_breakdown index[" << jetty_index
+    LOG(INFO) << "urma_import_jetty_breakdown index[" << jetty_index
                  << "] peer_jetty_id[" << peer_jetty_num << "] import_us["
                  << import_us << "] status[" << (imported_jetty ? 0 : -1)
                  << "]";
@@ -1179,13 +1179,13 @@ int UrmaEndpoint::doSetupConnection(int jetty_index,
                 urma_unimport_jetty(imported_jetty);
                 return ERR_ENDPOINT;
             }
-        LOG_INFO << "Bind jetty success, local jetty id:"
+        LOG(INFO) << "Bind jetty success, local jetty id:"
                 << jetty->jetty_id.id
                     << ", remote jetty id:" << peer_jetty_num
                     << "] bind_us[" << bind_us;
     }
     imported_jetty_map_[jetty] = imported_jetty;
-    LOG_INFO << "urma_bind_jetty_breakdown index[" << jetty_index
+    LOG(INFO) << "urma_bind_jetty_breakdown index[" << jetty_index
                  << "] local_jetty_id[" << jetty->jetty_id.id
                  << "] peer_jetty_id[" << peer_jetty_num << "] status[0]";
 

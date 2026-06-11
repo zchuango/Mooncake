@@ -337,12 +337,12 @@ tl::expected<ReturnType, ErrorCode> MasterClient::invoke_rpc(Args&&... args) {
                         std::forward<Args>(args)...);
                 });
             if (!ret.has_value()) {
-                LOG_ERROR << "Client not available";
+                LOG(ERROR) << "Client not available";
                 co_return tl::make_unexpected(ErrorCode::RPC_FAIL);
             }
             auto result = co_await std::move(ret.value());
             if (!result) {
-                LOG_ERROR << "RPC call failed: " << result.error().msg;
+                LOG(ERROR) << "RPC call failed: " << result.error().msg;
                 co_return tl::make_unexpected(ErrorCode::RPC_FAIL);
             }
             if (metrics_) {
@@ -378,13 +378,13 @@ std::vector<tl::expected<ResultType, ErrorCode>> MasterClient::invoke_batch_rpc(
                         std::forward<Args>(args)...);
                 });
             if (!ret.has_value()) {
-                LOG_ERROR << "Client not available";
+                LOG(ERROR) << "Client not available";
                 co_return std::vector<tl::expected<ResultType, ErrorCode>>(
                     input_size, tl::make_unexpected(ErrorCode::RPC_FAIL));
             }
             auto result = co_await std::move(ret.value());
             if (!result) {
-                LOG_ERROR << "Batch RPC call failed: " << result.error().msg;
+                LOG(ERROR) << "Batch RPC call failed: " << result.error().msg;
                 std::vector<tl::expected<ResultType, ErrorCode>> error_results;
                 error_results.reserve(input_size);
                 for (size_t i = 0; i < input_size; ++i) {
@@ -432,7 +432,7 @@ ErrorCode MasterClient::Connect(const std::string& master_addr) {
     std::string server_version = result.value();
     std::string client_version = GetMooncakeStoreVersion();
     if (server_version != client_version) {
-        LOG_ERROR << "Version mismatch: server=" << server_version
+        LOG(ERROR) << "Version mismatch: server=" << server_version
                   << " client=" << client_version;
         timer.LogResponse("error_code=", ErrorCode::INVALID_VERSION);
         return ErrorCode::INVALID_VERSION;

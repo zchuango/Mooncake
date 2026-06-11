@@ -30,12 +30,12 @@ ErrorCode ScopedSegmentAccess::MountSegment(const Segment& segment,
 
     // Check if cxl storage is enable
     if (segment_manager_->enable_cxl_ && segment.protocol == "cxl") {
-        LOG_INFO << "Start Mounting CXL Segment.";
+        LOG(INFO) << "Start Mounting CXL Segment.";
         if (segment_manager_->memory_allocator_ ==
             BufferAllocatorType::CACHELIB) {
             auto allocator = segment_manager_->cxl_global_allocator_;
             if (segment_manager_->cxl_global_allocator_ == nullptr) {
-                LOG_ERROR << "Cxl global allocator has not been initialized.";
+                LOG(ERROR) << "Cxl global allocator has not been initialized.";
                 return ErrorCode::INTERNAL_ERROR;
             }
             segment_manager_->allocator_manager_.addAllocator(segment.name,
@@ -46,7 +46,7 @@ ErrorCode ScopedSegmentAccess::MountSegment(const Segment& segment,
             segment_manager_->client_by_name_[segment.name] = client_id;
             segment_manager_->segment_id_by_name_[segment.name] = segment.id;
 
-            LOG_INFO << "[CXL Segment Mounted Successfully] Segment name: "
+            LOG(INFO) << "[CXL Segment Mounted Successfully] Segment name: "
                       << segment.name
                       << ", Mount size: " << (size / 1024 / 1024 / 1024)
                       << " GB";
@@ -56,7 +56,7 @@ ErrorCode ScopedSegmentAccess::MountSegment(const Segment& segment,
     }
     // Check if parameters are valid before allocating memory.
     if (buffer == 0 || size == 0) {
-        LOG_ERROR << "buffer=" << buffer << " or size=" << size
+        LOG(ERROR) << "buffer=" << buffer << " or size=" << size
                    << " is invalid";
         return ErrorCode::INVALID_PARAMS;
     }
@@ -64,7 +64,7 @@ ErrorCode ScopedSegmentAccess::MountSegment(const Segment& segment,
     if (segment_manager_->memory_allocator_ == BufferAllocatorType::CACHELIB &&
         (buffer % facebook::cachelib::Slab::kSize ||
          size % facebook::cachelib::Slab::kSize)) {
-        LOG_ERROR << "buffer=" << buffer << " or size=" << size
+        LOG(ERROR) << "buffer=" << buffer << " or size=" << size
                    << " is not aligned to " << facebook::cachelib::Slab::kSize
                    << " as required by Cachelib";
         return ErrorCode::INVALID_PARAMS;
@@ -76,11 +76,11 @@ ErrorCode ScopedSegmentAccess::MountSegment(const Segment& segment,
     if (exist_segment_it != segment_manager_->mounted_segments_.end()) {
         auto& exist_segment = exist_segment_it->second;
         if (exist_segment.status == SegmentStatus::OK) {
-            LOG_WARNING << "segment_name=" << segment.name
+            LOG(WARNING) << "segment_name=" << segment.name
                          << ", warn=segment_already_exists";
             return ErrorCode::SEGMENT_ALREADY_EXISTS;
         } else {
-            LOG_ERROR << "segment_name=" << segment.name
+            LOG(ERROR) << "segment_name=" << segment.name
                        << ", error=segment_already_exists_but_not_ok"
                        << ", status=" << exist_segment.status;
             return ErrorCode::UNAVAILABLE_IN_CURRENT_STATUS;
@@ -102,7 +102,7 @@ ErrorCode ScopedSegmentAccess::MountSegment(const Segment& segment,
                     segment.name, buffer, size, segment.te_endpoint);
                 break;
             default:
-                LOG_ERROR << "segment_name=" << segment.name
+                LOG(ERROR) << "segment_name=" << segment.name
                            << ", error=unknown_memory_allocator="
                            << static_cast<int>(
                                   segment_manager_->memory_allocator_);
@@ -110,12 +110,12 @@ ErrorCode ScopedSegmentAccess::MountSegment(const Segment& segment,
         }
 
         if (!allocator) {
-            LOG_ERROR << "segment_name=" << segment.name
+            LOG(ERROR) << "segment_name=" << segment.name
                        << ", error=failed_to_create_allocator";
             return ErrorCode::INVALID_PARAMS;
         }
     } catch (...) {
-        LOG_ERROR << "segment_name=" << segment.name
+        LOG(ERROR) << "segment_name=" << segment.name
                    << ", error=exception_during_allocator_creation";
         return ErrorCode::INVALID_PARAMS;
     }
@@ -137,7 +137,7 @@ ErrorCode ScopedSegmentAccess::MountLocalDiskSegment(const UUID& client_id,
         segment_manager_->client_local_disk_segment_.find(client_id);
     if (exist_segment_it !=
         segment_manager_->client_local_disk_segment_.end()) {
-        LOG_WARNING << "client_id=" << client_id
+        LOG(WARNING) << "client_id=" << client_id
                      << ", warn=local_disk_segment_already_exists";
         return ErrorCode::SEGMENT_ALREADY_EXISTS;
     }
@@ -152,22 +152,22 @@ ErrorCode ScopedSegmentAccess::ReMountSegment(
         ErrorCode err = MountSegment(segment, client_id);
         if (err == ErrorCode::UNAVAILABLE_IN_CURRENT_STATUS ||
             err == ErrorCode::INTERNAL_ERROR) {
-            LOG_ERROR << "segment_name=" << segment.name
+            LOG(ERROR) << "segment_name=" << segment.name
                        << ", error=fail_to_remount_segment";
             return err;
         } else if (err == ErrorCode::INVALID_PARAMS) {
             // Ignore INVALID_PARAMS. This error cannot be solved by a new
             // remount request.
-            LOG_WARNING << "segment_name=" << segment.name
+            LOG(WARNING) << "segment_name=" << segment.name
                          << ", warn=invalid_params";
         } else if (err == ErrorCode::SEGMENT_ALREADY_EXISTS) {
             // Segment already exists, no need to remount.
-            LOG_WARNING << "segment_name=" << segment.name
+            LOG(WARNING) << "segment_name=" << segment.name
                          << ", warn=segment_already_exists";
         } else if (err != ErrorCode::OK) {
             // Ignore other errors. The error may not be solvable by a new
             // remount request.
-            LOG_ERROR << "segment_name=" << segment.name
+            LOG(ERROR) << "segment_name=" << segment.name
                        << ", error=unexpected_error (" << err << ")";
         }
     }
@@ -179,12 +179,12 @@ ErrorCode ScopedSegmentAccess::PrepareUnmountSegment(
     const UUID& segment_id, size_t& metrics_dec_capacity) {
     auto it = segment_manager_->mounted_segments_.find(segment_id);
     if (it == segment_manager_->mounted_segments_.end()) {
-        LOG_WARNING << "segment_id=" << segment_id
+        LOG(WARNING) << "segment_id=" << segment_id
                      << ", warn=segment_not_found";
         return ErrorCode::SEGMENT_NOT_FOUND;
     }
     if (it->second.status == SegmentStatus::UNMOUNTING) {
-        LOG_ERROR << "segment_id=" << segment_id
+        LOG(ERROR) << "segment_id=" << segment_id
                    << ", error=segment_is_unmounting";
         return ErrorCode::UNAVAILABLE_IN_CURRENT_STATUS;
     }
@@ -216,13 +216,13 @@ ErrorCode ScopedSegmentAccess::PrepareGracefulUnmountSegment(
     const UUID& segment_id) {
     auto it = segment_manager_->mounted_segments_.find(segment_id);
     if (it == segment_manager_->mounted_segments_.end()) {
-        LOG_WARNING << "segment_id=" << segment_id
+        LOG(WARNING) << "segment_id=" << segment_id
                      << ", warn=segment_not_found";
         return ErrorCode::SEGMENT_NOT_FOUND;
     }
     auto status = it->second.status;
     if (status == SegmentStatus::UNMOUNTING) {
-        LOG_ERROR << "segment_id=" << segment_id
+        LOG(ERROR) << "segment_id=" << segment_id
                    << ", error=segment_is_unmounting";
         return ErrorCode::UNAVAILABLE_IN_CURRENT_STATUS;
     }
@@ -231,7 +231,7 @@ ErrorCode ScopedSegmentAccess::PrepareGracefulUnmountSegment(
         return ErrorCode::OK;
     }
     if (status != SegmentStatus::OK && status != SegmentStatus::DRAINING) {
-        LOG_ERROR << "segment_id=" << segment_id
+        LOG(ERROR) << "segment_id=" << segment_id
                    << ", error=unavailable_in_current_status, status="
                    << status;
         return ErrorCode::UNAVAILABLE_IN_CURRENT_STATUS;
@@ -272,7 +272,7 @@ ErrorCode ScopedSegmentAccess::CommitUnmountSegment(
         }
     }
     if (!found_in_client_segments) {
-        LOG_ERROR << "segment_id=" << segment_id
+        LOG(ERROR) << "segment_id=" << segment_id
                    << ", error=segment_not_found_in_client_segments";
     }
 
@@ -338,7 +338,7 @@ void ScopedSegmentAccess::UnmountLocalDiskSegment(const UUID& client_id) {
                 reported_capacity);
         }
         segment_manager_->client_local_disk_segment_.erase(it);
-        LOG_INFO << "client_id=" << client_id
+        LOG(INFO) << "client_id=" << client_id
                   << ", action=unmount_local_disk_segment";
     }
 }
@@ -393,7 +393,7 @@ ErrorCode ScopedSegmentAccess::QuerySegments(const std::string& segment,
     }
 
     if (total_capacity == 0) {
-        LOG_DEBUG << "### DEBUG ### MasterService::QuerySegments(" << segment
+        LOG(DEBUG) << "### DEBUG ### MasterService::QuerySegments(" << segment
                 << ") not found!";
         return ErrorCode::SEGMENT_NOT_FOUND;
     }
@@ -680,7 +680,7 @@ tl::expected<void, SerializationError> SegmentSerializer::Deserialize(
 
         // Note: Type must match, only OffsetAllocator is supported
         if (allocatorType != segment_manager_->memory_allocator_) {
-            LOG_ERROR << "deserialize memory allocator type doesn't match "
+            LOG(ERROR) << "deserialize memory allocator type doesn't match "
                           "current setting";
             return tl::unexpected(SerializationError(
                 ErrorCode::DESERIALIZE_FAIL,
@@ -958,7 +958,7 @@ ErrorCode ScopedSegmentAccess::GetClientIdBySegmentName(
     const std::string& segment_name, UUID& client_id) const {
     auto it = segment_manager_->client_by_name_.find(segment_name);
     if (it == segment_manager_->client_by_name_.end()) {
-        LOG_ERROR << "segment_name=" << segment_name
+        LOG(ERROR) << "segment_name=" << segment_name
                    << ", error=segment_not_found";
         return ErrorCode::SEGMENT_NOT_FOUND;
     }
@@ -1057,7 +1057,7 @@ ErrorCode ScopedNoFSegmentAccess::MountSegment(const NoFSegment& segment,
 
     // NoF segment base is an NVMe namespace offset, so 0 is valid.
     if (size == 0) {
-        LOG_ERROR << "NoF segment mount: buffer=" << buffer
+        LOG(ERROR) << "NoF segment mount: buffer=" << buffer
                    << " or size=" << size << " is invalid";
         return ErrorCode::INVALID_PARAMS;
     }
@@ -1066,7 +1066,7 @@ ErrorCode ScopedNoFSegmentAccess::MountSegment(const NoFSegment& segment,
             BufferAllocatorType::CACHELIB &&
         (buffer % facebook::cachelib::Slab::kSize ||
          size % facebook::cachelib::Slab::kSize)) {
-        LOG_ERROR << "NoF segment mount: buffer=" << buffer
+        LOG(ERROR) << "NoF segment mount: buffer=" << buffer
                    << " or size=" << size << " is not aligned to "
                    << facebook::cachelib::Slab::kSize
                    << " as required by Cachelib";
@@ -1078,11 +1078,11 @@ ErrorCode ScopedNoFSegmentAccess::MountSegment(const NoFSegment& segment,
     if (exist_segment_it != nof_segment_manager_->mounted_segments_.end()) {
         auto& exist_segment = exist_segment_it->second;
         if (exist_segment.status == SegmentStatus::OK) {
-            LOG_WARNING << "NoF segment mount: segment_name=" << segment.name
+            LOG(WARNING) << "NoF segment mount: segment_name=" << segment.name
                          << ", warn=segment_already_exists_by_id";
             return ErrorCode::SEGMENT_ALREADY_EXISTS;
         }
-        LOG_ERROR << "NoF segment mount: segment_name=" << segment.name
+        LOG(ERROR) << "NoF segment mount: segment_name=" << segment.name
                    << ", error=segment_already_exists_but_not_ok"
                    << ", status=" << exist_segment.status;
         return ErrorCode::UNAVAILABLE_IN_CURRENT_STATUS;
@@ -1094,7 +1094,7 @@ ErrorCode ScopedNoFSegmentAccess::MountSegment(const NoFSegment& segment,
          nof_segment_manager_->mounted_segments_) {
         if (existing_segment.status == SegmentStatus::OK &&
             existing_segment.segment.te_endpoint == segment.te_endpoint) {
-            LOG_WARNING << "NoF segment mount: segment_name=" << segment.name
+            LOG(WARNING) << "NoF segment mount: segment_name=" << segment.name
                          << ", endpoint=" << segment.te_endpoint
                          << ", warn=segment_already_exists_with_different_id";
             return ErrorCode::SEGMENT_ALREADY_EXISTS;
@@ -1115,7 +1115,7 @@ ErrorCode ScopedNoFSegmentAccess::MountSegment(const NoFSegment& segment,
                     ReplicaType::NOF_SSD);
                 break;
             default:
-                LOG_ERROR << "NoF segment mount: segment_name=" << segment.name
+                LOG(ERROR) << "NoF segment mount: segment_name=" << segment.name
                            << ", error=unknown_memory_allocator="
                            << static_cast<int>(
                                   nof_segment_manager_->memory_allocator_);
@@ -1123,12 +1123,12 @@ ErrorCode ScopedNoFSegmentAccess::MountSegment(const NoFSegment& segment,
         }
 
         if (!allocator) {
-            LOG_ERROR << "NoF segment mount: segment_name=" << segment.name
+            LOG(ERROR) << "NoF segment mount: segment_name=" << segment.name
                        << ", error=failed_to_create_allocator";
             return ErrorCode::INVALID_PARAMS;
         }
     } catch (...) {
-        LOG_ERROR << "NoF segment mount: segment_name=" << segment.name
+        LOG(ERROR) << "NoF segment mount: segment_name=" << segment.name
                    << ", error=exception_during_allocator_creation";
         return ErrorCode::INVALID_PARAMS;
     }
@@ -1150,18 +1150,18 @@ ErrorCode ScopedNoFSegmentAccess::ReMountSegment(
         ErrorCode err = MountSegment(segment, client_id);
         if (err == ErrorCode::UNAVAILABLE_IN_CURRENT_STATUS ||
             err == ErrorCode::INTERNAL_ERROR) {
-            LOG_ERROR << "NoF segment remount: segment_name=" << segment.name
+            LOG(ERROR) << "NoF segment remount: segment_name=" << segment.name
                        << ", error=fail_to_remount_segment";
             return err;
         }
         if (err == ErrorCode::INVALID_PARAMS) {
-            LOG_WARNING << "NoF segment remount: segment_name=" << segment.name
+            LOG(WARNING) << "NoF segment remount: segment_name=" << segment.name
                          << ", warn=invalid_params";
         } else if (err == ErrorCode::SEGMENT_ALREADY_EXISTS) {
-            LOG_WARNING << "NoF segment remount: segment_name=" << segment.name
+            LOG(WARNING) << "NoF segment remount: segment_name=" << segment.name
                          << ", warn=segment_already_exists";
         } else if (err != ErrorCode::OK) {
-            LOG_ERROR << "NoF segment remount: segment_name=" << segment.name
+            LOG(ERROR) << "NoF segment remount: segment_name=" << segment.name
                        << ", error=unexpected_error (" << err << ")";
         }
     }
@@ -1173,12 +1173,12 @@ ErrorCode ScopedNoFSegmentAccess::PrepareUnmountSegment(
     const UUID& segment_id, size_t& metrics_dec_capacity) {
     auto it = nof_segment_manager_->mounted_segments_.find(segment_id);
     if (it == nof_segment_manager_->mounted_segments_.end()) {
-        LOG_WARNING << "NoF segment unmount: segment_id=" << segment_id
+        LOG(WARNING) << "NoF segment unmount: segment_id=" << segment_id
                      << ", warn=segment_not_found";
         return ErrorCode::SEGMENT_NOT_FOUND;
     }
     if (it->second.status == SegmentStatus::UNMOUNTING) {
-        LOG_ERROR << "NoF segment unmount: segment_id=" << segment_id
+        LOG(ERROR) << "NoF segment unmount: segment_id=" << segment_id
                    << ", error=segment_is_unmounting";
         return ErrorCode::UNAVAILABLE_IN_CURRENT_STATUS;
     }
@@ -1218,7 +1218,7 @@ ErrorCode ScopedNoFSegmentAccess::CommitUnmountSegment(
         }
     }
     if (!found_in_client_segments) {
-        LOG_ERROR << "NoF segment unmount: segment_id=" << segment_id
+        LOG(ERROR) << "NoF segment unmount: segment_id=" << segment_id
                    << ", error=segment_not_found_in_client_segments";
     }
 
@@ -1293,7 +1293,7 @@ ErrorCode ScopedNoFSegmentAccess::QuerySegments(const std::string& segment,
     }
 
     if (total_capacity == 0) {
-        LOG_DEBUG << "NoF segment query: segment=" << segment
+        LOG(DEBUG) << "NoF segment query: segment=" << segment
                 << ", error=segment_not_found";
         return ErrorCode::SEGMENT_NOT_FOUND;
     }
@@ -1317,8 +1317,8 @@ void NoFSegmentManager::GetMountedSegmentsSnapshot(
 
 void SegmentManager::initializeCxlAllocator(const std::string& cxl_path,
                                             const size_t cxl_size) {
-    LOG_INFO << "Init CXL global allocator.";
-    LOG_INFO << "[CXL] create allocator with "
+    LOG(INFO) << "Init CXL global allocator.";
+    LOG(INFO) << "[CXL] create allocator with "
               << "path=" << cxl_path << " base=0x" << std::hex
               << DEFAULT_CXL_BASE << std::dec << " size=" << cxl_size << " ("
               << std::fixed << std::setprecision(2)

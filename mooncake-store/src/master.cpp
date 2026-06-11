@@ -1,5 +1,4 @@
 #include <gflags/gflags.h>
-#include <glog/logging.h>
 
 #include <chrono>  // For std::chrono
 #include <csignal>
@@ -41,7 +40,7 @@ bool ValidateDurationFlag(const char* flagname, const std::string& value) {
     uint64_t parsed_value = 0;
     std::string error;
     if (!mooncake::ParseDurationMs(value, &parsed_value, &error)) {
-        LOG_ERROR << "Invalid value for --" << flagname << ": " << value
+        LOG(ERROR) << "Invalid value for --" << flagname << ": " << value
                    << ". " << error;
         return false;
     }
@@ -53,7 +52,7 @@ uint64_t ParseDurationFlagOrDie(const char* flag_name,
     uint64_t parsed_value = 0;
     std::string error;
     if (!mooncake::ParseDurationMs(value, &parsed_value, &error)) {
-        LOG_FATAL << "Invalid value for --" << flag_name << ": " << value
+        LOG(FATAL) << "Invalid value for --" << flag_name << ": " << value
                    << ". " << error;
     }
     return parsed_value;
@@ -113,14 +112,14 @@ DEFINE_bool(rpc_enable_tcp_no_delay, true,
             "Enable TCP_NODELAY for RPC connections");
 DEFINE_validator(eviction_ratio, [](const char* flagname, double value) {
     if (value < 0.0 || value > 1.0) {
-        LOG_FATAL << "Mem eviction ratio must be between 0.0 and 1.0";
+        LOG(FATAL) << "Mem eviction ratio must be between 0.0 and 1.0";
         return false;
     }
     return true;
 });
 DEFINE_validator(nof_eviction_ratio, [](const char* flagname, double value) {
     if (value < 0.0 || value > 1.0) {
-        LOG_FATAL << "NoF eviction ratio must be between 0.0 and 1.0";
+        LOG(FATAL) << "NoF eviction ratio must be between 0.0 and 1.0";
         return false;
     }
     return true;
@@ -271,20 +270,20 @@ void ResolveRpcAddressFromInterfaceOrDie(
 
     if (!master_config.rpc_address.empty() &&
         master_config.rpc_address != "0.0.0.0") {
-        LOG_WARNING << "rpc_interface is set. Overriding rpc_address="
+        LOG(WARNING) << "rpc_interface is set. Overriding rpc_address="
                      << master_config.rpc_address;
     }
 
     auto resolved_address =
         mooncake::GetInterfaceIPv4Address(master_config.rpc_interface);
     if (!resolved_address) {
-        LOG_FATAL << "Failed to resolve rpc_interface="
+        LOG(FATAL) << "Failed to resolve rpc_interface="
                    << master_config.rpc_interface << ": "
                    << resolved_address.error();
     }
 
     master_config.rpc_address = resolved_address.value();
-    LOG_INFO << "Resolved rpc_interface=" << master_config.rpc_interface
+    LOG(INFO) << "Resolved rpc_interface=" << master_config.rpc_interface
               << " to rpc_address=" << master_config.rpc_address;
 }
 
@@ -485,10 +484,10 @@ void InitMasterConf(const mooncake::DefaultConfig& default_config,
 void LoadConfigFromCmdline(mooncake::MasterConfig& master_config,
                            bool conf_set) {
     if (FLAGS_max_threads != 4) {  // 4 is the default value
-        LOG_WARNING << "max_threads is deprecated, use rpc_thread_num instead";
+        LOG(WARNING) << "max_threads is deprecated, use rpc_thread_num instead";
     }
     if (FLAGS_port != 50051) {  // 50051 is the default value
-        LOG_WARNING << "port is deprecated, use rpc_port instead";
+        LOG(WARNING) << "port is deprecated, use rpc_port instead";
     }
     int server_thread_num =
         std::min(FLAGS_max_threads,
@@ -501,7 +500,7 @@ void LoadConfigFromCmdline(mooncake::MasterConfig& master_config,
     if (FLAGS_rpc_thread_num > 0) {
         rpc_thread_num = static_cast<size_t>(FLAGS_rpc_thread_num);
         if (FLAGS_max_threads != 4) {  // 4 is the default value
-            LOG_WARNING << "Both rpc_thread_num and max_threads are set. "
+            LOG(WARNING) << "Both rpc_thread_num and max_threads are set. "
                          << "Using rpc_thread_num=" << FLAGS_rpc_thread_num
                          << ". Please migrate to use rpc_thread_num only.";
         }
@@ -517,7 +516,7 @@ void LoadConfigFromCmdline(mooncake::MasterConfig& master_config,
     if (FLAGS_rpc_port > 0) {
         rpc_port = FLAGS_rpc_port;
         if (FLAGS_port != 50051) {  // 50051 is the default value
-            LOG_WARNING << "Both rpc_port and port are set. "
+            LOG(WARNING) << "Both rpc_port and port are set. "
                          << "Using rpc_port=" << FLAGS_rpc_port
                          << ". Please migrate to use rpc_port only.";
         }
@@ -660,7 +659,7 @@ void LoadConfigFromCmdline(mooncake::MasterConfig& master_config,
     // make the gate unreachable; clamping at parse time fails loudly and
     // gives the gate a stable contract to compare uint8_t against.
     if (master_config.promotion_admission_threshold > 255) {
-        LOG_WARNING << "promotion_admission_threshold="
+        LOG(WARNING) << "promotion_admission_threshold="
                      << master_config.promotion_admission_threshold
                      << " exceeds the CountMinSketch counter max (255). "
                      << "Clamping to 255. Lower the configured value to "
@@ -871,12 +870,12 @@ void LoadConfigFromCmdline(mooncake::MasterConfig& master_config,
         master_config.snapshot_object_store_type =
             FLAGS_snapshot_object_store_type;
     } else if (use_snapshot_payload_store_flag) {
-        LOG_WARNING << "--snapshot_payload_store_type is deprecated; use "
+        LOG(WARNING) << "--snapshot_payload_store_type is deprecated; use "
                      << "--snapshot_object_store_type instead";
         master_config.snapshot_object_store_type =
             FLAGS_snapshot_payload_store_type;
     } else if (use_snapshot_payload_backend_flag) {
-        LOG_WARNING << "--snapshot_payload_backend_type is deprecated; use "
+        LOG(WARNING) << "--snapshot_payload_backend_type is deprecated; use "
                      << "--snapshot_object_store_type instead";
         master_config.snapshot_object_store_type =
             FLAGS_snapshot_payload_backend_type;
@@ -899,7 +898,7 @@ void LoadConfigFromCmdline(mooncake::MasterConfig& master_config,
         master_config.snapshot_catalog_store_type =
             FLAGS_snapshot_catalog_store_type;
     } else if (use_snapshot_catalog_backend_flag) {
-        LOG_WARNING << "--snapshot_catalog_backend_type is deprecated; use "
+        LOG(WARNING) << "--snapshot_catalog_backend_type is deprecated; use "
                      << "--snapshot_catalog_store_type instead";
         master_config.snapshot_catalog_store_type =
             FLAGS_snapshot_catalog_backend_type;
@@ -923,7 +922,7 @@ void LoadConfigFromCmdline(mooncake::MasterConfig& master_config,
         master_config.snapshot_catalog_store_connstring =
             FLAGS_snapshot_catalog_store_connstring;
     } else if (use_snapshot_catalog_backend_connstring_flag) {
-        LOG_WARNING
+        LOG(WARNING)
             << "--snapshot_catalog_backend_connstring is deprecated; use "
             << "--snapshot_catalog_store_connstring instead";
         master_config.snapshot_catalog_store_connstring =
@@ -949,11 +948,11 @@ std::unique_ptr<mooncake::HttpMetadataServer> StartHttpMetadataServer(
             CLOG(INFO) << "C++ HTTP metadata server started successfully";
             return server;
         } else {
-            LOG_ERROR << "Failed to start C++ HTTP metadata server";
+            LOG(ERROR) << "Failed to start C++ HTTP metadata server";
             return nullptr;
         }
     } catch (const std::exception& e) {
-        LOG_ERROR << "Failed to start C++ HTTP metadata server: " << e.what();
+        LOG(ERROR) << "Failed to start C++ HTTP metadata server: " << e.what();
         return nullptr;
     }
 }
@@ -979,7 +978,7 @@ int main(int argc, char* argv[]) {
         try {
             default_config.Load();
         } catch (const std::exception& e) {
-            LOG_FATAL << "Failed to initialize default config: " << e.what();
+            LOG(FATAL) << "Failed to initialize default config: " << e.what();
             return 1;
         }
         InitMasterConf(default_config, master_config);
@@ -990,7 +989,7 @@ int main(int argc, char* argv[]) {
     const std::string ha_backend_connstring =
         ResolveHABackendConnstring(master_config);
     if (master_config.enable_ha && ha_backend_connstring.empty()) {
-        LOG_FATAL << "HA backend connection string must be set when "
+        LOG(FATAL) << "HA backend connection string must be set when "
                    << "enable_ha is true, backend_type="
                    << master_config.ha_backend_type
                    << ". Only backend_type=etcd may fall back to "
@@ -999,21 +998,21 @@ int main(int argc, char* argv[]) {
     }
     if (!master_config.enable_ha && (!ha_backend_connstring.empty() ||
                                      !master_config.etcd_endpoints.empty())) {
-        LOG_WARNING
+        LOG(WARNING)
             << "HA backend connection string is set but will not be used in "
             << "non-HA mode";
     }
     if (!master_config.ha_backend_connstring.empty() &&
         !master_config.etcd_endpoints.empty() &&
         master_config.ha_backend_connstring != master_config.etcd_endpoints) {
-        LOG_WARNING << "Both ha_backend_connstring and etcd_endpoints are "
+        LOG(WARNING) << "Both ha_backend_connstring and etcd_endpoints are "
                      << "set. Using ha_backend_connstring="
                      << master_config.ha_backend_connstring
                      << " for HA coordinator setup";
     }
     if (master_config.memory_allocator != "cachelib" &&
         master_config.memory_allocator != "offset") {
-        LOG_FATAL << "Invalid memory allocator: "
+        LOG(FATAL) << "Invalid memory allocator: "
                    << master_config.memory_allocator
                    << ", must be 'cachelib' or 'offset'";
         return 1;
@@ -1024,7 +1023,7 @@ int main(int argc, char* argv[]) {
     if (value && std::string_view(value) == "rdma") {
         protocol = "rdma";
     }
-    LOG_INFO
+    LOG(INFO)
         << "Master service started on port " << master_config.rpc_port
         << ", max_threads=" << master_config.rpc_thread_num
         << ", enable_metric_reporting=" << master_config.enable_metric_reporting
@@ -1100,7 +1099,7 @@ int main(int argc, char* argv[]) {
                                     master_config.http_metadata_server_host);
 
         if (!http_metadata_server) {
-            LOG_FATAL << "Failed to start HTTP metadata server";
+            LOG(FATAL) << "Failed to start HTTP metadata server";
             return 1;
         }
 
@@ -1132,7 +1131,7 @@ int main(int argc, char* argv[]) {
             static_cast<uint16_t>(master_config.metrics_port),
             master_config.enable_metric_reporting);
         if (!admin_server.Start()) {
-            LOG_ERROR << "Failed to start master admin server";
+            LOG(ERROR) << "Failed to start master admin server";
             mooncake::Logger::Instance().Shutdown();
             return 1;
         }

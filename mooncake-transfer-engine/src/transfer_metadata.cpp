@@ -93,7 +93,7 @@ struct TransferHandshakeUtil {
         Json::Value jettyNums(Json::arrayValue);
         for (const auto &jetty : desc.jetty_num) jettyNums.append(jetty);
         root["jetty_num"] = jettyNums;
-        LOG_INFO << "Encode: local_nic_path is " << desc.local_nic_path
+        LOG(INFO) << "Encode: local_nic_path is " << desc.local_nic_path
                      << " peer_nic_path is " << desc.peer_nic_path
                      << " jetty_num size is " << desc.jetty_num.size();
         pt.End(0);
@@ -136,7 +136,7 @@ struct TransferHandshakeUtil {
         for (const auto &jetty : root["jetty_num"]) {
             desc.jetty_num.push_back(jetty.asUInt());
         }
-        LOG_INFO << "Decode: remote_nic_path is " << desc.local_nic_path
+        LOG(INFO) << "Decode: remote_nic_path is " << desc.local_nic_path
                      << " peer_nic_path is " << desc.peer_nic_path
                      << " jetty_num size is " << desc.jetty_num.size();
         pt.End(0);
@@ -1181,12 +1181,12 @@ int TransferMetadata::rePublishRpcMetaEntry(const std::string &server_name) {
         }
     }
 
-    LOG_INFO << "Re-publishing RPC meta entry for " << server_name;
+    LOG(INFO) << "Re-publishing RPC meta entry for " << server_name;
     Json::Value rpcMetaJSON;
     rpcMetaJSON["ip_or_host_name"] = local_rpc_meta_.ip_or_host_name;
     rpcMetaJSON["rpc_port"] = static_cast<Json::UInt>(local_rpc_meta_.rpc_port);
     if (!storage_plugin_->set(full_key, rpcMetaJSON)) {
-        LOG_ERROR << "Failed to re-publish RPC meta entry for " << server_name;
+        LOG(ERROR) << "Failed to re-publish RPC meta entry for " << server_name;
         return ERR_METADATA;
     }
     return 0;
