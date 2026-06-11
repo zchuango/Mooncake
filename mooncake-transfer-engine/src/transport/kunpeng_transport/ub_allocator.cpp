@@ -55,7 +55,7 @@ void ub_free_memory(void* ptr) {
     }
     auto size = remove_store_memory_range(ptr);
     numa_free(ptr, size);
-    LOG(INFO) << "UB: freed  bytes at " << ptr;
+    CLOG(INFO) << "UB: freed  bytes at " << ptr;
 }
 
 bool ub_is_store_memory(void* addr, size_t length) {

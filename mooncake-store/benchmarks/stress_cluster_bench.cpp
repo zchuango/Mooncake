@@ -1474,16 +1474,24 @@ int main(int argc, char* argv[]) {
                      << "decreasing --num_keys, or use --hard_pin=true.";
     }
 
-    StressBenchmark bench;
-    int ret = bench.Setup();
-    if (ret == 0) {
-        ret = bench.Run();
-    } else {
-        CLOG(ERROR) << "Benchmark setup failed";
+    int ret = 0;
+    {
+        StressBenchmark bench;
+        ret = bench.Setup();
+        if (ret == 0) {
+            ret = bench.Run();
+        } else {
+            CLOG(ERROR) << "Benchmark setup failed";
+        }
+        // bench (and the transfer engine / UrmaContext it owns) is destroyed at
+        // the end of this scope — i.e. BEFORE Logger::Shutdown() below, while the
+        // spdlog logger is still alive — so the teardown logs in ~UrmaContext and
+        // ub_free_memory are actually emitted instead of dropped.
     }
 
-    // Explicit shutdown while spdlog's thread pool is still alive — avoids the
-    // "async flush: thread pool doesn't exist anymore" abort at static teardown.
+    // Explicit shutdown AFTER bench teardown, while spdlog's thread pool is still
+    // alive — drains the async queue and avoids the "async flush: thread pool
+    // doesn't exist anymore" abort at static teardown.
     mooncake::Logger::Instance().Shutdown();
     return ret;
 }

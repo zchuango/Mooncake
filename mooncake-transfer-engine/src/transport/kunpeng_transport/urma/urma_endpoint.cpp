@@ -59,11 +59,11 @@ UrmaContext::UrmaContext(UbTransport& engine, std::string device_name,
 UrmaContext::~UrmaContext() {
     auto thisString = toString();
     worker_pool_.reset();
-    LOG(INFO) << "destroy worker pool done.";
+    CLOG(INFO) << "destroy worker pool done.";
     endpoint_store_->destroy();
-    LOG(INFO) << "destroy endpoint store done.";
+    CLOG(INFO) << "destroy endpoint store done.";
     if (urma_context_) deconstruct();
-    LOG(WARNING) << "finished destroy context : " << thisString;
+    CLOG(WARNING) << "finished destroy context : " << thisString;
 }
 
 std::string UrmaContext::toString() {
