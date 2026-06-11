@@ -307,7 +307,7 @@ class UbContext {
     static int joinNonblockingPollList(int& event_fd, int data_fd) {
         event_fd = epoll_create1(0);
         if (event_fd < 0) {
-            PLOG_ERROR << "Failed to create epoll";
+            PLOG(ERROR) << "Failed to create epoll";
             return ERR_CONTEXT;
         }
         epoll_event event{};
@@ -315,18 +315,18 @@ class UbContext {
 
         int flags = fcntl(data_fd, F_GETFL, 0);
         if (flags == -1) {
-            PLOG_ERROR << "Failed to get file descriptor flags";
+            PLOG(ERROR) << "Failed to get file descriptor flags";
             return ERR_CONTEXT;
         }
         if (fcntl(data_fd, F_SETFL, flags | O_NONBLOCK) == -1) {
-            PLOG_ERROR << "Failed to set file descriptor nonblocking";
+            PLOG(ERROR) << "Failed to set file descriptor nonblocking";
             return ERR_CONTEXT;
         }
 
         event.events = EPOLLIN | EPOLLET;
         event.data.fd = data_fd;
         if (epoll_ctl(event_fd, EPOLL_CTL_ADD, event.data.fd, &event)) {
-            PLOG_ERROR << "Failed to register file descriptor to epoll";
+            PLOG(ERROR) << "Failed to register file descriptor to epoll";
             return ERR_CONTEXT;
         }
         return 0;

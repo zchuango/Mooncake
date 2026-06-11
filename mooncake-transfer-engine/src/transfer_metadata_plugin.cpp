@@ -610,7 +610,7 @@ static inline const std::string getNetworkAddress(struct sockaddr *addr) {
             return std::string(ip) + ":" +
                    std::to_string(ntohs(sock_addr->sin6_port));
     }
-    PLOG_ERROR << "Failed to parse socket address";
+    PLOG(ERROR) << "Failed to parse socket address";
     return "";
 }
 
@@ -666,7 +666,7 @@ struct SocketHandShakePlugin : public HandShakePlugin {
             listen_fd_ = socket(globalConfig().use_ipv6 ? AF_INET6 : AF_INET,
                                 SOCK_STREAM, 0);
             if (listen_fd_ < 0) {
-                PLOG_ERROR << "SocketHandShakePlugin: socket()";
+                PLOG(ERROR) << "SocketHandShakePlugin: socket()";
                 return ERR_SOCKET;
             }
 
@@ -675,14 +675,14 @@ struct SocketHandShakePlugin : public HandShakePlugin {
             timeout.tv_usec = 0;
             if (setsockopt(listen_fd_, SOL_SOCKET, SO_RCVTIMEO, &timeout,
                            sizeof(timeout))) {
-                PLOG_ERROR << "SocketHandShakePlugin: setsockopt(SO_RCVTIMEO)";
+                PLOG(ERROR) << "SocketHandShakePlugin: setsockopt(SO_RCVTIMEO)";
                 closeListen();
                 return ERR_SOCKET;
             }
 
             if (setsockopt(listen_fd_, SOL_SOCKET, SO_REUSEADDR, &on,
                            sizeof(on))) {
-                PLOG_ERROR
+                PLOG(ERROR)
                     << "SocketHandShakePlugin: setsockopt(SO_REUSEADDR)";
                 closeListen();
                 return ERR_SOCKET;
@@ -697,7 +697,7 @@ struct SocketHandShakePlugin : public HandShakePlugin {
 
                 if (bind(listen_fd_, (sockaddr *)&bind_address,
                          sizeof(sockaddr_in6)) < 0) {
-                    PLOG_ERROR << "SocketHandShakePlugin: bind (port "
+                    PLOG(ERROR) << "SocketHandShakePlugin: bind (port "
                                 << listen_port << ")";
                     closeListen();
                     return ERR_SOCKET;
@@ -711,7 +711,7 @@ struct SocketHandShakePlugin : public HandShakePlugin {
 
                 if (bind(listen_fd_, (sockaddr *)&bind_address,
                          sizeof(sockaddr_in)) < 0) {
-                    PLOG_ERROR << "SocketHandShakePlugin: bind (port "
+                    PLOG(ERROR) << "SocketHandShakePlugin: bind (port "
                                 << listen_port << ")";
                     closeListen();
                     return ERR_SOCKET;
@@ -720,7 +720,7 @@ struct SocketHandShakePlugin : public HandShakePlugin {
         }
 
         if (listen(listen_fd_, listen_backlog_)) {
-            PLOG_ERROR << "SocketHandShakePlugin: listen()";
+            PLOG(ERROR) << "SocketHandShakePlugin: listen()";
             closeListen();
             return ERR_SOCKET;
         }
@@ -733,7 +733,7 @@ struct SocketHandShakePlugin : public HandShakePlugin {
                 int conn_fd = accept(listen_fd_, (sockaddr *)&addr, &addr_len);
                 if (conn_fd < 0) {
                     if (errno != EWOULDBLOCK && errno != EINTR)
-                        PLOG_ERROR << "SocketHandShakePlugin: accept()";
+                        PLOG(ERROR) << "SocketHandShakePlugin: accept()";
                     continue;
                 }
 
@@ -749,7 +749,7 @@ struct SocketHandShakePlugin : public HandShakePlugin {
                 timeout.tv_usec = 0;
                 if (setsockopt(conn_fd, SOL_SOCKET, SO_RCVTIMEO, &timeout,
                                sizeof(timeout))) {
-                    PLOG_ERROR
+                    PLOG(ERROR)
                         << "SocketHandShakePlugin: setsockopt(SO_RCVTIMEO)";
                     close(conn_fd);
                     continue;
@@ -804,7 +804,7 @@ struct SocketHandShakePlugin : public HandShakePlugin {
 
                 ret = shutdown(conn_fd, SHUT_WR);
                 if (ret) {
-                    PLOG_ERROR << "SocketHandShakePlugin: shutdown() failed, "
+                    PLOG(ERROR) << "SocketHandShakePlugin: shutdown() failed, "
                                    "connection may be incomplete";
                     close(conn_fd);
                     continue;
@@ -817,7 +817,7 @@ struct SocketHandShakePlugin : public HandShakePlugin {
                     LOG(ERROR) << "Unexpected socket read result: " << rc
                                << ", byte: " << int(byte);
                 } else if (rc < 0) {
-                    PLOG_ERROR
+                    PLOG(ERROR)
                         << "Socket read failed while waiting client to close";
                 }
                 // else rc == 0, client close the connection, safe to close.
@@ -841,7 +841,7 @@ struct SocketHandShakePlugin : public HandShakePlugin {
         char service[16];
         sprintf(service, "%u", rpc_port);
         if (getaddrinfo(ip_or_host_name.c_str(), service, &hints, &result)) {
-            PLOG_ERROR
+            PLOG(ERROR)
                 << "SocketHandShakePlugin: failed to get IP address of peer "
                    "server "
                 << ip_or_host_name << ":" << rpc_port
@@ -876,7 +876,7 @@ struct SocketHandShakePlugin : public HandShakePlugin {
         char service[16];
         sprintf(service, "%u", rpc_port);
         if (getaddrinfo(ip_or_host_name.c_str(), service, &hints, &result)) {
-            PLOG_ERROR
+            PLOG(ERROR)
                 << "SocketHandShakePlugin: failed to get IP address of peer "
                    "server "
                 << ip_or_host_name << ":" << rpc_port
@@ -911,7 +911,7 @@ struct SocketHandShakePlugin : public HandShakePlugin {
         char service[16];
         sprintf(service, "%u", rpc_port);
         if (getaddrinfo(ip_or_host_name.c_str(), service, &hints, &result)) {
-            PLOG_ERROR
+            PLOG(ERROR)
                 << "SocketHandShakePlugin: failed to get IP address of peer "
                    "server "
                 << ip_or_host_name << ":" << rpc_port
@@ -939,11 +939,11 @@ struct SocketHandShakePlugin : public HandShakePlugin {
         int on = 1;
         conn_fd = socket(addr->ai_family, addr->ai_socktype, addr->ai_protocol);
         if (conn_fd == -1) {
-            PLOG_ERROR << "SocketHandShakePlugin: socket()";
+            PLOG(ERROR) << "SocketHandShakePlugin: socket()";
             return ERR_SOCKET;
         }
         if (setsockopt(conn_fd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on))) {
-            PLOG_ERROR << "SocketHandShakePlugin: setsockopt(SO_REUSEADDR)";
+            PLOG(ERROR) << "SocketHandShakePlugin: setsockopt(SO_REUSEADDR)";
             close(conn_fd);
             return ERR_SOCKET;
         }
@@ -953,13 +953,13 @@ struct SocketHandShakePlugin : public HandShakePlugin {
         timeout.tv_usec = 0;
         if (setsockopt(conn_fd, SOL_SOCKET, SO_RCVTIMEO, &timeout,
                        sizeof(timeout))) {
-            PLOG_ERROR << "SocketHandShakePlugin: setsockopt(SO_RCVTIMEO)";
+            PLOG(ERROR) << "SocketHandShakePlugin: setsockopt(SO_RCVTIMEO)";
             close(conn_fd);
             return ERR_SOCKET;
         }
 
         if (connect(conn_fd, addr->ai_addr, addr->ai_addrlen)) {
-            PLOG_ERROR << "SocketHandShakePlugin: connect()"
+            PLOG(ERROR) << "SocketHandShakePlugin: connect()"
                         << getNetworkAddress(addr->ai_addr);
             close(conn_fd);
             return ERR_SOCKET;
@@ -1019,7 +1019,7 @@ struct SocketHandShakePlugin : public HandShakePlugin {
         char service[16];
         sprintf(service, "%u", rpc_port);
         if (getaddrinfo(ip_or_host_name.c_str(), service, &hints, &result)) {
-            PLOG_ERROR
+            PLOG(ERROR)
                 << "SocketHandShakePlugin: failed to get IP address of peer "
                    "server "
                 << ip_or_host_name << ":" << rpc_port
@@ -1187,7 +1187,7 @@ std::vector<std::string> findLocalIpAddresses() {
     struct ifaddrs *ifaddr, *ifa;
 
     if (getifaddrs(&ifaddr) == -1) {
-        PLOG_ERROR << "getifaddrs failed";
+        PLOG(ERROR) << "getifaddrs failed";
         return ips;
     }
 
