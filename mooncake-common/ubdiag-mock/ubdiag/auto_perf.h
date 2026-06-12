@@ -18,7 +18,7 @@
 // Process the perf-key definition file to populate the PerfKey enum.
 // UBDIAG_PERF_DEF_FILE must be defined by the includer before this header.
 enum class PerfKey : int {
-    // All keys map to 0 — mock PerfPoint ignores the key entirely.
+// All keys map to 0 — mock PerfPoint ignores the key entirely.
 #define PERF_KEY_DEF(name, file, label) name = 0,
 #include UBDIAG_PERF_DEF_FILE
 #undef PERF_KEY_DEF
@@ -42,8 +42,7 @@ class PerfPoint {
 
     // Template constructor: accepts any enum type (zero-overhead in real
     // UbDiag). Mock forwards to the no-op core constructor.
-    template <typename E,
-              typename = std::enable_if_t<std::is_enum_v<E>>>
+    template <typename E, typename = std::enable_if_t<std::is_enum_v<E>>>
     explicit PerfPoint(E key, PerfLevel level = PerfLevel::SUB_SYSTEM)
         : PerfPoint(static_cast<uint32_t>(key), level) {}
 
