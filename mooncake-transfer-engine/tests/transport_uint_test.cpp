@@ -171,6 +171,32 @@ TEST_F(TransportTest, ReadEmptyFile) {
 
     close(fd);
 }
+
+TEST_F(TransportTest, TransferTaskKeepsOwnedRequestCopy) {
+    Transport::TransferTask task;
+    Transport::TransferRequest request;
+    request.opcode = Transport::TransferRequest::READ;
+    request.source = reinterpret_cast<void *>(0x1234);
+    request.target_id = 7;
+    request.target_offset = 4096;
+    request.length = 8192;
+    request.advise_retry_cnt = 3;
+
+    task.setRequest(request);
+
+    ASSERT_NE(task.request, nullptr);
+    EXPECT_NE(task.request, &request);
+
+    request.source = reinterpret_cast<void *>(0x4321);
+    request.length = 16;
+
+    EXPECT_EQ(task.request->opcode, Transport::TransferRequest::READ);
+    EXPECT_EQ(task.request->source, reinterpret_cast<void *>(0x1234));
+    EXPECT_EQ(task.request->target_id, 7);
+    EXPECT_EQ(task.request->target_offset, 4096);
+    EXPECT_EQ(task.request->length, 8192);
+    EXPECT_EQ(task.request->advise_retry_cnt, 3);
+}
 }  // namespace mooncake
 
 int main(int argc, char** argv) {

@@ -30,6 +30,7 @@
 #include <functional>
 #include <mutex>
 #include <condition_variable>
+#include <utility>
 
 #include "common/base/status.h"
 #include "transfer_metadata.h"
@@ -284,6 +285,30 @@ class Transport {
     };
 
     struct TransferTask {
+        TransferTask() = default;
+
+        TransferTask(const TransferTask &) = delete;
+        TransferTask &operator=(const TransferTask &) = delete;
+
+        TransferTask(TransferTask &&other) noexcept {
+            moveFrom(std::move(other));
+        }
+
+        TransferTask &operator=(TransferTask &&other) noexcept {
+            if (this != &other) {
+                releaseSlices();
+                moveFrom(std::move(other));
+            }
+            return *this;
+        }
+
+        ~TransferTask() { releaseSlices(); }
+
+        void setRequest(const TransferRequest &transfer_request) {
+            request_storage = transfer_request;
+            request = &request_storage;
+        }
+
         volatile uint64_t slice_count = 0;
         volatile uint64_t success_slice_count = 0;
         volatile uint64_t failed_slice_count = 0;
@@ -306,6 +331,8 @@ class Transport {
         volatile uint64_t completed_slice_count = 0;
 #endif
 
+        TransferRequest request_storage{};
+
         // record the origin request
 #ifdef USE_ASCEND_HETEROGENEOUS
         // need to modify the request's source address, changing it from an NPU
@@ -316,9 +343,37 @@ class Transport {
 #endif
         // record the slice list for freeing objects
         std::vector<Slice *> slice_list;
-        ~TransferTask() {
+
+       private:
+        void releaseSlices() {
             for (auto &slice : slice_list)
                 Transport::getSliceCache().deallocate(slice);
+            slice_list.clear();
+        }
+
+        void moveFrom(TransferTask &&other) noexcept {
+            slice_count = other.slice_count;
+            success_slice_count = other.success_slice_count;
+            failed_slice_count = other.failed_slice_count;
+            transferred_bytes = other.transferred_bytes;
+            is_finished = other.is_finished;
+            total_bytes = other.total_bytes;
+            batch_id = other.batch_id;
+            transport_ = other.transport_;
+
+#ifdef WITH_METRICS
+            start_time = other.start_time;
+#endif
+
+#ifdef USE_EVENT_DRIVEN_COMPLETION
+            completed_slice_count = other.completed_slice_count;
+#endif
+
+            request_storage = other.request_storage;
+            request = other.request == nullptr ? nullptr : &request_storage;
+            slice_list = std::move(other.slice_list);
+            other.slice_list.clear();
+            other.request = nullptr;
         }
     };
 
