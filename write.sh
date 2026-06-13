@@ -1,0 +1,31 @@
+export MC_STORE_CLIENT_SETUP_RETRIES=3
+export no_proxy="127.0.0.1,localhost,local,.local,192.168.0.0/16,10.0.0.0/8,172.16.0.0/12,141.61.17.0/24,141.61.11.0/24,141.61.84.0/24"
+export MC_STORE_CLIENT_METRIC_BANDWIDTH=0
+export MC_TCP_BIND_ADDRESS=141.61.84.245
+export MC_SLICE_SIZE=1048576
+export MC_WORKERS_PER_CTX=4
+export MC_MAX_WR=32
+export MC_URMA_TRANS_MODE=RM
+export MC_LOG_ENABLE=on
+export MC_LOG_LEVEL=INFO
+# export MC_LOG_DIR=/var/log/mooncake
+export MC_LOG_DETAIL_ENABLE=off
+export MC_LOG_MAX_SIZE=100
+export MC_LOG_BUFFER_SECS=3
+export MC_HIFREQ_LOG_SAMPLE_RATE=0.1
+BENCH=./build/mooncake-store/benchmarks/stress_cluster_bench
+$BENCH \
+        --metadata-server='http://141.61.84.245:8020/metadata' \
+        --master-server='141.61.84.245:50060' \
+        --local-hostname=$MC_TCP_BIND_ADDRESS \
+        --master_admin_port=9010 \
+        --global-segment-size=0 \
+        --local-buffer-size=536870912 \
+        --device-name=bonding_dev_0 \
+        --scenario=segment_write \
+        --num-keys=1000 \
+        --protocol=ub \
+        --verify=false \
+        --num_threads=32 \
+        --batch-size=32
+sleep 5
