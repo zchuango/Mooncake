@@ -1,0 +1,48 @@
+nohup: ignoring input
+WARNING: Logging before InitGoogleLogging() is written to STDERR
+I20260614 10:19:17.435513 267383 client_metric.cpp:114] Client metrics enabled (default enabled)
+I20260614 10:19:17.435575 267383 client_metric.cpp:115] Client bandwidth summary disabled via MC_STORE_CLIENT_METRIC_BANDWIDTH
+I20260614 10:19:17.436904 267383 client_service.cpp:76] client_id=14001048086851390148-6041477148435450537
+I20260614 10:19:17.436929 267383 client_service.cpp:84] Client metrics enabled but reporting disabled (interval=0)
+I20260614 10:19:17.438220 267383 client_service.cpp:658] Storage root directory is not set. persisting data is disabled.
+I20260614 10:19:17.438279 267383 transfer_engine_impl.cpp:811] Metrics reporting is disabled (set MC_TE_METRIC=1 to enable)
+I20260614 10:19:17.438297 267383 transfer_engine_impl.cpp:115] Transfer Engine parseHostNameWithPort. server_name: 141.61.84.245 port: 12971
+I20260614 10:19:17.438346 267383 transfer_engine_impl.cpp:182] Transfer Engine RPC using new RPC mapping, listening on 141.61.84.245:15104
+I20260614 10:19:17.439618 267383 client_service.cpp:490] Transfer engine auto discovery is disabled for protocol: ub
+W20260614 10:19:17.440033 267383 topology.cpp:156] No RDMA devices found, check your device installation
+E20260614 10:19:17.440090 267383 multi_transport.cpp:385] Unsupported transport ub, please rebuild Mooncake
+E20260614 10:19:17.440220 267477 client_service.cpp:588] trace_id[none] Failed to install ub transport with specified devices
+E20260614 10:19:17.440476 267477 client_service.cpp:711] trace_id[none] Failed to initialize transfer engine
+W20260614 10:19:17.442785 267477 real_client.cpp:789] trace_id[none] Failed to create client on port 12971, retry 1/3
+I20260614 10:19:17.543133 267383 client_metric.cpp:114] Client metrics enabled (default enabled)
+I20260614 10:19:17.543162 267383 client_metric.cpp:115] Client bandwidth summary disabled via MC_STORE_CLIENT_METRIC_BANDWIDTH
+I20260614 10:19:17.544448 267383 client_service.cpp:76] client_id=14141658142594115280-12678242134888264077
+I20260614 10:19:17.544461 267383 client_service.cpp:84] Client metrics enabled but reporting disabled (interval=0)
+I20260614 10:19:17.545151 267383 client_service.cpp:658] Storage root directory is not set. persisting data is disabled.
+I20260614 10:19:17.545198 267383 transfer_engine_impl.cpp:811] Metrics reporting is disabled (set MC_TE_METRIC=1 to enable)
+I20260614 10:19:17.545210 267383 transfer_engine_impl.cpp:115] Transfer Engine parseHostNameWithPort. server_name: 141.61.84.245 port: 12943
+I20260614 10:19:17.545241 267383 transfer_engine_impl.cpp:182] Transfer Engine RPC using new RPC mapping, listening on 141.61.84.245:16845
+I20260614 10:19:17.545471 267383 client_service.cpp:490] Transfer engine auto discovery is disabled for protocol: ub
+W20260614 10:19:17.545514 267383 topology.cpp:156] No RDMA devices found, check your device installation
+E20260614 10:19:17.545536 267383 multi_transport.cpp:385] Unsupported transport ub, please rebuild Mooncake
+E20260614 10:19:17.545552 267477 client_service.cpp:588] trace_id[none] Failed to install ub transport with specified devices
+E20260614 10:19:17.545565 267477 client_service.cpp:711] trace_id[none] Failed to initialize transfer engine
+W20260614 10:19:17.546063 267477 real_client.cpp:789] trace_id[none] Failed to create client on port 12943, retry 2/3
+I20260614 10:19:17.646374 267383 client_metric.cpp:114] Client metrics enabled (default enabled)
+I20260614 10:19:17.646394 267383 client_metric.cpp:115] Client bandwidth summary disabled via MC_STORE_CLIENT_METRIC_BANDWIDTH
+I20260614 10:19:17.647197 267383 client_service.cpp:76] client_id=8741196280602532443-5084273768205881013
+I20260614 10:19:17.647207 267383 client_service.cpp:84] Client metrics enabled but reporting disabled (interval=0)
+I20260614 10:19:17.647897 267383 client_service.cpp:658] Storage root directory is not set. persisting data is disabled.
+I20260614 10:19:17.647931 267383 transfer_engine_impl.cpp:811] Metrics reporting is disabled (set MC_TE_METRIC=1 to enable)
+I20260614 10:19:17.647940 267383 transfer_engine_impl.cpp:115] Transfer Engine parseHostNameWithPort. server_name: 141.61.84.245 port: 12552
+I20260614 10:19:17.647976 267383 transfer_engine_impl.cpp:182] Transfer Engine RPC using new RPC mapping, listening on 141.61.84.245:16624
+I20260614 10:19:17.648150 267383 client_service.cpp:490] Transfer engine auto discovery is disabled for protocol: ub
+W20260614 10:19:17.648192 267383 topology.cpp:156] No RDMA devices found, check your device installation
+E20260614 10:19:17.648212 267383 multi_transport.cpp:385] Unsupported transport ub, please rebuild Mooncake
+E20260614 10:19:17.648226 267477 client_service.cpp:588] trace_id[none] Failed to install ub transport with specified devices
+E20260614 10:19:17.648240 267477 client_service.cpp:711] trace_id[none] Failed to initialize transfer engine
+W20260614 10:19:17.648695 267477 real_client.cpp:789] trace_id[none] Failed to create client on port 12552, retry 3/3
+E20260614 10:19:17.748765 267477 real_client.cpp:796] trace_id[none] Failed to create client after 3 retries
+F20260614 10:19:17.748764 267383 real_client_main.cpp:119] Failed to setup client: INTERNAL_ERROR
+*** Check failure stack trace: ***
+run_mooncake_store_client.sh: line 26: 267383 Aborted                 (core dumped) $MOONCAKE_CLIENT --metadata_server='http://141.61.84.245:8020/metadata' --master_server_address='141.61.84.245:50060' --host=$MC_TCP_BIND_ADDRESS --global_segment_size=21474836480 --device_names=bonding_dev_0 --threads=16 --protocol=ub --port=8980
