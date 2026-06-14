@@ -1,48 +1,262 @@
 nohup: ignoring input
 WARNING: Logging before InitGoogleLogging() is written to STDERR
-I20260614 10:19:17.435513 267383 client_metric.cpp:114] Client metrics enabled (default enabled)
-I20260614 10:19:17.435575 267383 client_metric.cpp:115] Client bandwidth summary disabled via MC_STORE_CLIENT_METRIC_BANDWIDTH
-I20260614 10:19:17.436904 267383 client_service.cpp:76] client_id=14001048086851390148-6041477148435450537
-I20260614 10:19:17.436929 267383 client_service.cpp:84] Client metrics enabled but reporting disabled (interval=0)
-I20260614 10:19:17.438220 267383 client_service.cpp:658] Storage root directory is not set. persisting data is disabled.
-I20260614 10:19:17.438279 267383 transfer_engine_impl.cpp:811] Metrics reporting is disabled (set MC_TE_METRIC=1 to enable)
-I20260614 10:19:17.438297 267383 transfer_engine_impl.cpp:115] Transfer Engine parseHostNameWithPort. server_name: 141.61.84.245 port: 12971
-I20260614 10:19:17.438346 267383 transfer_engine_impl.cpp:182] Transfer Engine RPC using new RPC mapping, listening on 141.61.84.245:15104
-I20260614 10:19:17.439618 267383 client_service.cpp:490] Transfer engine auto discovery is disabled for protocol: ub
-W20260614 10:19:17.440033 267383 topology.cpp:156] No RDMA devices found, check your device installation
-E20260614 10:19:17.440090 267383 multi_transport.cpp:385] Unsupported transport ub, please rebuild Mooncake
-E20260614 10:19:17.440220 267477 client_service.cpp:588] trace_id[none] Failed to install ub transport with specified devices
-E20260614 10:19:17.440476 267477 client_service.cpp:711] trace_id[none] Failed to initialize transfer engine
-W20260614 10:19:17.442785 267477 real_client.cpp:789] trace_id[none] Failed to create client on port 12971, retry 1/3
-I20260614 10:19:17.543133 267383 client_metric.cpp:114] Client metrics enabled (default enabled)
-I20260614 10:19:17.543162 267383 client_metric.cpp:115] Client bandwidth summary disabled via MC_STORE_CLIENT_METRIC_BANDWIDTH
-I20260614 10:19:17.544448 267383 client_service.cpp:76] client_id=14141658142594115280-12678242134888264077
-I20260614 10:19:17.544461 267383 client_service.cpp:84] Client metrics enabled but reporting disabled (interval=0)
-I20260614 10:19:17.545151 267383 client_service.cpp:658] Storage root directory is not set. persisting data is disabled.
-I20260614 10:19:17.545198 267383 transfer_engine_impl.cpp:811] Metrics reporting is disabled (set MC_TE_METRIC=1 to enable)
-I20260614 10:19:17.545210 267383 transfer_engine_impl.cpp:115] Transfer Engine parseHostNameWithPort. server_name: 141.61.84.245 port: 12943
-I20260614 10:19:17.545241 267383 transfer_engine_impl.cpp:182] Transfer Engine RPC using new RPC mapping, listening on 141.61.84.245:16845
-I20260614 10:19:17.545471 267383 client_service.cpp:490] Transfer engine auto discovery is disabled for protocol: ub
-W20260614 10:19:17.545514 267383 topology.cpp:156] No RDMA devices found, check your device installation
-E20260614 10:19:17.545536 267383 multi_transport.cpp:385] Unsupported transport ub, please rebuild Mooncake
-E20260614 10:19:17.545552 267477 client_service.cpp:588] trace_id[none] Failed to install ub transport with specified devices
-E20260614 10:19:17.545565 267477 client_service.cpp:711] trace_id[none] Failed to initialize transfer engine
-W20260614 10:19:17.546063 267477 real_client.cpp:789] trace_id[none] Failed to create client on port 12943, retry 2/3
-I20260614 10:19:17.646374 267383 client_metric.cpp:114] Client metrics enabled (default enabled)
-I20260614 10:19:17.646394 267383 client_metric.cpp:115] Client bandwidth summary disabled via MC_STORE_CLIENT_METRIC_BANDWIDTH
-I20260614 10:19:17.647197 267383 client_service.cpp:76] client_id=8741196280602532443-5084273768205881013
-I20260614 10:19:17.647207 267383 client_service.cpp:84] Client metrics enabled but reporting disabled (interval=0)
-I20260614 10:19:17.647897 267383 client_service.cpp:658] Storage root directory is not set. persisting data is disabled.
-I20260614 10:19:17.647931 267383 transfer_engine_impl.cpp:811] Metrics reporting is disabled (set MC_TE_METRIC=1 to enable)
-I20260614 10:19:17.647940 267383 transfer_engine_impl.cpp:115] Transfer Engine parseHostNameWithPort. server_name: 141.61.84.245 port: 12552
-I20260614 10:19:17.647976 267383 transfer_engine_impl.cpp:182] Transfer Engine RPC using new RPC mapping, listening on 141.61.84.245:16624
-I20260614 10:19:17.648150 267383 client_service.cpp:490] Transfer engine auto discovery is disabled for protocol: ub
-W20260614 10:19:17.648192 267383 topology.cpp:156] No RDMA devices found, check your device installation
-E20260614 10:19:17.648212 267383 multi_transport.cpp:385] Unsupported transport ub, please rebuild Mooncake
-E20260614 10:19:17.648226 267477 client_service.cpp:588] trace_id[none] Failed to install ub transport with specified devices
-E20260614 10:19:17.648240 267477 client_service.cpp:711] trace_id[none] Failed to initialize transfer engine
-W20260614 10:19:17.648695 267477 real_client.cpp:789] trace_id[none] Failed to create client on port 12552, retry 3/3
-E20260614 10:19:17.748765 267477 real_client.cpp:796] trace_id[none] Failed to create client after 3 retries
-F20260614 10:19:17.748764 267383 real_client_main.cpp:119] Failed to setup client: INTERNAL_ERROR
-*** Check failure stack trace: ***
-run_mooncake_store_client.sh: line 26: 267383 Aborted                 (core dumped) $MOONCAKE_CLIENT --metadata_server='http://141.61.84.245:8020/metadata' --master_server_address='141.61.84.245:50060' --host=$MC_TCP_BIND_ADDRESS --global_segment_size=21474836480 --device_names=bonding_dev_0 --threads=16 --protocol=ub --port=8980
+I20260614 10:55:02.734818 404598 client_metric.cpp:114] Client metrics enabled (default enabled)
+I20260614 10:55:02.734860 404598 client_metric.cpp:115] Client bandwidth summary disabled via MC_STORE_CLIENT_METRIC_BANDWIDTH
+I20260614 10:55:02.736148 404598 client_service.cpp:76] client_id=2975194121089799214-39844582408164270
+I20260614 10:55:02.736167 404598 client_service.cpp:84] Client metrics enabled but reporting disabled (interval=0)
+I20260614 10:55:02.737169 404598 client_service.cpp:658] Storage root directory is not set. persisting data is disabled.
+I20260614 10:55:02.737221 404598 transfer_engine_impl.cpp:811] Metrics reporting is disabled (set MC_TE_METRIC=1 to enable)
+I20260614 10:55:02.737236 404598 transfer_engine_impl.cpp:115] Transfer Engine parseHostNameWithPort. server_name: 141.61.84.245 port: 14109
+I20260614 10:55:02.737282 404598 transfer_engine_impl.cpp:182] Transfer Engine RPC using new RPC mapping, listening on 141.61.84.245:15843
+I20260614 10:55:02.738454 404598 client_service.cpp:490] Transfer engine auto discovery is disabled for protocol: ub
+W20260614 10:55:02.738710 404598 topology.cpp:156] No RDMA devices found, check your device installation
+I20260614 10:55:02.741750 404598 topology.cpp:216] URMA module init success
+I20260614 10:55:02.743485 404598 topology.cpp:239] listUBDevices: path /sys/class/ubcore/bonding_dev_0
+I20260614 10:55:02.743505 404598 topology.cpp:245] listUBDevices: realpath /sys/devices/virtual/ubcore/bonding_dev_0
+I20260614 10:55:02.743510 404598 topology.cpp:251] listUBDevices: numanodepath /sys/devices/virtual/numa
+I20260614 10:55:02.743525 404598 topology.cpp:253] UBDevices : performation node ----bonding_dev_0 : -1
+I20260614 10:55:02.746426 404598 urma_endpoint.cpp:632] URMA module init success
+I20260614 10:55:02.748178 404598 urma_endpoint.cpp:409] found 7 devices.
+I20260614 10:55:02.748330 404598 urma_endpoint.cpp:420] device_name : bonding_dev_0 EID : 42:45:49:44:00:00:00:00:00:00:00:00:01:00:00:00
+I20260614 10:55:02.757421 404598 urma_endpoint.cpp:111] create jfce done
+I20260614 10:55:02.757453 404598 urma_endpoint.cpp:118] join blocking list done
+I20260614 10:55:02.758212 404598 urma_endpoint.cpp:132] create jfc(send) done, jfc id : 836
+I20260614 10:55:02.758555 404598 urma_endpoint.cpp:132] create jfc(send) done, jfc id : 837
+I20260614 10:55:02.758841 404598 urma_endpoint.cpp:147] create jfc(send) done, jfc id : 838
+I20260614 10:55:02.759152 404598 urma_endpoint.cpp:147] create jfc(send) done, jfc id : 839
+I20260614 10:55:02.760104 404598 urma_endpoint.cpp:170] create jfr done
+I20260614 10:55:02.760114 404598 urma_endpoint.cpp:171] URMA device: bonding_dev_0, EID: (EID_Index 0) 42:45:49:44:00:00:00:00:00:00:00:00:01:00:00:00, transport mode: RM
+I20260614 10:55:02.760123 404598 urma_endpoint.cpp:175] context_ == NULL ? FALSE
+I20260614 10:55:02.760295 404598 urma_endpoint.cpp:178] create workerpool done
+I20260614 10:55:02.760304 404598 ub_context.h:148] finish construct context UrmaContext:{device_name : bonding_dev_0 ,max_endpoints : 65536 ,async_fd : 21 }
+I20260614 10:55:02.760311 404598 ub_context.h:155] finish create endpoint store.
+I20260614 10:55:02.760315 404598 ub_transport.cpp:463] device bonding_dev_0 add to list
+I20260614 10:55:02.760319 404598 ub_transport.cpp:472] ub resources init success
+I20260614 10:55:02.760322 404598 ub_transport.cpp:54] UbTransport: initialize Ub resources done
+I20260614 10:55:02.760337 404598 ub_transport.cpp:63] Transfer engine allocate local segment done
+I20260614 10:55:02.760394 404598 ub_transport.cpp:71] UbTransport: start handshake daemon done
+I20260614 10:55:02.760684 404598 ub_transport.cpp:79] UbTransport: publish segments done
+I20260614 10:55:02.761286 404598 client_service.cpp:730] client_create_breakdown protocol[ub] connect_master_us[796] storage_config_us[221] init_transfer_engine_us[23510] init_transfer_submitter_us[583] total_us[26484]
+I20260614 10:55:02.761294 404937 transfer_task.cpp:946] trace_id[none] MC_STORE_MEMCPY not set, auto-detected: non-TCP transport available, memcpy disabled
+I20260614 10:55:02.761327 404598 ub_allocator.cpp:43] UB:  allocated total size : 21474836480, alignment : 16777216 addr at 0xfff9ac000000
+I20260614 10:55:02.761394 404937 real_client.cpp:782] trace_id[none] Successfully created client on port 14109 after 1 attempt(s)
+I20260614 10:55:02.761402 404598 urma_endpoint.cpp:292] Register memory region 281447797620736 length 21474836480
+I20260614 10:55:02.761405 404937 real_client.cpp:826] trace_id[none] Local buffer size is 0, skip registering local memory
+I20260614 10:55:02.761412 404937 real_client.cpp:882] trace_id[none] Mounting segment: 21474836480 bytes, 21474836480 of 21474836480
+I20260614 10:55:03.559494 404598 urma_endpoint.cpp:314] Local seg token id : 1
+I20260614 10:55:03.561031 404937 real_client.cpp:946] trace_id[none] Starting IPC server at @mooncake_client_8980.sock
+I20260614 10:55:03.561069 404944 real_client.cpp:5774] IPC server is listening
+I20260614 10:55:03.561120 404937 real_client.cpp:5708] trace_id[none] start dummy_client_monitor_thread
+I20260614 10:55:03.561146 404598 real_client_main.cpp:131] Starting real client service on 141.61.84.245:8980
+I20260614 10:55:03.562315 404946 transfer_metadata.cpp:1184] Re-publishing RPC meta entry for 141.61.84.245:14109
+E20260614 10:55:03.562492 404946 transfer_metadata_plugin.cpp:346] PUT http://141.61.84.245:8020/metadata?key=mooncake%2Frpc_meta%2F141.61.84.245%3A14109 http=400 body: Duplicate rpc_meta key not allowed
+E20260614 10:55:03.562512 404946 transfer_metadata.cpp:1189] Failed to re-publish RPC meta entry for 141.61.84.245:14109
+E20260614 10:55:03.562518 404946 client_service.cpp:3293] Failed to re-publish RPC meta entry to metadata server, rc=-200, will retry in next heartbeat cycle
+I20260614 10:55:04.561805 404942 transfer_metadata.cpp:1184] Re-publishing RPC meta entry for 141.61.84.245:14109
+E20260614 10:55:04.561978 404942 transfer_metadata_plugin.cpp:346] PUT http://141.61.84.245:8020/metadata?key=mooncake%2Frpc_meta%2F141.61.84.245%3A14109 http=400 body: Duplicate rpc_meta key not allowed
+E20260614 10:55:04.561993 404942 transfer_metadata.cpp:1189] Failed to re-publish RPC meta entry for 141.61.84.245:14109
+E20260614 10:55:04.561998 404942 client_service.cpp:3356] Retry: failed to re-publish RPC meta entry to metadata server, rc=-200
+I20260614 10:55:05.562352 404942 transfer_metadata.cpp:1184] Re-publishing RPC meta entry for 141.61.84.245:14109
+E20260614 10:55:05.562459 404942 transfer_metadata_plugin.cpp:346] PUT http://141.61.84.245:8020/metadata?key=mooncake%2Frpc_meta%2F141.61.84.245%3A14109 http=400 body: Duplicate rpc_meta key not allowed
+E20260614 10:55:05.562469 404942 transfer_metadata.cpp:1189] Failed to re-publish RPC meta entry for 141.61.84.245:14109
+E20260614 10:55:05.562474 404942 client_service.cpp:3356] Retry: failed to re-publish RPC meta entry to metadata server, rc=-200
+I20260614 10:55:06.562755 404942 transfer_metadata.cpp:1184] Re-publishing RPC meta entry for 141.61.84.245:14109
+E20260614 10:55:06.562856 404942 transfer_metadata_plugin.cpp:346] PUT http://141.61.84.245:8020/metadata?key=mooncake%2Frpc_meta%2F141.61.84.245%3A14109 http=400 body: Duplicate rpc_meta key not allowed
+E20260614 10:55:06.562866 404942 transfer_metadata.cpp:1189] Failed to re-publish RPC meta entry for 141.61.84.245:14109
+E20260614 10:55:06.562871 404942 client_service.cpp:3356] Retry: failed to re-publish RPC meta entry to metadata server, rc=-200
+I20260614 10:55:07.563239 404942 transfer_metadata.cpp:1184] Re-publishing RPC meta entry for 141.61.84.245:14109
+E20260614 10:55:07.563400 404942 transfer_metadata_plugin.cpp:346] PUT http://141.61.84.245:8020/metadata?key=mooncake%2Frpc_meta%2F141.61.84.245%3A14109 http=400 body: Duplicate rpc_meta key not allowed
+E20260614 10:55:07.563410 404942 transfer_metadata.cpp:1189] Failed to re-publish RPC meta entry for 141.61.84.245:14109
+E20260614 10:55:07.563416 404942 client_service.cpp:3356] Retry: failed to re-publish RPC meta entry to metadata server, rc=-200
+I20260614 10:55:08.563683 404942 transfer_metadata.cpp:1184] Re-publishing RPC meta entry for 141.61.84.245:14109
+E20260614 10:55:08.563783 404942 transfer_metadata_plugin.cpp:346] PUT http://141.61.84.245:8020/metadata?key=mooncake%2Frpc_meta%2F141.61.84.245%3A14109 http=400 body: Duplicate rpc_meta key not allowed
+E20260614 10:55:08.563793 404942 transfer_metadata.cpp:1189] Failed to re-publish RPC meta entry for 141.61.84.245:14109
+E20260614 10:55:08.563797 404942 client_service.cpp:3356] Retry: failed to re-publish RPC meta entry to metadata server, rc=-200
+I20260614 10:55:09.564123 404942 transfer_metadata.cpp:1184] Re-publishing RPC meta entry for 141.61.84.245:14109
+E20260614 10:55:09.564268 404942 transfer_metadata_plugin.cpp:346] PUT http://141.61.84.245:8020/metadata?key=mooncake%2Frpc_meta%2F141.61.84.245%3A14109 http=400 body: Duplicate rpc_meta key not allowed
+E20260614 10:55:09.564280 404942 transfer_metadata.cpp:1189] Failed to re-publish RPC meta entry for 141.61.84.245:14109
+E20260614 10:55:09.564283 404942 client_service.cpp:3356] Retry: failed to re-publish RPC meta entry to metadata server, rc=-200
+I20260614 10:55:10.564644 404942 transfer_metadata.cpp:1184] Re-publishing RPC meta entry for 141.61.84.245:14109
+E20260614 10:55:10.564756 404942 transfer_metadata_plugin.cpp:346] PUT http://141.61.84.245:8020/metadata?key=mooncake%2Frpc_meta%2F141.61.84.245%3A14109 http=400 body: Duplicate rpc_meta key not allowed
+E20260614 10:55:10.564766 404942 transfer_metadata.cpp:1189] Failed to re-publish RPC meta entry for 141.61.84.245:14109
+E20260614 10:55:10.564771 404942 client_service.cpp:3356] Retry: failed to re-publish RPC meta entry to metadata server, rc=-200
+I20260614 10:55:11.565150 404942 transfer_metadata.cpp:1184] Re-publishing RPC meta entry for 141.61.84.245:14109
+E20260614 10:55:11.565268 404942 transfer_metadata_plugin.cpp:346] PUT http://141.61.84.245:8020/metadata?key=mooncake%2Frpc_meta%2F141.61.84.245%3A14109 http=400 body: Duplicate rpc_meta key not allowed
+E20260614 10:55:11.565279 404942 transfer_metadata.cpp:1189] Failed to re-publish RPC meta entry for 141.61.84.245:14109
+E20260614 10:55:11.565284 404942 client_service.cpp:3356] Retry: failed to re-publish RPC meta entry to metadata server, rc=-200
+I20260614 10:55:12.565646 404942 transfer_metadata.cpp:1184] Re-publishing RPC meta entry for 141.61.84.245:14109
+E20260614 10:55:12.565769 404942 transfer_metadata_plugin.cpp:346] PUT http://141.61.84.245:8020/metadata?key=mooncake%2Frpc_meta%2F141.61.84.245%3A14109 http=400 body: Duplicate rpc_meta key not allowed
+E20260614 10:55:12.565781 404942 transfer_metadata.cpp:1189] Failed to re-publish RPC meta entry for 141.61.84.245:14109
+E20260614 10:55:12.565786 404942 client_service.cpp:3356] Retry: failed to re-publish RPC meta entry to metadata server, rc=-200
+I20260614 10:55:13.566113 404942 transfer_metadata.cpp:1184] Re-publishing RPC meta entry for 141.61.84.245:14109
+E20260614 10:55:13.566231 404942 transfer_metadata_plugin.cpp:346] PUT http://141.61.84.245:8020/metadata?key=mooncake%2Frpc_meta%2F141.61.84.245%3A14109 http=400 body: Duplicate rpc_meta key not allowed
+E20260614 10:55:13.566241 404942 transfer_metadata.cpp:1189] Failed to re-publish RPC meta entry for 141.61.84.245:14109
+E20260614 10:55:13.566246 404942 client_service.cpp:3356] Retry: failed to re-publish RPC meta entry to metadata server, rc=-200
+I20260614 10:55:14.566606 404942 transfer_metadata.cpp:1184] Re-publishing RPC meta entry for 141.61.84.245:14109
+E20260614 10:55:14.566721 404942 transfer_metadata_plugin.cpp:346] PUT http://141.61.84.245:8020/metadata?key=mooncake%2Frpc_meta%2F141.61.84.245%3A14109 http=400 body: Duplicate rpc_meta key not allowed
+E20260614 10:55:14.566732 404942 transfer_metadata.cpp:1189] Failed to re-publish RPC meta entry for 141.61.84.245:14109
+E20260614 10:55:14.566737 404942 client_service.cpp:3356] Retry: failed to re-publish RPC meta entry to metadata server, rc=-200
+I20260614 10:55:15.567044 404942 transfer_metadata.cpp:1184] Re-publishing RPC meta entry for 141.61.84.245:14109
+E20260614 10:55:15.567148 404942 transfer_metadata_plugin.cpp:346] PUT http://141.61.84.245:8020/metadata?key=mooncake%2Frpc_meta%2F141.61.84.245%3A14109 http=400 body: Duplicate rpc_meta key not allowed
+E20260614 10:55:15.567166 404942 transfer_metadata.cpp:1189] Failed to re-publish RPC meta entry for 141.61.84.245:14109
+E20260614 10:55:15.567173 404942 client_service.cpp:3356] Retry: failed to re-publish RPC meta entry to metadata server, rc=-200
+I20260614 10:55:16.567504 404942 transfer_metadata.cpp:1184] Re-publishing RPC meta entry for 141.61.84.245:14109
+E20260614 10:55:16.567615 404942 transfer_metadata_plugin.cpp:346] PUT http://141.61.84.245:8020/metadata?key=mooncake%2Frpc_meta%2F141.61.84.245%3A14109 http=400 body: Duplicate rpc_meta key not allowed
+E20260614 10:55:16.567624 404942 transfer_metadata.cpp:1189] Failed to re-publish RPC meta entry for 141.61.84.245:14109
+E20260614 10:55:16.567629 404942 client_service.cpp:3356] Retry: failed to re-publish RPC meta entry to metadata server, rc=-200
+I20260614 10:55:17.567979 404942 transfer_metadata.cpp:1184] Re-publishing RPC meta entry for 141.61.84.245:14109
+E20260614 10:55:17.568096 404942 transfer_metadata_plugin.cpp:346] PUT http://141.61.84.245:8020/metadata?key=mooncake%2Frpc_meta%2F141.61.84.245%3A14109 http=400 body: Duplicate rpc_meta key not allowed
+E20260614 10:55:17.568107 404942 transfer_metadata.cpp:1189] Failed to re-publish RPC meta entry for 141.61.84.245:14109
+E20260614 10:55:17.568112 404942 client_service.cpp:3356] Retry: failed to re-publish RPC meta entry to metadata server, rc=-200
+I20260614 10:55:18.568459 404942 transfer_metadata.cpp:1184] Re-publishing RPC meta entry for 141.61.84.245:14109
+E20260614 10:55:18.568590 404942 transfer_metadata_plugin.cpp:346] PUT http://141.61.84.245:8020/metadata?key=mooncake%2Frpc_meta%2F141.61.84.245%3A14109 http=400 body: Duplicate rpc_meta key not allowed
+E20260614 10:55:18.568604 404942 transfer_metadata.cpp:1189] Failed to re-publish RPC meta entry for 141.61.84.245:14109
+E20260614 10:55:18.568609 404942 client_service.cpp:3356] Retry: failed to re-publish RPC meta entry to metadata server, rc=-200
+I20260614 10:55:19.568920 404942 transfer_metadata.cpp:1184] Re-publishing RPC meta entry for 141.61.84.245:14109
+E20260614 10:55:19.569023 404942 transfer_metadata_plugin.cpp:346] PUT http://141.61.84.245:8020/metadata?key=mooncake%2Frpc_meta%2F141.61.84.245%3A14109 http=400 body: Duplicate rpc_meta key not allowed
+E20260614 10:55:19.569034 404942 transfer_metadata.cpp:1189] Failed to re-publish RPC meta entry for 141.61.84.245:14109
+E20260614 10:55:19.569038 404942 client_service.cpp:3356] Retry: failed to re-publish RPC meta entry to metadata server, rc=-200
+I20260614 10:55:20.569316 404942 transfer_metadata.cpp:1184] Re-publishing RPC meta entry for 141.61.84.245:14109
+E20260614 10:55:20.569420 404942 transfer_metadata_plugin.cpp:346] PUT http://141.61.84.245:8020/metadata?key=mooncake%2Frpc_meta%2F141.61.84.245%3A14109 http=400 body: Duplicate rpc_meta key not allowed
+E20260614 10:55:20.569429 404942 transfer_metadata.cpp:1189] Failed to re-publish RPC meta entry for 141.61.84.245:14109
+E20260614 10:55:20.569434 404942 client_service.cpp:3356] Retry: failed to re-publish RPC meta entry to metadata server, rc=-200
+I20260614 10:55:21.569772 404942 transfer_metadata.cpp:1184] Re-publishing RPC meta entry for 141.61.84.245:14109
+E20260614 10:55:21.569926 404942 transfer_metadata_plugin.cpp:346] PUT http://141.61.84.245:8020/metadata?key=mooncake%2Frpc_meta%2F141.61.84.245%3A14109 http=400 body: Duplicate rpc_meta key not allowed
+E20260614 10:55:21.569937 404942 transfer_metadata.cpp:1189] Failed to re-publish RPC meta entry for 141.61.84.245:14109
+E20260614 10:55:21.569941 404942 client_service.cpp:3356] Retry: failed to re-publish RPC meta entry to metadata server, rc=-200
+I20260614 10:55:22.570268 404942 transfer_metadata.cpp:1184] Re-publishing RPC meta entry for 141.61.84.245:14109
+E20260614 10:55:22.570377 404942 transfer_metadata_plugin.cpp:346] PUT http://141.61.84.245:8020/metadata?key=mooncake%2Frpc_meta%2F141.61.84.245%3A14109 http=400 body: Duplicate rpc_meta key not allowed
+E20260614 10:55:22.570398 404942 transfer_metadata.cpp:1189] Failed to re-publish RPC meta entry for 141.61.84.245:14109
+E20260614 10:55:22.570405 404942 client_service.cpp:3356] Retry: failed to re-publish RPC meta entry to metadata server, rc=-200
+I20260614 10:55:23.570744 404942 transfer_metadata.cpp:1184] Re-publishing RPC meta entry for 141.61.84.245:14109
+E20260614 10:55:23.570861 404942 transfer_metadata_plugin.cpp:346] PUT http://141.61.84.245:8020/metadata?key=mooncake%2Frpc_meta%2F141.61.84.245%3A14109 http=400 body: Duplicate rpc_meta key not allowed
+E20260614 10:55:23.570871 404942 transfer_metadata.cpp:1189] Failed to re-publish RPC meta entry for 141.61.84.245:14109
+E20260614 10:55:23.570876 404942 client_service.cpp:3356] Retry: failed to re-publish RPC meta entry to metadata server, rc=-200
+I20260614 10:55:24.571204 404942 transfer_metadata.cpp:1184] Re-publishing RPC meta entry for 141.61.84.245:14109
+E20260614 10:55:24.571311 404942 transfer_metadata_plugin.cpp:346] PUT http://141.61.84.245:8020/metadata?key=mooncake%2Frpc_meta%2F141.61.84.245%3A14109 http=400 body: Duplicate rpc_meta key not allowed
+E20260614 10:55:24.571322 404942 transfer_metadata.cpp:1189] Failed to re-publish RPC meta entry for 141.61.84.245:14109
+E20260614 10:55:24.571326 404942 client_service.cpp:3356] Retry: failed to re-publish RPC meta entry to metadata server, rc=-200
+I20260614 10:55:25.571656 404942 transfer_metadata.cpp:1184] Re-publishing RPC meta entry for 141.61.84.245:14109
+E20260614 10:55:25.571765 404942 transfer_metadata_plugin.cpp:346] PUT http://141.61.84.245:8020/metadata?key=mooncake%2Frpc_meta%2F141.61.84.245%3A14109 http=400 body: Duplicate rpc_meta key not allowed
+E20260614 10:55:25.571775 404942 transfer_metadata.cpp:1189] Failed to re-publish RPC meta entry for 141.61.84.245:14109
+E20260614 10:55:25.571780 404942 client_service.cpp:3356] Retry: failed to re-publish RPC meta entry to metadata server, rc=-200
+I20260614 10:55:26.572078 404942 transfer_metadata.cpp:1184] Re-publishing RPC meta entry for 141.61.84.245:14109
+E20260614 10:55:26.572183 404942 transfer_metadata_plugin.cpp:346] PUT http://141.61.84.245:8020/metadata?key=mooncake%2Frpc_meta%2F141.61.84.245%3A14109 http=400 body: Duplicate rpc_meta key not allowed
+E20260614 10:55:26.572194 404942 transfer_metadata.cpp:1189] Failed to re-publish RPC meta entry for 141.61.84.245:14109
+E20260614 10:55:26.572198 404942 client_service.cpp:3356] Retry: failed to re-publish RPC meta entry to metadata server, rc=-200
+I20260614 10:55:27.572491 404942 transfer_metadata.cpp:1184] Re-publishing RPC meta entry for 141.61.84.245:14109
+E20260614 10:55:27.572604 404942 transfer_metadata_plugin.cpp:346] PUT http://141.61.84.245:8020/metadata?key=mooncake%2Frpc_meta%2F141.61.84.245%3A14109 http=400 body: Duplicate rpc_meta key not allowed
+E20260614 10:55:27.572615 404942 transfer_metadata.cpp:1189] Failed to re-publish RPC meta entry for 141.61.84.245:14109
+E20260614 10:55:27.572620 404942 client_service.cpp:3356] Retry: failed to re-publish RPC meta entry to metadata server, rc=-200
+I20260614 10:55:28.572989 404942 transfer_metadata.cpp:1184] Re-publishing RPC meta entry for 141.61.84.245:14109
+E20260614 10:55:28.573108 404942 transfer_metadata_plugin.cpp:346] PUT http://141.61.84.245:8020/metadata?key=mooncake%2Frpc_meta%2F141.61.84.245%3A14109 http=400 body: Duplicate rpc_meta key not allowed
+E20260614 10:55:28.573119 404942 transfer_metadata.cpp:1189] Failed to re-publish RPC meta entry for 141.61.84.245:14109
+E20260614 10:55:28.573123 404942 client_service.cpp:3356] Retry: failed to re-publish RPC meta entry to metadata server, rc=-200
+I20260614 10:55:29.573410 404942 transfer_metadata.cpp:1184] Re-publishing RPC meta entry for 141.61.84.245:14109
+E20260614 10:55:29.573575 404942 transfer_metadata_plugin.cpp:346] PUT http://141.61.84.245:8020/metadata?key=mooncake%2Frpc_meta%2F141.61.84.245%3A14109 http=400 body: Duplicate rpc_meta key not allowed
+E20260614 10:55:29.573585 404942 transfer_metadata.cpp:1189] Failed to re-publish RPC meta entry for 141.61.84.245:14109
+E20260614 10:55:29.573601 404942 client_service.cpp:3356] Retry: failed to re-publish RPC meta entry to metadata server, rc=-200
+I20260614 10:55:30.573943 404942 transfer_metadata.cpp:1184] Re-publishing RPC meta entry for 141.61.84.245:14109
+E20260614 10:55:30.574057 404942 transfer_metadata_plugin.cpp:346] PUT http://141.61.84.245:8020/metadata?key=mooncake%2Frpc_meta%2F141.61.84.245%3A14109 http=400 body: Duplicate rpc_meta key not allowed
+E20260614 10:55:30.574067 404942 transfer_metadata.cpp:1189] Failed to re-publish RPC meta entry for 141.61.84.245:14109
+E20260614 10:55:30.574072 404942 client_service.cpp:3356] Retry: failed to re-publish RPC meta entry to metadata server, rc=-200
+I20260614 10:55:31.574373 404942 transfer_metadata.cpp:1184] Re-publishing RPC meta entry for 141.61.84.245:14109
+E20260614 10:55:31.574473 404942 transfer_metadata_plugin.cpp:346] PUT http://141.61.84.245:8020/metadata?key=mooncake%2Frpc_meta%2F141.61.84.245%3A14109 http=400 body: Duplicate rpc_meta key not allowed
+E20260614 10:55:31.574483 404942 transfer_metadata.cpp:1189] Failed to re-publish RPC meta entry for 141.61.84.245:14109
+E20260614 10:55:31.574487 404942 client_service.cpp:3356] Retry: failed to re-publish RPC meta entry to metadata server, rc=-200
+I20260614 10:55:32.574832 404942 transfer_metadata.cpp:1184] Re-publishing RPC meta entry for 141.61.84.245:14109
+E20260614 10:55:32.574949 404942 transfer_metadata_plugin.cpp:346] PUT http://141.61.84.245:8020/metadata?key=mooncake%2Frpc_meta%2F141.61.84.245%3A14109 http=400 body: Duplicate rpc_meta key not allowed
+E20260614 10:55:32.574959 404942 transfer_metadata.cpp:1189] Failed to re-publish RPC meta entry for 141.61.84.245:14109
+E20260614 10:55:32.574965 404942 client_service.cpp:3356] Retry: failed to re-publish RPC meta entry to metadata server, rc=-200
+I20260614 10:55:33.575273 404942 transfer_metadata.cpp:1184] Re-publishing RPC meta entry for 141.61.84.245:14109
+E20260614 10:55:33.575387 404942 transfer_metadata_plugin.cpp:346] PUT http://141.61.84.245:8020/metadata?key=mooncake%2Frpc_meta%2F141.61.84.245%3A14109 http=400 body: Duplicate rpc_meta key not allowed
+E20260614 10:55:33.575397 404942 transfer_metadata.cpp:1189] Failed to re-publish RPC meta entry for 141.61.84.245:14109
+E20260614 10:55:33.575402 404942 client_service.cpp:3356] Retry: failed to re-publish RPC meta entry to metadata server, rc=-200
+I20260614 10:55:34.575691 404942 transfer_metadata.cpp:1184] Re-publishing RPC meta entry for 141.61.84.245:14109
+E20260614 10:55:34.575798 404942 transfer_metadata_plugin.cpp:346] PUT http://141.61.84.245:8020/metadata?key=mooncake%2Frpc_meta%2F141.61.84.245%3A14109 http=400 body: Duplicate rpc_meta key not allowed
+E20260614 10:55:34.575809 404942 transfer_metadata.cpp:1189] Failed to re-publish RPC meta entry for 141.61.84.245:14109
+E20260614 10:55:34.575812 404942 client_service.cpp:3356] Retry: failed to re-publish RPC meta entry to metadata server, rc=-200
+I20260614 10:55:35.576071 404942 transfer_metadata.cpp:1184] Re-publishing RPC meta entry for 141.61.84.245:14109
+E20260614 10:55:35.576164 404942 transfer_metadata_plugin.cpp:346] PUT http://141.61.84.245:8020/metadata?key=mooncake%2Frpc_meta%2F141.61.84.245%3A14109 http=400 body: Duplicate rpc_meta key not allowed
+E20260614 10:55:35.576174 404942 transfer_metadata.cpp:1189] Failed to re-publish RPC meta entry for 141.61.84.245:14109
+E20260614 10:55:35.576177 404942 client_service.cpp:3356] Retry: failed to re-publish RPC meta entry to metadata server, rc=-200
+I20260614 10:55:36.576417 404942 transfer_metadata.cpp:1184] Re-publishing RPC meta entry for 141.61.84.245:14109
+E20260614 10:55:36.576503 404942 transfer_metadata_plugin.cpp:346] PUT http://141.61.84.245:8020/metadata?key=mooncake%2Frpc_meta%2F141.61.84.245%3A14109 http=400 body: Duplicate rpc_meta key not allowed
+E20260614 10:55:36.576511 404942 transfer_metadata.cpp:1189] Failed to re-publish RPC meta entry for 141.61.84.245:14109
+E20260614 10:55:36.576515 404942 client_service.cpp:3356] Retry: failed to re-publish RPC meta entry to metadata server, rc=-200
+I20260614 10:55:37.576881 404942 transfer_metadata.cpp:1184] Re-publishing RPC meta entry for 141.61.84.245:14109
+E20260614 10:55:37.577008 404942 transfer_metadata_plugin.cpp:346] PUT http://141.61.84.245:8020/metadata?key=mooncake%2Frpc_meta%2F141.61.84.245%3A14109 http=400 body: Duplicate rpc_meta key not allowed
+E20260614 10:55:37.577018 404942 transfer_metadata.cpp:1189] Failed to re-publish RPC meta entry for 141.61.84.245:14109
+E20260614 10:55:37.577023 404942 client_service.cpp:3356] Retry: failed to re-publish RPC meta entry to metadata server, rc=-200
+I20260614 10:55:38.577366 404942 transfer_metadata.cpp:1184] Re-publishing RPC meta entry for 141.61.84.245:14109
+E20260614 10:55:38.577488 404942 transfer_metadata_plugin.cpp:346] PUT http://141.61.84.245:8020/metadata?key=mooncake%2Frpc_meta%2F141.61.84.245%3A14109 http=400 body: Duplicate rpc_meta key not allowed
+E20260614 10:55:38.577500 404942 transfer_metadata.cpp:1189] Failed to re-publish RPC meta entry for 141.61.84.245:14109
+E20260614 10:55:38.577505 404942 client_service.cpp:3356] Retry: failed to re-publish RPC meta entry to metadata server, rc=-200
+I20260614 10:55:39.577872 404942 transfer_metadata.cpp:1184] Re-publishing RPC meta entry for 141.61.84.245:14109
+E20260614 10:55:39.577997 404942 transfer_metadata_plugin.cpp:346] PUT http://141.61.84.245:8020/metadata?key=mooncake%2Frpc_meta%2F141.61.84.245%3A14109 http=400 body: Duplicate rpc_meta key not allowed
+E20260614 10:55:39.578009 404942 transfer_metadata.cpp:1189] Failed to re-publish RPC meta entry for 141.61.84.245:14109
+E20260614 10:55:39.578014 404942 client_service.cpp:3356] Retry: failed to re-publish RPC meta entry to metadata server, rc=-200
+I20260614 10:55:40.578361 404942 transfer_metadata.cpp:1184] Re-publishing RPC meta entry for 141.61.84.245:14109
+E20260614 10:55:40.578481 404942 transfer_metadata_plugin.cpp:346] PUT http://141.61.84.245:8020/metadata?key=mooncake%2Frpc_meta%2F141.61.84.245%3A14109 http=400 body: Duplicate rpc_meta key not allowed
+E20260614 10:55:40.578492 404942 transfer_metadata.cpp:1189] Failed to re-publish RPC meta entry for 141.61.84.245:14109
+E20260614 10:55:40.578497 404942 client_service.cpp:3356] Retry: failed to re-publish RPC meta entry to metadata server, rc=-200
+I20260614 10:55:41.578806 404942 transfer_metadata.cpp:1184] Re-publishing RPC meta entry for 141.61.84.245:14109
+E20260614 10:55:41.578918 404942 transfer_metadata_plugin.cpp:346] PUT http://141.61.84.245:8020/metadata?key=mooncake%2Frpc_meta%2F141.61.84.245%3A14109 http=400 body: Duplicate rpc_meta key not allowed
+E20260614 10:55:41.578930 404942 transfer_metadata.cpp:1189] Failed to re-publish RPC meta entry for 141.61.84.245:14109
+E20260614 10:55:41.578934 404942 client_service.cpp:3356] Retry: failed to re-publish RPC meta entry to metadata server, rc=-200
+I20260614 10:55:42.579244 404942 transfer_metadata.cpp:1184] Re-publishing RPC meta entry for 141.61.84.245:14109
+E20260614 10:55:42.579352 404942 transfer_metadata_plugin.cpp:346] PUT http://141.61.84.245:8020/metadata?key=mooncake%2Frpc_meta%2F141.61.84.245%3A14109 http=400 body: Duplicate rpc_meta key not allowed
+E20260614 10:55:42.579363 404942 transfer_metadata.cpp:1189] Failed to re-publish RPC meta entry for 141.61.84.245:14109
+E20260614 10:55:42.579367 404942 client_service.cpp:3356] Retry: failed to re-publish RPC meta entry to metadata server, rc=-200
+I20260614 10:55:43.579706 404942 transfer_metadata.cpp:1184] Re-publishing RPC meta entry for 141.61.84.245:14109
+E20260614 10:55:43.579828 404942 transfer_metadata_plugin.cpp:346] PUT http://141.61.84.245:8020/metadata?key=mooncake%2Frpc_meta%2F141.61.84.245%3A14109 http=400 body: Duplicate rpc_meta key not allowed
+E20260614 10:55:43.579839 404942 transfer_metadata.cpp:1189] Failed to re-publish RPC meta entry for 141.61.84.245:14109
+E20260614 10:55:43.579843 404942 client_service.cpp:3356] Retry: failed to re-publish RPC meta entry to metadata server, rc=-200
+I20260614 10:55:44.580202 404942 transfer_metadata.cpp:1184] Re-publishing RPC meta entry for 141.61.84.245:14109
+E20260614 10:55:44.580338 404942 transfer_metadata_plugin.cpp:346] PUT http://141.61.84.245:8020/metadata?key=mooncake%2Frpc_meta%2F141.61.84.245%3A14109 http=400 body: Duplicate rpc_meta key not allowed
+E20260614 10:55:44.580350 404942 transfer_metadata.cpp:1189] Failed to re-publish RPC meta entry for 141.61.84.245:14109
+E20260614 10:55:44.580355 404942 client_service.cpp:3356] Retry: failed to re-publish RPC meta entry to metadata server, rc=-200
+I20260614 10:55:45.580737 404942 transfer_metadata.cpp:1184] Re-publishing RPC meta entry for 141.61.84.245:14109
+E20260614 10:55:45.580863 404942 transfer_metadata_plugin.cpp:346] PUT http://141.61.84.245:8020/metadata?key=mooncake%2Frpc_meta%2F141.61.84.245%3A14109 http=400 body: Duplicate rpc_meta key not allowed
+E20260614 10:55:45.580874 404942 transfer_metadata.cpp:1189] Failed to re-publish RPC meta entry for 141.61.84.245:14109
+E20260614 10:55:45.580879 404942 client_service.cpp:3356] Retry: failed to re-publish RPC meta entry to metadata server, rc=-200
+I20260614 10:55:46.581254 404942 transfer_metadata.cpp:1184] Re-publishing RPC meta entry for 141.61.84.245:14109
+E20260614 10:55:46.581399 404942 transfer_metadata_plugin.cpp:346] PUT http://141.61.84.245:8020/metadata?key=mooncake%2Frpc_meta%2F141.61.84.245%3A14109 http=400 body: Duplicate rpc_meta key not allowed
+E20260614 10:55:46.581413 404942 transfer_metadata.cpp:1189] Failed to re-publish RPC meta entry for 141.61.84.245:14109
+E20260614 10:55:46.581418 404942 client_service.cpp:3356] Retry: failed to re-publish RPC meta entry to metadata server, rc=-200
+I20260614 10:55:47.581808 404942 transfer_metadata.cpp:1184] Re-publishing RPC meta entry for 141.61.84.245:14109
+E20260614 10:55:47.581939 404942 transfer_metadata_plugin.cpp:346] PUT http://141.61.84.245:8020/metadata?key=mooncake%2Frpc_meta%2F141.61.84.245%3A14109 http=400 body: Duplicate rpc_meta key not allowed
+E20260614 10:55:47.581951 404942 transfer_metadata.cpp:1189] Failed to re-publish RPC meta entry for 141.61.84.245:14109
+E20260614 10:55:47.581956 404942 client_service.cpp:3356] Retry: failed to re-publish RPC meta entry to metadata server, rc=-200
+I20260614 10:55:48.582289 404942 transfer_metadata.cpp:1184] Re-publishing RPC meta entry for 141.61.84.245:14109
+E20260614 10:55:48.582403 404942 transfer_metadata_plugin.cpp:346] PUT http://141.61.84.245:8020/metadata?key=mooncake%2Frpc_meta%2F141.61.84.245%3A14109 http=400 body: Duplicate rpc_meta key not allowed
+E20260614 10:55:48.582414 404942 transfer_metadata.cpp:1189] Failed to re-publish RPC meta entry for 141.61.84.245:14109
+E20260614 10:55:48.582419 404942 client_service.cpp:3356] Retry: failed to re-publish RPC meta entry to metadata server, rc=-200
+I20260614 10:55:49.582696 404942 transfer_metadata.cpp:1184] Re-publishing RPC meta entry for 141.61.84.245:14109
+E20260614 10:55:49.582789 404942 transfer_metadata_plugin.cpp:346] PUT http://141.61.84.245:8020/metadata?key=mooncake%2Frpc_meta%2F141.61.84.245%3A14109 http=400 body: Duplicate rpc_meta key not allowed
+E20260614 10:55:49.582798 404942 transfer_metadata.cpp:1189] Failed to re-publish RPC meta entry for 141.61.84.245:14109
+E20260614 10:55:49.582803 404942 client_service.cpp:3356] Retry: failed to re-publish RPC meta entry to metadata server, rc=-200
+I20260614 10:55:50.583071 404942 transfer_metadata.cpp:1184] Re-publishing RPC meta entry for 141.61.84.245:14109
+E20260614 10:55:50.583163 404942 transfer_metadata_plugin.cpp:346] PUT http://141.61.84.245:8020/metadata?key=mooncake%2Frpc_meta%2F141.61.84.245%3A14109 http=400 body: Duplicate rpc_meta key not allowed
+E20260614 10:55:50.583173 404942 transfer_metadata.cpp:1189] Failed to re-publish RPC meta entry for 141.61.84.245:14109
+E20260614 10:55:50.583176 404942 client_service.cpp:3356] Retry: failed to re-publish RPC meta entry to metadata server, rc=-200
+I20260614 10:55:51.583549 404942 transfer_metadata.cpp:1184] Re-publishing RPC meta entry for 141.61.84.245:14109
+E20260614 10:55:51.583676 404942 transfer_metadata_plugin.cpp:346] PUT http://141.61.84.245:8020/metadata?key=mooncake%2Frpc_meta%2F141.61.84.245%3A14109 http=400 body: Duplicate rpc_meta key not allowed
+E20260614 10:55:51.583701 404942 transfer_metadata.cpp:1189] Failed to re-publish RPC meta entry for 141.61.84.245:14109
+E20260614 10:55:51.583706 404942 client_service.cpp:3356] Retry: failed to re-publish RPC meta entry to metadata server, rc=-200
+I20260614 10:55:52.584081 404942 transfer_metadata.cpp:1184] Re-publishing RPC meta entry for 141.61.84.245:14109
+E20260614 10:55:52.584241 404942 transfer_metadata_plugin.cpp:346] PUT http://141.61.84.245:8020/metadata?key=mooncake%2Frpc_meta%2F141.61.84.245%3A14109 http=400 body: Duplicate rpc_meta key not allowed
+E20260614 10:55:52.584263 404942 transfer_metadata.cpp:1189] Failed to re-publish RPC meta entry for 141.61.84.245:14109
+E20260614 10:55:52.584270 404942 client_service.cpp:3356] Retry: failed to re-publish RPC meta entry to metadata server, rc=-200
+I20260614 10:55:53.584709 404942 transfer_metadata.cpp:1184] Re-publishing RPC meta entry for 141.61.84.245:14109
+E20260614 10:55:53.584864 404942 transfer_metadata_plugin.cpp:346] PUT http://141.61.84.245:8020/metadata?key=mooncake%2Frpc_meta%2F141.61.84.245%3A14109 http=400 body: Duplicate rpc_meta key not allowed
+E20260614 10:55:53.584878 404942 transfer_metadata.cpp:1189] Failed to re-publish RPC meta entry for 141.61.84.245:14109
+E20260614 10:55:53.584884 404942 client_service.cpp:3356] Retry: failed to re-publish RPC meta entry to metadata server, rc=-200
+I20260614 10:55:54.585273 404942 transfer_metadata.cpp:1184] Re-publishing RPC meta entry for 141.61.84.245:14109
+E20260614 10:55:54.585397 404942 transfer_metadata_plugin.cpp:346] PUT http://141.61.84.245:8020/metadata?key=mooncake%2Frpc_meta%2F141.61.84.245%3A14109 http=400 body: Duplicate rpc_meta key not allowed
+E20260614 10:55:54.585410 404942 transfer_metadata.cpp:1189] Failed to re-publish RPC meta entry for 141.61.84.245:14109
+E20260614 10:55:54.585415 404942 client_service.cpp:3356] Retry: failed to re-publish RPC meta entry to metadata server, rc=-200
+I20260614 10:55:55.585772 404942 transfer_metadata.cpp:1184] Re-publishing RPC meta entry for 141.61.84.245:14109
+E20260614 10:55:55.585888 404942 transfer_metadata_plugin.cpp:346] PUT http://141.61.84.245:8020/metadata?key=mooncake%2Frpc_meta%2F141.61.84.245%3A14109 http=400 body: Duplicate rpc_meta key not allowed
+E20260614 10:55:55.585901 404942 transfer_metadata.cpp:1189] Failed to re-publish RPC meta entry for 141.61.84.245:14109
+E20260614 10:55:55.585906 404942 client_service.cpp:3356] Retry: failed to re-publish RPC meta entry to metadata server, rc=-200
