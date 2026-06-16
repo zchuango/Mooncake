@@ -77,7 +77,7 @@ check_ubdiag_layer() {
 link_build() {
     local target=$1
     cd "$PROJECT_DIR"
-    rm -f build
+    rm -rf build
     ln -sfn "$target" build
     echo "  [link] build -> $target"
 }
@@ -228,6 +228,7 @@ mkdir -p "$RESULTS_DIR"
         cd "$UBDIAG_BUILD"
         cmake "$UBDIAG_SRC" \
             -DCMAKE_INSTALL_PREFIX="$UBDIAG_INSTALL_PREFIX" \
+            -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
             -DBUILD_TESTS=OFF -DBUILD_EXAMPLES=OFF \
             > "$L2_LOG/ubdiag_cmake.log" 2>&1
         make -j$(nproc) > "$L2_LOG/ubdiag_make.log" 2>&1

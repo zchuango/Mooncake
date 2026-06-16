@@ -77,7 +77,13 @@ echo ""
 echo "============================================"
 echo "  KEY METRICS"
 echo "============================================"
-grep -E '(Wall time|Total ops|Throughput|Ops/sec|Mean|P50|P99|P999)' "$READ_STDOUT" || echo "  (no metrics found)"
+# Extract the FINAL SUMMARY block from benchmark stdout
+sed -n '/FINAL SUMMARY/,/^========================================/{
+    /FINAL SUMMARY/d
+    /^========================================/d
+    /^$/d
+    p
+}' "$READ_STDOUT" || echo "  (no metrics found)"
 
 # Check for common error patterns in stderr
 if grep -qi 'segfault\|SIGSEGV\|signal\|fatal\|corrupted\|double free' "$READ_STDERR"; then
