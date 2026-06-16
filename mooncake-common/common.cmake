@@ -80,7 +80,6 @@ option(USE_EFA "option for using AWS EFA transport" OFF)
 option(USE_UB "option for using UB protocol transport" OFF)
 
 if (USE_UB)
-  add_compile_definitions(USE_UB)
   message(STATUS "ub transport is enabled")
   include(${CMAKE_CURRENT_LIST_DIR}/FindUrma.cmake)
 endif()
