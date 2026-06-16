@@ -30,8 +30,11 @@ if(EXISTS "${CMAKE_SOURCE_DIR}/extern/ubdiag/CMakeLists.txt")
   endif()
 endif()
 
-# Layer 2: System package
-find_package(UbDiag QUIET)
+# Layer 2: System package — only search standard system paths
+find_package(UbDiag QUIET
+    NO_CMAKE_PATH
+    NO_CMAKE_ENVIRONMENT_PATH
+    NO_CMAKE_PACKAGE_REGISTRY)
 if(TARGET UbDiag::ubdiag_lib)
   message(STATUS "UbDiag: using system package")
   return()
