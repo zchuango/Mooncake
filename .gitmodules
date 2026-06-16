@@ -9,4 +9,4 @@
 [submodule "extern/ubdiag"]
 	path = extern/ubdiag
 	url = https://atomgit.com/liusiyu60/ubdiag
-	branch = main
+	branch = fix/shm-probe-fastpath
