@@ -212,57 +212,27 @@ mkdir -p "$RESULTS_DIR"
     rm -rf "$L2_BUILD"
     mkdir -p "$L2_BUILD"
 
-    # Step 1: Build & install UbDiag to local prefix (no sudo needed)
-    if [ ! -d "$UBDIAG_SRC" ]; then
-        if [ -d "$PROJECT_DIR/extern/ubdiag_bak" ]; then
-            mv "$PROJECT_DIR/extern/ubdiag_bak" "$UBDIAG_SRC"
-        fi
+    # Hide submodule so FindUbDiag falls through to Layer 2
+    if [ -d "$PROJECT_DIR/extern/ubdiag" ]; then
+        mv "$PROJECT_DIR/extern/ubdiag" "$PROJECT_DIR/extern/ubdiag_bak"
     fi
 
-    if [ -d "$UBDIAG_SRC" ]; then
-        echo "  [ubdiag] Building ubdiag for local install..."
-        rm -rf "$UBDIAG_INSTALL_PREFIX"
-        UBDIAG_BUILD="$PROJECT_DIR/build_ubdiag_layer2"
-        rm -rf "$UBDIAG_BUILD"
-        mkdir -p "$UBDIAG_BUILD"
-        cd "$UBDIAG_BUILD"
-        cmake "$UBDIAG_SRC" \
-            -DCMAKE_INSTALL_PREFIX="$UBDIAG_INSTALL_PREFIX" \
-            -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
-            -DBUILD_TESTS=OFF -DBUILD_EXAMPLES=OFF \
-            > "$L2_LOG/ubdiag_cmake.log" 2>&1
-        make -j$(nproc) > "$L2_LOG/ubdiag_make.log" 2>&1
-        make install > "$L2_LOG/ubdiag_install.log" 2>&1
-        echo "  [ubdiag] Installed to $UBDIAG_INSTALL_PREFIX"
+    echo "  [build] cmake configure (system paths only)..."
+    cd "$L2_BUILD"
+    cmake "$PROJECT_DIR" "${CMAKE_ARGS[@]}" > "$L2_LOG/cmake_output.log" 2>&1
+    check_ubdiag_layer "$L2_LOG/cmake_output.log" 2
 
-        # Step 2: Hide submodule so FindUbDiag falls through to Layer 2
-        if [ -d "$PROJECT_DIR/extern/ubdiag" ]; then
-            mv "$PROJECT_DIR/extern/ubdiag" "$PROJECT_DIR/extern/ubdiag_bak"
-        fi
+    echo "  [build] make -j$(nproc)..."
+    make -j$(nproc) > "$L2_LOG/make_output.log" 2>&1
+    echo "  [build] make exit=$?"
 
-        # Step 3: Build Mooncake with CMAKE_PREFIX_PATH pointing to local install
-        echo "  [build] cmake configure (CMAKE_PREFIX_PATH=$UBDIAG_INSTALL_PREFIX)..."
-        cd "$L2_BUILD"
-        cmake "$PROJECT_DIR" \
-            "${CMAKE_ARGS[@]}" \
-            -DCMAKE_PREFIX_PATH="$UBDIAG_INSTALL_PREFIX" \
-            > "$L2_LOG/cmake_output.log" 2>&1
-        check_ubdiag_layer "$L2_LOG/cmake_output.log" 2
+    link_build "$L2_BUILD"
+    kill_mooncake
+    run_4scripts "$L2_LOG" || echo "  [WARN] Layer 2 scripts had issues"
 
-        echo "  [build] make -j$(nproc)..."
-        make -j$(nproc) > "$L2_LOG/make_output.log" 2>&1
-        echo "  [build] make exit=$?"
-
-        link_build "$L2_BUILD"
-        kill_mooncake
-        run_4scripts "$L2_LOG" || echo "  [WARN] Layer 2 scripts had issues"
-
-        # Restore submodule for next layer
-        if [ -d "$PROJECT_DIR/extern/ubdiag_bak" ]; then
-            mv "$PROJECT_DIR/extern/ubdiag_bak" "$PROJECT_DIR/extern/ubdiag"
-        fi
-    else
-        echo "  [SKIP] ubdiag source not found at $UBDIAG_SRC — cannot verify Layer 2"
+    # Restore submodule for next layer
+    if [ -d "$PROJECT_DIR/extern/ubdiag_bak" ]; then
+        mv "$PROJECT_DIR/extern/ubdiag_bak" "$PROJECT_DIR/extern/ubdiag"
     fi
     echo "  Layer 2 DONE"
 } 2>&1 | tee "$RESULTS_DIR/layer2.log"
@@ -290,6 +260,14 @@ mkdir -p "$RESULTS_DIR"
     # Also remove the local install from Layer 2 so find_package also fails
     rm -rf "$UBDIAG_INSTALL_PREFIX" 2>/dev/null || true
 
+    # Backup system UbDiag cmake configs so find_package cannot find them
+    if [ -d "/usr/local/lib64/cmake/UbDiag" ]; then
+        mv /usr/local/lib64/cmake/UbDiag /usr/local/lib64/cmake/UbDiag_verify_bak
+    fi
+    if [ -d "/usr/lib64/cmake/UbDiag" ]; then
+        mv /usr/lib64/cmake/UbDiag /usr/lib64/cmake/UbDiag_verify_bak
+    fi
+
     echo "  [build] cmake configure (expecting mock)..."
     cd "$L3_BUILD"
     cmake "$PROJECT_DIR" "${CMAKE_ARGS[@]}" > "$L3_LOG/cmake_output.log" 2>&1
@@ -307,6 +285,15 @@ mkdir -p "$RESULTS_DIR"
     if [ -d "$PROJECT_DIR/extern/ubdiag_bak" ]; then
         mv "$PROJECT_DIR/extern/ubdiag_bak" "$PROJECT_DIR/extern/ubdiag"
     fi
+
+    # Restore system UbDiag cmake configs
+    if [ -d "/usr/local/lib64/cmake/UbDiag_verify_bak" ]; then
+        mv /usr/local/lib64/cmake/UbDiag_verify_bak /usr/local/lib64/cmake/UbDiag
+    fi
+    if [ -d "/usr/lib64/cmake/UbDiag_verify_bak" ]; then
+        mv /usr/lib64/cmake/UbDiag_verify_bak /usr/lib64/cmake/UbDiag
+    fi
+
     echo "  Layer 3 DONE"
 } 2>&1 | tee "$RESULTS_DIR/layer3.log"
 
