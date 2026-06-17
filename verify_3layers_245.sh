@@ -187,14 +187,20 @@ mkdir -p "$RESULTS_DIR"
     cmake "$PROJECT_DIR" "${CMAKE_ARGS[@]}" > "$L1_LOG/cmake_output.log" 2>&1
     check_ubdiag_layer "$L1_LOG/cmake_output.log" 1
 
-    echo "  [build] make -j106..."
-    make -j106 > "$L1_LOG/make_output.log" 2>&1
+    echo "  [build] make -j$(nproc)..."
+    make -j$(nproc) > "$L1_LOG/make_output.log" 2>&1
     echo "  [build] make exit=$?"
 
     link_build "$L1_BUILD"
     kill_mooncake
     run_4scripts "$L1_LOG" || echo "  [WARN] Layer 1 scripts had issues"
     echo "  Layer 1 DONE"
+
+    # Free page cache between layers (L1 benchmark → L2 compilation)
+    sync 2>/dev/null || true
+    echo 3 > /proc/sys/vm/drop_caches 2>/dev/null || true
+    sleep 2
+
 } 2>&1 | tee "$RESULTS_DIR/layer1.log"
 
 # ========================================================================
@@ -230,8 +236,8 @@ mkdir -p "$RESULTS_DIR"
     cmake "$PROJECT_DIR" "${CMAKE_ARGS[@]}" > "$L2_LOG/cmake_output.log" 2>&1
     check_ubdiag_layer "$L2_LOG/cmake_output.log" 2
 
-    echo "  [build] make -j106..."
-    make -j106 > "$L2_LOG/make_output.log" 2>&1
+    echo "  [build] make -j$(nproc)..."
+    make -j$(nproc) > "$L2_LOG/make_output.log" 2>&1
     echo "  [build] make exit=$?"
 
     link_build "$L2_BUILD"
@@ -243,6 +249,12 @@ mkdir -p "$RESULTS_DIR"
         mv "$PROJECT_DIR/extern/ubdiag_bak" "$PROJECT_DIR/extern/ubdiag"
     fi
     echo "  Layer 2 DONE"
+
+    # Free page cache between layers (L2 benchmark → L3 compilation)
+    sync 2>/dev/null || true
+    echo 3 > /proc/sys/vm/drop_caches 2>/dev/null || true
+    sleep 2
+
 } 2>&1 | tee "$RESULTS_DIR/layer2.log"
 
 # ========================================================================
@@ -285,8 +297,8 @@ mkdir -p "$RESULTS_DIR"
     cmake "$PROJECT_DIR" "${CMAKE_ARGS[@]}" > "$L3_LOG/cmake_output.log" 2>&1
     check_ubdiag_layer "$L3_LOG/cmake_output.log" 3
 
-    echo "  [build] make -j106..."
-    make -j106 > "$L3_LOG/make_output.log" 2>&1
+    echo "  [build] make -j$(nproc)..."
+    make -j$(nproc) > "$L3_LOG/make_output.log" 2>&1
     echo "  [build] make exit=$?"
 
     link_build "$L3_BUILD"
