@@ -30,11 +30,12 @@ if(EXISTS "${CMAKE_SOURCE_DIR}/extern/ubdiag/CMakeLists.txt")
   endif()
 endif()
 
-# Layer 2: System package — only search standard system paths
+# Layer 2: System package — only search standard system library paths
+# Using NO_DEFAULT_PATH + explicit PATHS to prevent cmake from recursively
+# searching CMAKE_SYSTEM_PREFIX_PATH subdirectories (e.g., UbDiag_bak, build artifacts)
 find_package(UbDiag QUIET
-    NO_CMAKE_PATH
-    NO_CMAKE_ENVIRONMENT_PATH
-    NO_CMAKE_PACKAGE_REGISTRY)
+    NO_DEFAULT_PATH
+    PATHS /usr/lib64/cmake /usr/local/lib64/cmake)
 if(TARGET UbDiag::ubdiag_lib)
   message(STATUS "UbDiag: using system package")
   return()
