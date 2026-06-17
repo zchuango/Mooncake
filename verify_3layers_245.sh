@@ -114,6 +114,30 @@ run_4scripts() {
     fi
     echo "  [run] Client PID=$CLIENT_PID"
 
+    # Wait for client to finish mounting its segment before running benchmarks.
+    # 20GB segment registration over URMA can take >3s; polling the master's
+    # HTTP admin endpoint avoids the "No segments discovered" race.
+    echo "  [run] Waiting for segment to appear on master..."
+    local wait_start=$(date +%s)
+    while true; do
+        local segments=$(curl -s --connect-timeout 3 --max-time 5 \
+            "http://141.61.84.245:9010/get_all_segments" 2>/dev/null || true)
+        if [ -n "$segments" ] && [ "$segments" != "null" ]; then
+            echo "  [run] Segment(s) detected: $segments"
+            break
+        fi
+        if kill -0 $CLIENT_PID 2>/dev/null; then :; else
+            echo "  [FAIL] Client died while waiting for segment"
+            tail -20 "$log_dir/02_client.log"
+            return 1
+        fi
+        if [ $(($(date +%s) - wait_start)) -ge 60 ]; then
+            echo "  [FAIL] Timed out waiting for segment (60s)"
+            return 1
+        fi
+        sleep 3
+    done
+
     echo "  [run] Running write.sh..."
     bash "$SCRIPTS_DIR/write.sh" >"$log_dir/03_write.log" 2>&1
     WRITE_EXIT=$?
