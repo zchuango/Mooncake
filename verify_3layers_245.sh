@@ -195,12 +195,6 @@ mkdir -p "$RESULTS_DIR"
     kill_mooncake
     run_4scripts "$L1_LOG" || echo "  [WARN] Layer 1 scripts had issues"
     echo "  Layer 1 DONE"
-
-    # Free page cache between layers (L1 benchmark → L2 compilation)
-    sync 2>/dev/null || true
-    echo 3 > /proc/sys/vm/drop_caches 2>/dev/null || true
-    sleep 2
-
 } 2>&1 | tee "$RESULTS_DIR/layer1.log"
 
 # ========================================================================
@@ -226,7 +220,23 @@ mkdir -p "$RESULTS_DIR"
     rm -rf "$L2_BUILD"
     mkdir -p "$L2_BUILD"
 
-    # Hide submodule so FindUbDiag falls through to Layer 2
+    # Step 1: Compile ubdiag source as buffer (L1 benchmark fills page cache;
+    # this ~60s build lets kernel naturally reclaim memory before L2 heavy build)
+    if [ -d "$UBDIAG_SRC" ]; then
+        echo "  [buffer] Compiling ubdiag (buffer step, result discarded)..."
+        UBDIAG_BUFFER="$PROJECT_DIR/build_ubdiag_buffer"
+        rm -rf "$UBDIAG_BUFFER"
+        mkdir -p "$UBDIAG_BUFFER"
+        cd "$UBDIAG_BUFFER"
+        cmake "$UBDIAG_SRC" \
+            -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
+            -DBUILD_TESTS=OFF -DBUILD_EXAMPLES=OFF \
+            > "$L2_LOG/buffer_cmake.log" 2>&1
+        make -j$(nproc) > "$L2_LOG/buffer_make.log" 2>&1
+        echo "  [buffer] Done. Build result discarded."
+    fi
+
+    # Step 2: Hide submodule so FindUbDiag falls through to Layer 2
     if [ -d "$PROJECT_DIR/extern/ubdiag" ]; then
         mv "$PROJECT_DIR/extern/ubdiag" "$PROJECT_DIR/extern/ubdiag_bak"
     fi
@@ -249,12 +259,6 @@ mkdir -p "$RESULTS_DIR"
         mv "$PROJECT_DIR/extern/ubdiag_bak" "$PROJECT_DIR/extern/ubdiag"
     fi
     echo "  Layer 2 DONE"
-
-    # Free page cache between layers (L2 benchmark → L3 compilation)
-    sync 2>/dev/null || true
-    echo 3 > /proc/sys/vm/drop_caches 2>/dev/null || true
-    sleep 2
-
 } 2>&1 | tee "$RESULTS_DIR/layer2.log"
 
 # ========================================================================
@@ -279,10 +283,6 @@ mkdir -p "$RESULTS_DIR"
 
     # Remove local L2 install residue
     rm -rf "$UBDIAG_INSTALL_PREFIX" 2>/dev/null || true
-    # Clean build_ubdiag_layer2 residue from old L2 script
-    rm -rf "$PROJECT_DIR/build_ubdiag_layer2" 2>/dev/null || true
-    # Clean L1 submodule build residue that exposes UbDiagConfig.cmake
-    rm -rf "$PROJECT_DIR/build_verify_l1" 2>/dev/null || true
 
     # Hide system UbDiag cmake configs so find_package (NO_DEFAULT_PATH) won't find them
     if [ -d "/usr/local/lib64/cmake/UbDiag" ]; then
