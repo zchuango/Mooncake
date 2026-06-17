@@ -46,6 +46,8 @@ kill_mooncake() {
             echo "  [cleanup] WARNING: ports still in use after 30s, force killing..."
             fuser -k 50060/tcp 2>/dev/null || true
             fuser -k 8020/tcp 2>/dev/null || true
+            fuser -k 9010/tcp 2>/dev/null || true
+            fuser -k 8980/tcp 2>/dev/null || true
             break
         fi
     done

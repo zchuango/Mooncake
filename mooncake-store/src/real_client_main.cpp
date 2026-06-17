@@ -98,7 +98,7 @@ int main(int argc, char *argv[]) {
     mooncake::ResourceTracker::getInstance();
 
     gflags::ParseCommandLineFlags(&argc, &argv, true);
-    if (!FLAGS_log_dir.empty()) {
+    if (!FLAGS_log_dir.empty() && !google::IsGoogleLoggingInitialized()) {
         google::InitGoogleLogging(argv[0]);
     }
     mooncake::logging::ApplyMooncakeLogEnableToGlog();
