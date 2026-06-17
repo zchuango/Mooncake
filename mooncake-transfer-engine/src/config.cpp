@@ -274,9 +274,13 @@ void loadGlobalConfig(GlobalConfig& config) {
 
     const char* log_dir_path = std::getenv("MC_LOG_DIR");
     if (log_dir_path) {
-        if (!google::IsGoogleLoggingInitialized()) {
-            google::InitGoogleLogging("mooncake-transfer-engine");
-        }
+        // NOTE: Do NOT call InitGoogleLogging() here.  This function may
+        // execute during static initialization (e.g. via ub_context.cpp's
+        // file-scope globalConfig() call).  If we init glog here and main()
+        // inits it again, we get a fatal "You called InitGoogleLogging()
+        // twice!" abort.  Instead, just forward the desired log directory
+        // to glog's flags; the actual InitGoogleLogging() call belongs in
+        // each binary's main() (master / client / bench).
         if (opendir(log_dir_path) == NULL) {
             LOG(WARNING)
                 << "Path [" << log_dir_path
