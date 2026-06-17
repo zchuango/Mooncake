@@ -1,7 +1,7 @@
 set(CMAKE_C_STANDARD 99)
 set(CMAKE_CXX_STANDARD 20)
 
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g -Wall -Wextra -Wno-unused-parameter -fPIC")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g -Wall -Wextra -Wno-unused-parameter -Wno-error=maybe-uninitialized -fPIC")
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -g -Wall -Wextra -Wno-unused-parameter -fPIC")
 
 if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
