@@ -206,6 +206,14 @@ mkdir -p "$RESULTS_DIR"
     echo "#  LAYER 2: System Package (find_package)"
     echo "############################################################"
 
+    # Restore system UbDiag cmake if previously hidden by L3
+    if [ -d "/usr/local/lib64/cmake/UbDiag_verify_bak" ]; then
+        mv /usr/local/lib64/cmake/UbDiag_verify_bak /usr/local/lib64/cmake/UbDiag
+    fi
+    if [ -d "/usr/lib64/cmake/UbDiag_verify_bak" ]; then
+        mv /usr/lib64/cmake/UbDiag_verify_bak /usr/lib64/cmake/UbDiag
+    fi
+
     L2_BUILD="$PROJECT_DIR/build_verify_l2"
     L2_LOG="$RESULTS_DIR/layer2_system"
     mkdir -p "$L2_LOG"
@@ -257,10 +265,14 @@ mkdir -p "$RESULTS_DIR"
         mv "$PROJECT_DIR/extern/ubdiag" "$PROJECT_DIR/extern/ubdiag_bak"
     fi
 
-    # Also remove the local install from Layer 2 so find_package also fails
+    # Remove local L2 install residue
     rm -rf "$UBDIAG_INSTALL_PREFIX" 2>/dev/null || true
+    # Clean build_ubdiag_layer2 residue from old L2 script
+    rm -rf "$PROJECT_DIR/build_ubdiag_layer2" 2>/dev/null || true
+    # Clean L1 submodule build residue that exposes UbDiagConfig.cmake
+    rm -rf "$PROJECT_DIR/build_verify_l1" 2>/dev/null || true
 
-    # Backup system UbDiag cmake configs so find_package cannot find them
+    # Hide system UbDiag cmake configs so find_package (NO_DEFAULT_PATH) won't find them
     if [ -d "/usr/local/lib64/cmake/UbDiag" ]; then
         mv /usr/local/lib64/cmake/UbDiag /usr/local/lib64/cmake/UbDiag_verify_bak
     fi
