@@ -34,7 +34,7 @@ $BENCH \
         --master_admin_port=9010 \
         --global-segment-size=0 \
         --local-buffer-size=536870912 \
-        --device-name=bonding_dev_0 \
+        --device-name=udmac0d1e2 \
         --scenario=segment_write \
         --num-keys=1000 \
         --protocol=ub \

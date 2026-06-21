@@ -148,7 +148,7 @@ run_4scripts() {
     bash "$SCRIPTS_DIR/read.sh" >"$log_dir/04_read.log" 2>&1
     READ_EXIT=$?
     echo "  [run] read.sh exit=$READ_EXIT"
-    grep -E '(STATUS|Throughput|Ops/sec|Wall time|Total ops|P50|P99)' "$log_dir/04_read.log" 2>/dev/null | head -10
+    grep -E '(STATUS|Throughput|Ops/sec|Wall time|Total time|Total data|Total ops|Min|Max|P50|P99|P999|P9999)' "$log_dir/04_read.log" 2>/dev/null | awk '!x[$0]++' | head -30
 
     # Write per-layer summary
     {
@@ -156,7 +156,7 @@ run_4scripts() {
         echo "read_exit=$READ_EXIT"
         echo ""
         echo "--- read metrics ---"
-        grep -E '(Wall time|Total ops|Throughput|Ops/sec|STATUS|Mean|P50|P99)' "$log_dir/04_read.log" 2>/dev/null || echo "(no metrics)"
+        grep -E '(Wall time|Total time|Total data|Total ops|Throughput|Ops/sec|STATUS|Mean|Min|Max|P50|P99|P999|P9999)' "$log_dir/04_read.log" 2>/dev/null | awk '!x[$0]++' || echo "(no metrics)"
     } > "$log_dir/00_summary.txt"
 
     kill_mooncake
@@ -182,6 +182,20 @@ if [ ! -f "$SCRIPTS_DIR/write.sh" ]; then
 fi
 if [ ! -f "$SCRIPTS_DIR/read.sh" ]; then
     echo "FATAL: read.sh not found in $SCRIPTS_DIR"
+    exit 1
+fi
+
+# 子模块完整性检查
+for mod in extern/pybind11 extern/yalantinglibs; do
+    if [ ! -f "$PROJECT_DIR/$mod/CMakeLists.txt" ]; then
+        echo "FATAL: $mod 缺失，请先执行:"
+        echo "  cd $PROJECT_DIR && git submodule update --init $mod"
+        exit 1
+    fi
+done
+if [ ! -f "$PROJECT_DIR/extern/ubdiag/CMakeLists.txt" ]; then
+    echo "FATAL: extern/ubdiag 缺失，请先创建符号链接:"
+    echo "  ln -s /home/q00913006/project/ubdiag $PROJECT_DIR/extern/ubdiag"
     exit 1
 fi
 
@@ -233,11 +247,11 @@ mkdir -p "$RESULTS_DIR"
     echo "############################################################"
 
     # Restore system UbDiag cmake if previously hidden by L3
-    if [ -d "/usr/local/lib64/cmake/UbDiag_verify_bak" ]; then
-        mv /usr/local/lib64/cmake/UbDiag_verify_bak /usr/local/lib64/cmake/UbDiag
+    if [ -d "/usr/local/lib64/cmake/_UbDiag_hidden_bak" ]; then
+        mv /usr/local/lib64/cmake/_UbDiag_hidden_bak /usr/local/lib64/cmake/UbDiag
     fi
-    if [ -d "/usr/lib64/cmake/UbDiag_verify_bak" ]; then
-        mv /usr/lib64/cmake/UbDiag_verify_bak /usr/lib64/cmake/UbDiag
+    if [ -d "/usr/lib64/cmake/_UbDiag_hidden_bak" ]; then
+        mv /usr/lib64/cmake/_UbDiag_hidden_bak /usr/lib64/cmake/UbDiag
     fi
 
     L2_BUILD="$PROJECT_DIR/build_verify_l2"
@@ -257,6 +271,7 @@ mkdir -p "$RESULTS_DIR"
         cmake "$UBDIAG_SRC" \
             -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
             -DBUILD_TESTS=OFF -DBUILD_EXAMPLES=OFF \
+            -DENABLE_OB_MEMORY=OFF -DENABLE_OB_CACHE=OFF -DENABLE_MEMPOINT=OFF \
             > "$L2_LOG/buffer_cmake.log" 2>&1
         make -j$(nproc) > "$L2_LOG/buffer_make.log" 2>&1
         echo "  [buffer] Done. Build result discarded."
@@ -312,10 +327,10 @@ mkdir -p "$RESULTS_DIR"
 
     # Hide system UbDiag cmake configs so find_package (NO_DEFAULT_PATH) won't find them
     if [ -d "/usr/local/lib64/cmake/UbDiag" ]; then
-        mv /usr/local/lib64/cmake/UbDiag /usr/local/lib64/cmake/UbDiag_verify_bak
+        mv /usr/local/lib64/cmake/UbDiag /usr/local/lib64/cmake/_UbDiag_hidden_bak
     fi
     if [ -d "/usr/lib64/cmake/UbDiag" ]; then
-        mv /usr/lib64/cmake/UbDiag /usr/lib64/cmake/UbDiag_verify_bak
+        mv /usr/lib64/cmake/UbDiag /usr/lib64/cmake/_UbDiag_hidden_bak
     fi
 
     echo "  [build] cmake configure (expecting mock)..."
@@ -337,11 +352,11 @@ mkdir -p "$RESULTS_DIR"
     fi
 
     # Restore system UbDiag cmake configs
-    if [ -d "/usr/local/lib64/cmake/UbDiag_verify_bak" ]; then
-        mv /usr/local/lib64/cmake/UbDiag_verify_bak /usr/local/lib64/cmake/UbDiag
+    if [ -d "/usr/local/lib64/cmake/_UbDiag_hidden_bak" ]; then
+        mv /usr/local/lib64/cmake/_UbDiag_hidden_bak /usr/local/lib64/cmake/UbDiag
     fi
-    if [ -d "/usr/lib64/cmake/UbDiag_verify_bak" ]; then
-        mv /usr/lib64/cmake/UbDiag_verify_bak /usr/lib64/cmake/UbDiag
+    if [ -d "/usr/lib64/cmake/_UbDiag_hidden_bak" ]; then
+        mv /usr/lib64/cmake/_UbDiag_hidden_bak /usr/lib64/cmake/UbDiag
     fi
 
     echo "  Layer 3 DONE"

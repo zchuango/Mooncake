@@ -20,7 +20,7 @@ $MOONCAKE_CLIENT \
     --master_server_address='141.61.84.245:50060' \
     --host=$MC_TCP_BIND_ADDRESS \
     --global_segment_size=21474836480 \
-    --device_names=bonding_dev_0 \
+    --device_names=udmac0d1e2 \
     --threads=16 \
     --protocol=ub \
     --port=8980

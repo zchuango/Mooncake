@@ -33,7 +33,7 @@ $BENCH \
         --local-hostname=141.61.84.245 \
         --master-server=141.61.84.245:50060 \
         --master_admin_port=9010 \
-        --device-name=bonding_dev_0 \
+        --device-name=udmac0d1e2 \
         --metadata-server='http://141.61.84.245:8020/metadata' \
         --scenario=segment_read \
         --num-keys=1000 \
