@@ -28,7 +28,7 @@ if(EXISTS "${CMAKE_SOURCE_DIR}/extern/ubdiag/CMakeLists.txt")
     message(STATUS "UbDiag: using submodule (extern/ubdiag)")
     return()
   endif()
-endif()
+else()
 
 # Layer 2: System package — only search standard system library paths
 # Using NO_DEFAULT_PATH + explicit PATHS to prevent cmake from recursively
