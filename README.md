@@ -350,6 +350,23 @@ make -j
 ```
 
 
+<h2 id="ubdiag">📊 UbDiag PerfPoint 集成</h2>
+
+Mooncake 通过 UbDiag SDK 支持 PerfPoint 性能打点，编译期自动通过三层分发（submodule / 系统包 / header-only mock）解析。使用前需先安装 ubdiag。
+
+**使用场景**：
+
+| 场景 | 操作 | 结果 |
+|---|---|---|
+| 需要打点 | `ubdiag start` → 启动 Mooncake | SHM 已存在，PerfPoint 正常打点 |
+| 不需要打点 | 直接启动 Mooncake | SDK 探测一次 SHM 不存在，后续全跳过，程序正常跑 |
+| 不需要打点但中途又想打点 | 重启 Mooncake（或程序内调 `Shutdown()` → `Init()`） | probeDone 标记归零，重新探测 SHM |
+
+> **注意**：Mooncake 启动后再执行 `ubdiag start`，已经在跑的 Mooncake 进程**不会自动感知**。必须重启进程，或在程序内调用 `PerfManager::Instance().Shutdown()` 后再 `Init(config)`。`ubdiag restart` 操作的是 SHM，不影响进程内部已缓存的探测结果。
+
+详见 [UbDiag 文档](https://atomgit.com/liusiyu60/ubdiag)。
+
+
 <h2 id="milestones"> 🛣️ Incoming Milestones</h2>
 
 - [x] First release of Mooncake and integrate with latest vLLM
