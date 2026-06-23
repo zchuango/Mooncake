@@ -2,6 +2,9 @@
 #include <csignal>
 #include <ylt/easylog/record.hpp>
 #include <ylt/coro_rpc/coro_rpc_client.hpp>
+#ifdef YLT_ENABLE_URMA
+#include <ylt/coro_io/urma/urma_socket.hpp>
+#endif
 
 #include <sys/mman.h>  // For shm_open, mmap, munmap
 #include <sys/stat.h>  // For S_IRUSR, S_IWUSR
@@ -18,6 +21,7 @@
 #include "types.h"
 #include "default_config.h"
 #include "config.h"
+#include "rpc_transport_config.h"
 #ifdef USE_ASCEND_DIRECT
 #include "acl/acl_rt.h"
 #include "ascend_allocator.h"
@@ -220,6 +224,19 @@ DummyClient::DummyClient()
     mooncake::init_ylt_log_level();
     // Initialize client pools
     coro_io::client_pool<coro_rpc::coro_rpc_client>::pool_config pool_conf{};
+    const char *value = std::getenv("MC_RPC_PROTOCOL");
+    if (value && std::string_view(value) == "rdma") {
+        pool_conf.client_config.socket_config =
+            coro_io::ib_socket_t::config_t{};
+    }
+#ifdef YLT_ENABLE_URMA
+    else if (value && std::string_view(value) == "urma") {
+        auto urma_config = MakeUrmaRpcConfigFromEnv();
+        pool_conf.client_config.socket_config = urma_config;
+        LOG(INFO) << "DummyClient using URMA RPC transport: "
+                  << FormatUrmaRpcConfig(urma_config);
+    }
+#endif
     client_pools_ =
         std::make_shared<coro_io::client_pools<coro_rpc::coro_rpc_client>>(
             pool_conf);

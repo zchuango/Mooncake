@@ -1,16 +1,20 @@
 #pragma once
 
 #include <csignal>
+#include <cstdlib>
 #include <memory>
 #include <string>
 #include <type_traits>
-#include <vector>
 #include <variant>
-#include <cstdlib>
+#include <vector>
 #include <boost/functional/hash.hpp>
+#include <glog/logging.h>
 #include <ylt/coro_rpc/coro_rpc_client.hpp>
 #include <ylt/coro_io/client_pool.hpp>
 #include <ylt/coro_io/ibverbs/ib_socket.hpp>
+#ifdef YLT_ENABLE_URMA
+#include <ylt/coro_io/urma/urma_socket.hpp>
+#endif
 
 #include "client_metric.h"
 #include "replica.h"
@@ -19,6 +23,7 @@
 #include "rpc_types.h"
 #include "master_metric_manager.h"
 #include "task_manager.h"
+#include "rpc_transport_config.h"
 
 namespace mooncake {
 
@@ -45,6 +50,16 @@ inline void MaybeEnableRdmaSocketConfig(SocketConfigVariant& socket_config) {
     }
 }
 
+#ifdef YLT_ENABLE_URMA
+template <typename SocketConfigVariant>
+inline void MaybeEnableUrmaSocketConfig(SocketConfigVariant& socket_config) {
+    if constexpr (variant_contains_v<SocketConfigVariant,
+                                     coro_io::urma_socket_t::config_t>) {
+        socket_config = MakeUrmaRpcConfigFromEnv();
+    }
+}
+#endif
+
 }  // namespace detail
 
 /**
@@ -70,6 +85,15 @@ class MasterClient {
             detail::MaybeEnableRdmaSocketConfig(
                 pool_conf.client_config.socket_config);
         }
+#ifdef YLT_ENABLE_URMA
+        else if (value && std::string_view(value) == "urma") {
+            detail::MaybeEnableUrmaSocketConfig(
+                pool_conf.client_config.socket_config);
+            auto urma_config = MakeUrmaRpcConfigFromEnv();
+            LOG(INFO) << "MasterClient using URMA RPC transport: "
+                      << FormatUrmaRpcConfig(urma_config);
+        }
+#endif
         client_pools_ =
             std::make_shared<coro_io::client_pools<coro_rpc::coro_rpc_client>>(
                 pool_conf);

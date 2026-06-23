@@ -314,6 +314,30 @@ export MOONCAKE_TE_META_DATA_SERVER="P2PHANDSHAKE"
 export MOONCAKE_LOCAL_HOSTNAME="node1"
 ```
 
+### yalantinglibs RPC transport
+
+Mooncake's data-plane transport is configured separately from the yalantinglibs `coro_rpc` control-plane transport. The control-plane RPC transport is selected with `MC_RPC_PROTOCOL`:
+
+```bash
+# Default: TCP control-plane RPC
+unset MC_RPC_PROTOCOL
+
+# Existing IBV/RDMA control-plane RPC
+export MC_RPC_PROTOCOL=rdma
+
+# URMA control-plane RPC, requires Mooncake built with USE_YLT_URMA_RPC=ON,
+# yalantinglibs built with YLT_ENABLE_URMA=ON, and URMA/UMDK development
+# and runtime libraries available on the host.
+export MC_RPC_PROTOCOL=urma
+
+# Optional URMA RPC tuning. Defaults match the yalantinglibs URMA benchmark.
+export MC_RPC_URMA_DEVICE=bonding_dev_0
+export MC_RPC_URMA_EID_INDEX=0
+export MC_RPC_URMA_QUEUE_DEPTH=64
+export MC_RPC_URMA_BUFFER_SIZE=4096
+export MC_RPC_URMA_MAX_MEMORY_MIB=256
+```
+
 ## Choosing the Right Protocol
 
 | Scenario | Recommended Protocol | Notes |

@@ -1,11 +1,17 @@
 #include <gflags/gflags.h>
 #include <csignal>
+#include <cstdlib>
+#include <string_view>
 #include <ylt/coro_rpc/coro_rpc_server.hpp>
+#ifdef YLT_ENABLE_URMA
+#include <ylt/coro_io/urma/urma_socket.hpp>
+#endif
 
 #include "client_service.h"
 #include "config.h"
 #include "mooncake_logging.h"
 #include "real_client.h"
+#include "rpc_transport_config.h"
 
 using namespace mooncake;
 
@@ -129,6 +135,15 @@ int main(int argc, char *argv[]) {
     }
 
     coro_rpc::coro_rpc_server server(FLAGS_threads, FLAGS_port, FLAGS_host);
+#ifdef YLT_ENABLE_URMA
+    const char *rpc_protocol = std::getenv("MC_RPC_PROTOCOL");
+    if (rpc_protocol && std::string_view(rpc_protocol) == "urma") {
+        auto urma_config = MakeUrmaRpcConfigFromEnv();
+        LOG(INFO) << "Real client service using URMA RPC transport: "
+                  << FormatUrmaRpcConfig(urma_config);
+        server.init_urma(urma_config);
+    }
+#endif
     RegisterClientRpcService(server, *client_inst);
 
     LOG(INFO) << "Starting real client service on " << FLAGS_host << ":"
