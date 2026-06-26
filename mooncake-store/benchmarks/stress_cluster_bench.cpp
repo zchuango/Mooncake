@@ -21,7 +21,9 @@
 #include "gflags/gflags.h"
 #include "glog/logging.h"
 #include "mooncake_logging.h"
+#include "dummy_client.h"
 #include "real_client.h"
+#include "shm_helper.h"
 
 #include <arpa/inet.h>
 #include <netinet/in.h>
@@ -192,6 +194,22 @@ DEFINE_string(scenario, "local_memory",
               "remote_disk, segment_write, segment_read");
 DEFINE_string(role, "writer",
               "Node role: writer (prefill data) or reader (benchmark reads)");
+DEFINE_string(client_type, "real",
+              "Underlying client implementation: real (RealClient) or dummy "
+              "(DummyClient that connects to a remote RealClient via RPC + "
+              "IPC). The dummy client requires a real client to be running "
+              "with its RPC server reachable at --dummy_server_address and "
+              "its IPC server listening on --dummy_ipc_socket_path.");
+DEFINE_string(dummy_server_address, "127.0.0.1:12345",
+              "[dummy client] RealClient RPC server address (IP:port) that "
+              "the DummyClient connects to.");
+DEFINE_string(dummy_ipc_socket_path, "/tmp/mooncake_dummy.sock",
+              "[dummy client] Abstract-namespace Unix socket path used by "
+              "DummyClient to register SHM with the real client. Should "
+              "match the --ipc_socket_path of the real client.");
+DEFINE_uint64(dummy_mem_pool_size, 0,
+              "[dummy client] Memory pool size in bytes allocated inside "
+              "DummyClient. 0 = reuse --global_segment_size.");
 DEFINE_uint64(value_size, 4 * MB, "Size of each value in bytes");
 DEFINE_uint64(num_keys, 100, "Number of keys to write/read");
 DEFINE_uint64(batch_size, 32, "Batch size for put/get operations");
@@ -233,7 +251,7 @@ inline double NanosToMs(int64_t ns) {
 inline double NanosToSec(int64_t ns) { return static_cast<double>(ns) / 1e9; }
 
 struct ThreadResult {
-    std::vector<int64_t> latencies_ns;  // per-query latency
+    std::vector<int64_t> latencies_ns;
     size_t total_bytes = 0;
     size_t total_keys = 0;     // number of keys processed
     size_t total_queries = 0;  // number of API calls (get_into / batch_get_into)
@@ -378,73 +396,183 @@ class BenchmarkStats {
 class StressBenchmark {
    public:
     StressBenchmark()
-        : client_(mooncake::RealClient::create()),
+        : client_(nullptr),
+          primary_dummy_client_(nullptr),
+          main_buffer_client_(nullptr),
           buffer_(nullptr),
           buffer_size_(0) {}
 
     ~StressBenchmark() {
-        // Early return if already cleaned up
-        if (!client_) {
+        // Early return if nothing was set up (covers both real and dummy
+        // modes - in dummy mode client_ stays null but primary_dummy_client_
+        // and dummy_clients_ may be populated).
+        if (!client_ && !primary_dummy_client_ && dummy_clients_.empty()) {
             return;
         }
 
-        // Unregister and free thread buffers (these are allocated by this
-        // class)
-        for (auto& tb : thread_buffers_) {
-            if (tb.ptr) {
+        // Unregister and free per-thread buffers. For dummy mode each
+        // thread owns its own DummyClient and its own SHM, so we must
+        // unregister the buffer with the same client that registered it
+        // (otherwise the real client side will not find the matching
+        // registration). For real mode all threads share client_, so
+        // unregister is a no-op for repeated calls.
+        for (size_t t = 0; t < thread_buffers_.size(); ++t) {
+            auto& tb = thread_buffers_[t];
+            if (!tb.ptr) continue;
+            std::shared_ptr<mooncake::PyClient> thread_client;
+            if (is_dummy_ && t < dummy_clients_.size() &&
+                dummy_clients_[t]) {
+                thread_client = dummy_clients_[t];
+            } else {
+                thread_client = client_;
+            }
+            if (thread_client) {
                 try {
-                    client_->unregister_buffer(tb.ptr);
+                    thread_client->unregister_buffer(tb.ptr);
                 } catch (...) {
                     LOG(WARNING)
-                        << "Failed to unregister thread buffer, ignoring";
+                        << "Failed to unregister thread " << t
+                        << " buffer, ignoring";
                 }
-                numa_free(tb.ptr, tb.size);
-                tb.ptr = nullptr;
             }
+            FreeBuffer(tb.ptr, tb.size);
+            tb.ptr = nullptr;
         }
         thread_buffers_.clear();
 
-        // Unregister and free main buffer (allocated by this class)
-        if (buffer_) {
+        // Unregister and free the main buffer (allocated by this class).
+        if (buffer_ && main_buffer_client_) {
             try {
-                client_->unregister_buffer(buffer_);
+                main_buffer_client_->unregister_buffer(buffer_);
             } catch (...) {
                 LOG(WARNING) << "Failed to unregister main buffer, ignoring";
             }
-            numa_free(buffer_, buffer_size_);
-            buffer_ = nullptr;
         }
-        client_ = nullptr;
+        FreeBuffer(buffer_, buffer_size_);
+        buffer_ = nullptr;
+
+        // Tear down per-thread DummyClients (one per reader thread). Each
+        // call to DummyClient::tearDownAll() also stops the ping thread and
+        // closes the IPC / RPC channels belonging to that client.
+        for (auto& dc : dummy_clients_) {
+            if (!dc) continue;
+            try {
+                dc->tearDownAll();
+            } catch (...) {
+                LOG(WARNING) << "Failed to tearDownAll per-thread dummy "
+                                "client, ignoring";
+            }
+        }
+        dummy_clients_.clear();
+
+        // Tear down the primary DummyClient (writer's client).
+        if (primary_dummy_client_) {
+            try {
+                primary_dummy_client_->tearDownAll();
+            } catch (...) {
+                LOG(WARNING) << "Failed to tearDownAll primary dummy "
+                                "client, ignoring";
+            }
+            primary_dummy_client_.reset();
+        }
+
+        // Tear down the RealClient (no-op in dummy mode).
+        if (client_) {
+            try {
+                client_->tearDownAll();
+            } catch (...) {
+                LOG(WARNING) << "Failed to tearDownAll real client, ignoring";
+            }
+            client_ = nullptr;
+        }
+        main_buffer_client_ = nullptr;
     }
 
     int Setup() {
-        int ret = client_->setup_real(
-            FLAGS_local_hostname, FLAGS_metadata_server,
-            FLAGS_global_segment_size, FLAGS_local_buffer_size, FLAGS_protocol,
-            FLAGS_device_name, FLAGS_master_server, nullptr, "",
-            FLAGS_enable_ssd_offload, FLAGS_ssd_offload_path);
-        if (ret != 0) {
-            LOG(ERROR) << "RealClient setup_real failed, ret=" << ret;
-            return ret;
+        if (FLAGS_client_type == "dummy") {
+            is_dummy_ = true;
+            // Build the primary DummyClient that owns the main buffer. The
+            // single-threaded writer, warmup, and verify paths use this
+            // client and operate on buffer_. Per-thread DummyClients (one
+            // per reader thread) are created later in AllocateThreadBuffers.
+            // local_buffer_size is set to 0 so the primary client does not
+            // pre-allocate an extra SHM segment - we will allocate buffer_
+            // ourselves via ShmHelper and register it explicitly.
+            primary_dummy_client_ =
+                CreateDummyClient(/*local_buffer_size=*/0);
+            if (!primary_dummy_client_) {
+                return -1;
+            }
+            main_buffer_client_ = primary_dummy_client_;
+            client_ = nullptr;
+            LOG(INFO) << "DummyClient (primary, for writer) setup succeeded "
+                      << "(server=" << FLAGS_dummy_server_address
+                      << ", ipc=" << FLAGS_dummy_ipc_socket_path << ")";
+        } else if (FLAGS_client_type == "real") {
+            is_dummy_ = false;
+            auto real = mooncake::RealClient::create();
+            int ret = real->setup_real(
+                FLAGS_local_hostname, FLAGS_metadata_server,
+                FLAGS_global_segment_size, FLAGS_local_buffer_size,
+                FLAGS_protocol, FLAGS_device_name, FLAGS_master_server, nullptr,
+                "", FLAGS_enable_ssd_offload, FLAGS_ssd_offload_path);
+            if (ret != 0) {
+                LOG(ERROR) << "RealClient setup_real failed, ret=" << ret;
+                return ret;
+            }
+            client_ = real;
+            main_buffer_client_ = real;
+            primary_dummy_client_ = nullptr;
+            LOG(INFO) << "RealClient setup succeeded"
+                      << (FLAGS_enable_ssd_offload
+                              ? " (SSD offload enabled)"
+                              : "");
+        } else {
+            LOG(ERROR) << "Unknown --client_type: " << FLAGS_client_type
+                       << " (expected 'real' or 'dummy')";
+            return -1;
         }
-        LOG(INFO) << "RealClient setup succeeded"
-                  << (FLAGS_enable_ssd_offload ? " (SSD offload enabled)" : "");
 
         buffer_size_ = FLAGS_batch_size * FLAGS_value_size;
-        buffer_ = reinterpret_cast<char*>(numa_alloc_local(buffer_size_));
+        buffer_ = AllocateBuffer(buffer_size_);
         if (!buffer_) {
             LOG(ERROR) << "Failed to allocate buffer of " << buffer_size_
-                       << " bytes";
+                       << " bytes ("
+                       << (is_dummy_ ? "ShmHelper" : "numa") << ")";
+            // Tear down the primary dummy client immediately: it has an
+            // open RPC/IPC connection to the real client and a background
+            // ping thread; leaving it around would leak those resources
+            // (the destructor would still clean up, but we want the
+            // failure to be self-contained).
+            if (primary_dummy_client_) {
+                primary_dummy_client_->tearDownAll();
+                primary_dummy_client_.reset();
+            }
+            main_buffer_client_ = nullptr;
             return -1;
         }
         std::memset(buffer_, 0, buffer_size_);
 
-        ret = client_->register_buffer(buffer_, buffer_size_);
+        // Register the main buffer with the client that owns it: the
+        // primary dummy client in dummy mode, or the shared real client
+        // in real mode. If registration fails, free the buffer and the
+        // primary dummy client immediately so we don't leave a half-open
+        // RPC/IPC connection to the real client.
+        int ret =
+            main_buffer_client_->register_buffer(buffer_, buffer_size_);
         if (ret != 0) {
-            LOG(ERROR) << "register_buffer failed, ret=" << ret;
+            LOG(ERROR) << "register_buffer (main) failed, ret=" << ret;
+            FreeBuffer(buffer_, buffer_size_);
+            buffer_ = nullptr;
+            if (primary_dummy_client_) {
+                primary_dummy_client_->tearDownAll();
+                primary_dummy_client_.reset();
+            }
+            main_buffer_client_ = nullptr;
             return ret;
         }
-        LOG(INFO) << "Registered buffer of " << buffer_size_ / MB << " MB";
+        LOG(INFO) << "Registered main buffer of " << buffer_size_ / MB
+                  << " MB";
         return 0;
     }
 
@@ -465,7 +593,7 @@ class StressBenchmark {
             FillBuffer(i);
 
             auto t0 = Clock::now();
-            int ret = client_->put_from(key, buffer_, FLAGS_value_size, config);
+            int ret = main_buffer_client_->put_from(key, buffer_, FLAGS_value_size, config);
             auto t1 = Clock::now();
 
             if (ret != 0) {
@@ -565,7 +693,7 @@ class StressBenchmark {
         for (size_t i = 0; i < FLAGS_num_keys; ++i) {
             std::string key = MakeKey(i);
             FillBuffer(i);
-            int ret = client_->put_from(key, buffer_, FLAGS_value_size, config);
+            int ret = main_buffer_client_->put_from(key, buffer_, FLAGS_value_size, config);
             if (ret != 0) {
                 LOG(ERROR) << "put_from failed for key=" << key;
                 return ret;
@@ -631,7 +759,7 @@ class StressBenchmark {
         for (size_t i = 0; i < FLAGS_num_keys; ++i) {
             std::string key = MakeKey(i);
             FillBuffer(i);
-            int ret = client_->put_from(key, buffer_, FLAGS_value_size, config);
+            int ret = main_buffer_client_->put_from(key, buffer_, FLAGS_value_size, config);
             if (ret != 0) {
                 LOG(ERROR) << "put_from failed for key=" << key;
                 return ret;
@@ -742,7 +870,7 @@ class StressBenchmark {
                 FillBuffer(i);
 
                 auto t0 = Clock::now();
-                int ret = client_->put_from(key, buffer_, FLAGS_value_size,
+                int ret = main_buffer_client_->put_from(key, buffer_, FLAGS_value_size,
                                             configs[s]);
                 auto t1 = Clock::now();
 
@@ -812,8 +940,8 @@ class StressBenchmark {
         if (buf_ret != 0) return buf_ret;
 
         std::vector<std::string> all_keys;
-        for (size_t i = 0; i < FLAGS_num_keys; ++i) {
-            for (size_t s = 0; s < read_segments.size(); ++s) {
+        for (size_t s = 0; s < read_segments.size(); ++s) {
+            for (size_t i = 0; i < FLAGS_num_keys; ++i) {
                 all_keys.push_back(MakeSegmentKey(read_segments[s], i));
             }
         }
@@ -825,7 +953,7 @@ class StressBenchmark {
             LOG(INFO) << "Warmup: reading " << warmup_end << " keys...";
             for (size_t i = 0; i < warmup_end; ++i) {
                 int64_t ret =
-                    client_->get_into(all_keys[i], buffer_, FLAGS_value_size);
+                    main_buffer_client_->get_into(all_keys[i], buffer_, FLAGS_value_size);
                 if (ret < 0) {
                     LOG(WARNING)
                         << "Warmup get_into failed for key=" << all_keys[i]
@@ -966,87 +1094,103 @@ class StressBenchmark {
             (total_keys + FLAGS_num_threads - 1) / FLAGS_num_threads;
 
         for (size_t t = 0; t < FLAGS_num_threads; ++t) {
-            threads.emplace_back([&, t, keys_per_thread, total_keys]() {
-                bindToSocket(t % NR_SOCKETS);
-                char* my_buf = thread_buffers_[t].ptr;
+            // Per-thread client: each reader thread uses its own
+            // DummyClient in dummy mode (isolated SHM + RPC), or the
+            // shared RealClient in real mode.
+            std::shared_ptr<mooncake::PyClient> thread_client;
+            if (is_dummy_) {
+                thread_client = dummy_clients_[t];
+            } else {
+                thread_client = client_;
+            }
+            threads.emplace_back(
+                [&, t, keys_per_thread, total_keys, thread_client]() {
+                    bindToSocket(t % NR_SOCKETS);
+                    char* my_buf = thread_buffers_[t].ptr;
 
-                start_latch.arrive_and_wait();
+                    start_latch.arrive_and_wait();
 
-                size_t key_offset = t * keys_per_thread;
-                size_t key_idx = key_offset;
+                    size_t key_offset = t * keys_per_thread;
+                    size_t key_idx = key_offset;
 
-                if (FLAGS_batch_size <= 1) {
-                    while (!stop_flag.load(std::memory_order_relaxed)) {
-                        const std::string& key = all_keys[key_idx % total_keys];
-                        auto t0 = Clock::now();
-                        int64_t ret =
-                            client_->get_into(key, my_buf, FLAGS_value_size);
-                        auto t1 = Clock::now();
-                        int64_t latency_ns = ElapsedNanos(t0, t1);
-
-                        {
-                            std::lock_guard<std::mutex> lock(
-                                latency_mutexes[t]);
-                            thread_latencies[t].push_back(latency_ns);
-                        }
-
-                        if (ret < 0) {
-                            global_failed.fetch_add(1,
-                                                    std::memory_order_relaxed);
-                        } else {
-                            global_bytes.fetch_add(static_cast<size_t>(ret),
-                                                   std::memory_order_relaxed);
-                        }
-                        global_keys.fetch_add(1, std::memory_order_relaxed);
-                        global_queries.fetch_add(1, std::memory_order_relaxed);
-                        ++key_idx;
-                    }
-                } else {
-                    size_t per_key_buf = FLAGS_value_size;
-                    while (!stop_flag.load(std::memory_order_relaxed)) {
-                        std::vector<std::string> keys;
-                        std::vector<void*> bufs;
-                        std::vector<size_t> sizes;
-                        keys.reserve(FLAGS_batch_size);
-                        bufs.reserve(FLAGS_batch_size);
-                        sizes.reserve(FLAGS_batch_size);
-
-                        for (size_t b = 0; b < FLAGS_batch_size; ++b) {
+                    if (FLAGS_batch_size <= 1) {
+                        while (!stop_flag.load(std::memory_order_relaxed)) {
                             const std::string& key =
                                 all_keys[key_idx % total_keys];
-                            keys.push_back(key);
-                            bufs.push_back(my_buf + b * per_key_buf);
-                            sizes.push_back(FLAGS_value_size);
-                            ++key_idx;
-                        }
+                            auto t0 = Clock::now();
+                            int64_t ret = thread_client->get_into(
+                                key, my_buf, FLAGS_value_size);
+                            auto t1 = Clock::now();
+                            int64_t latency_ns = ElapsedNanos(t0, t1);
 
-                        auto t0 = Clock::now();
-                        auto results =
-                            client_->batch_get_into(keys, bufs, sizes);
-                        auto t1 = Clock::now();
-                        int64_t latency_ns = ElapsedNanos(t0, t1);
+                            {
+                                std::lock_guard<std::mutex> lock(
+                                    latency_mutexes[t]);
+                                thread_latencies[t].push_back(latency_ns);
+                            }
 
-                        {
-                            std::lock_guard<std::mutex> lock(
-                                latency_mutexes[t]);
-                            thread_latencies[t].push_back(latency_ns);
-                        }
-
-                        for (size_t k = 0; k < results.size(); ++k) {
-                            if (results[k] < 0) {
+                            if (ret < 0) {
                                 global_failed.fetch_add(
                                     1, std::memory_order_relaxed);
                             } else {
                                 global_bytes.fetch_add(
-                                    static_cast<size_t>(results[k]),
+                                    static_cast<size_t>(ret),
                                     std::memory_order_relaxed);
                             }
                             global_keys.fetch_add(1, std::memory_order_relaxed);
+                            global_queries.fetch_add(1, std::memory_order_relaxed);
+                            ++key_idx;
                         }
-                        global_queries.fetch_add(1, std::memory_order_relaxed);
+                    } else {
+                        size_t per_key_buf = FLAGS_value_size;
+                        while (!stop_flag.load(
+                            std::memory_order_relaxed)) {
+                            std::vector<std::string> keys;
+                            std::vector<void*> bufs;
+                            std::vector<size_t> sizes;
+                            keys.reserve(FLAGS_batch_size);
+                            bufs.reserve(FLAGS_batch_size);
+                            sizes.reserve(FLAGS_batch_size);
+
+                            for (size_t b = 0; b < FLAGS_batch_size; ++b) {
+                                const std::string& key =
+                                    all_keys[key_idx % total_keys];
+                                keys.push_back(key);
+                                bufs.push_back(my_buf + b * per_key_buf);
+                                sizes.push_back(FLAGS_value_size);
+                                ++key_idx;
+                            }
+
+                            auto t0 = Clock::now();
+                            auto results = thread_client->batch_get_into(
+                                keys, bufs, sizes);
+                            auto t1 = Clock::now();
+                            int64_t latency_ns = ElapsedNanos(t0, t1);
+
+                            {
+                                std::lock_guard<std::mutex> lock(
+                                    latency_mutexes[t]);
+                                for (size_t k = 0; k < results.size(); ++k) {
+                                    thread_latencies[t].push_back(
+                                        latency_ns / FLAGS_batch_size);
+                                }
+                            }
+
+                            for (size_t k = 0; k < results.size(); ++k) {
+                                if (results[k] < 0) {
+                                    global_failed.fetch_add(
+                                        1, std::memory_order_relaxed);
+                                } else {
+                                    global_bytes.fetch_add(
+                                        static_cast<size_t>(results[k]),
+                                        std::memory_order_relaxed);
+                                }
+                                global_keys.fetch_add(1, std::memory_order_relaxed);
+                            }
+			    global_queries.fetch_add(1, std::memory_order_relaxed);
+                        }
                     }
-                }
-            });
+                });
         }
 
         auto bench_start = Clock::now();
@@ -1338,7 +1482,7 @@ class StressBenchmark {
                                      static_cast<size_t>(FLAGS_num_keys));
         for (size_t i = 0; i < warmup_end; ++i) {
             std::string key = MakeKey(i);
-            int64_t ret = client_->get_into(key, buffer_, FLAGS_value_size);
+            int64_t ret = main_buffer_client_->get_into(key, buffer_, FLAGS_value_size);
             if (ret < 0) {
                 LOG(WARNING) << "Warmup get_into failed for key=" << key
                              << " ret=" << ret;
@@ -1351,7 +1495,8 @@ class StressBenchmark {
     void BatchReadWorker(size_t tid, size_t my_keys, size_t key_offset,
                          BenchmarkStats& stats, std::latch& start_latch,
                          std::latch& done_latch,
-                         const std::function<std::string(size_t)>& key_func) {
+                         const std::function<std::string(size_t)>& key_func,
+                         std::shared_ptr<mooncake::PyClient> thread_client) {
         bindToSocket(tid % NR_SOCKETS);
 
         ThreadResult& result = stats.GetThreadResult(tid);
@@ -1372,7 +1517,8 @@ class StressBenchmark {
                 std::string key = key_func(key_idx);
 
                 auto t0 = Clock::now();
-                int64_t ret = client_->get_into(key, my_buf, FLAGS_value_size);
+                int64_t ret =
+                    thread_client->get_into(key, my_buf, FLAGS_value_size);
                 auto t1 = Clock::now();
 
                 int64_t lat_ns = ElapsedNanos(t0, t1);
@@ -1408,7 +1554,8 @@ class StressBenchmark {
                 }
 
                 auto t0 = Clock::now();
-                auto results = client_->batch_get_into(key_list, bufs, sizes);
+                auto results =
+                    thread_client->batch_get_into(key_list, bufs, sizes);
                 auto t1 = Clock::now();
 
                 int64_t lat_ns = ElapsedNanos(t0, t1);
@@ -1448,10 +1595,22 @@ class StressBenchmark {
             size_t my_keys = keys_per_thread + (t < remainder ? 1 : 0);
             size_t key_offset = t * keys_per_thread + std::min(t, remainder);
 
-            threads.emplace_back([&, t, my_keys, key_offset]() {
-                BatchReadWorker(t, my_keys, key_offset, stats, start_latch,
-                                done_latch, key_func);
-            });
+            // Per-thread client: a separate DummyClient for dummy mode
+            // (one per reader thread, isolated SHM and RPC), or the
+            // shared RealClient for real mode.
+            std::shared_ptr<mooncake::PyClient> thread_client;
+            if (is_dummy_) {
+                thread_client = dummy_clients_[t];
+            } else {
+                thread_client = client_;
+            }
+
+            threads.emplace_back(
+                [&, t, my_keys, key_offset, thread_client]() {
+                    BatchReadWorker(t, my_keys, key_offset, stats,
+                                    start_latch, done_latch, key_func,
+                                    thread_client);
+                });
         }
         return threads;
     }
@@ -1481,7 +1640,7 @@ class StressBenchmark {
 
         for (size_t i = 0; i < FLAGS_num_keys; ++i) {
             std::string key = MakeKey(i);
-            int64_t ret = client_->get_into(key, buffer_, FLAGS_value_size);
+            int64_t ret = main_buffer_client_->get_into(key, buffer_, FLAGS_value_size);
             if (ret < 0) {
                 LOG(ERROR) << "Verify: get_into failed for key=" << key;
                 ++errors;
@@ -1498,9 +1657,92 @@ class StressBenchmark {
         return errors > 0 ? -1 : 0;
     }
 
-    std::shared_ptr<mooncake::RealClient> client_;
+    // Real client (single, used for real mode only).
+    std::shared_ptr<mooncake::PyClient> client_;
+    // For dummy mode: a dedicated DummyClient that owns the main buffer
+    // (buffer_). The single-threaded writer, warmup, and verify paths all
+    // operate on buffer_ via this client.
+    std::shared_ptr<mooncake::DummyClient> primary_dummy_client_;
+    // For dummy mode: one DummyClient per reader thread. Each thread's SHM
+    // segment and RPC channel are isolated to that thread's DummyClient, so
+    // multiple readers can run get_into / batch_get_into concurrently
+    // without contending on a single client (the per-thread setup matches
+    // the original Go test pattern that creates an independent store per
+    // goroutine / process).
+    std::vector<std::shared_ptr<mooncake::DummyClient>> dummy_clients_;
+    // The client that owns the main buffer (buffer_). For real mode this is
+    // client_; for dummy mode this is primary_dummy_client_. Use this in
+    // single-threaded writer / warmup / verify code paths.
+    std::shared_ptr<mooncake::PyClient> main_buffer_client_;
     char* buffer_;
     size_t buffer_size_;
+    // True if the underlying client is a DummyClient. DummyClient::register_buffer
+    // requires the memory to be inside a ShmHelper-managed segment (memfd+mmap),
+    // because the address+fd is later passed to the real client via IPC. A
+    // plain numa_alloc_local buffer would be rejected with "Buffer is not
+    // in any registered shared memory". Track this so Setup / destructor /
+    // AllocateThreadBuffers can pick the right allocator.
+    bool is_dummy_ = false;
+
+    // Build and connect a single DummyClient. Returns nullptr on failure.
+    // Per-thread dummy clients are created with local_buffer_size=0 so they
+    // do not pre-allocate a SHM segment; AllocateThreadBuffers will then
+    // allocate the per-thread buffer via ShmHelper and register it. This
+    // gives every thread its own (SHM, RPC, IPC) triple and avoids sharing
+    // one client across threads.
+    std::shared_ptr<mooncake::DummyClient> CreateDummyClient(size_t local_buffer_size = 0) {
+        size_t mem_pool = FLAGS_dummy_mem_pool_size > 0
+                              ? FLAGS_dummy_mem_pool_size
+                              : FLAGS_global_segment_size;
+        if (FLAGS_dummy_server_address.empty() ||
+            FLAGS_dummy_ipc_socket_path.empty()) {
+            LOG(ERROR)
+                << "Dummy client requires non-empty --dummy_server_address "
+                   "and --dummy_ipc_socket_path";
+            return nullptr;
+        }
+        auto dummy = std::make_shared<mooncake::DummyClient>();
+        int ret = dummy->setup_dummy(mem_pool, local_buffer_size,
+                                     FLAGS_dummy_server_address,
+                                     FLAGS_dummy_ipc_socket_path);
+        if (ret != 0) {
+            LOG(ERROR) << "DummyClient setup_dummy failed, ret=" << ret;
+            return nullptr;
+        }
+        return dummy;
+    }
+
+    // Returns a NUMA-local buffer for RealClient, or a ShmHelper segment for
+    // DummyClient. Caller owns the buffer and must release it with
+    // FreeBuffer().
+    char* AllocateBuffer(size_t size, int numa_node = -1) {
+        if (is_dummy_) {
+            try {
+                return static_cast<char*>(
+                    mooncake::ShmHelper::getInstance()->allocate(size));
+            } catch (const std::exception& e) {
+                LOG(ERROR) << "ShmHelper::allocate(" << size
+                           << ") failed: " << e.what();
+                return nullptr;
+            }
+        }
+        if (numa_node >= 0) {
+            return reinterpret_cast<char*>(numa_alloc_onnode(size, numa_node));
+        }
+        return reinterpret_cast<char*>(numa_alloc_local(size));
+    }
+
+    // Counterpart of AllocateBuffer.
+    void FreeBuffer(char* ptr, size_t size) {
+        if (!ptr) return;
+        if (is_dummy_) {
+            if (mooncake::ShmHelper::getInstance()->free(ptr) != 0) {
+                LOG(WARNING) << "ShmHelper::free(" << ptr << ") failed";
+            }
+            return;
+        }
+        numa_free(ptr, size);
+    }
 
     struct ThreadBuffer {
         char* ptr = nullptr;
@@ -1511,31 +1753,145 @@ class StressBenchmark {
 
     int AllocateThreadBuffers(size_t num_threads) {
         thread_buffers_.resize(num_threads);
+        dummy_clients_.clear();
+        dummy_clients_.reserve(num_threads);
         size_t per_buf_size = FLAGS_batch_size * FLAGS_value_size;
         for (size_t t = 0; t < num_threads; ++t) {
             int node = t % NR_SOCKETS;
             thread_buffers_[t].size = per_buf_size;
             thread_buffers_[t].numa_node = node;
-            thread_buffers_[t].ptr =
-                reinterpret_cast<char*>(numa_alloc_onnode(per_buf_size, node));
+
+            // Pick (or create) the client that will own this thread's
+            // buffer. For dummy mode, every thread gets its own
+            // DummyClient so its SHM and RPC channel are isolated; for
+            // real mode all threads share the single RealClient.
+            std::shared_ptr<mooncake::PyClient> thread_client;
+            if (is_dummy_) {
+                auto dc = CreateDummyClient(/*local_buffer_size=*/0);
+                if (!dc) {
+                    LOG(ERROR) << "Failed to create DummyClient for thread "
+                               << t
+                               << " (will roll back " << t
+                               << " already-allocated thread(s))";
+                    RollbackThreadBuffers(t);
+                    return -1;
+                }
+                dummy_clients_.push_back(dc);
+                thread_client = dc;
+            } else {
+                thread_client = client_;
+            }
+
+            thread_buffers_[t].ptr = AllocateBuffer(per_buf_size, node);
             if (!thread_buffers_[t].ptr) {
                 LOG(ERROR) << "Failed to allocate buffer for thread " << t
-                           << " on NUMA node " << node;
+                           << " on NUMA node " << node << " ("
+                           << (is_dummy_ ? "ShmHelper" : "numa")
+                           << "); will roll back " << t
+                           << " already-allocated thread(s)";
+                // The buffer failed to allocate, so this thread's dummy
+                // client owns no buffer; tear it down to release its
+                // RPC/IPC connection.
+                if (is_dummy_ && !dummy_clients_.empty()) {
+                    try {
+                        dummy_clients_.back()->tearDownAll();
+                    } catch (...) {
+                        LOG(WARNING)
+                            << "Failed to tearDownAll dummy client for "
+                            << "thread " << t << ", ignoring";
+                    }
+                    dummy_clients_.pop_back();
+                }
+                RollbackThreadBuffers(t);
                 return -1;
             }
             std::memset(thread_buffers_[t].ptr, 0, per_buf_size);
-            int ret =
-                client_->register_buffer(thread_buffers_[t].ptr, per_buf_size);
+
+            int ret = thread_client->register_buffer(
+                thread_buffers_[t].ptr, per_buf_size);
             if (ret != 0) {
                 LOG(ERROR) << "register_buffer failed for thread " << t
-                           << " on NUMA node " << node;
+                           << " on NUMA node " << node
+                           << " (is_dummy=" << is_dummy_
+                           << "); will roll back " << t
+                           << " already-allocated thread(s)";
+                // Try to unregister with the same client (best effort).
+                try {
+                    thread_client->unregister_buffer(
+                        thread_buffers_[t].ptr);
+                } catch (...) {
+                    LOG(WARNING) << "Best-effort unregister after "
+                                    "register_buffer failure for thread "
+                                 << t << " failed, ignoring";
+                }
+                FreeBuffer(thread_buffers_[t].ptr, per_buf_size);
+                thread_buffers_[t].ptr = nullptr;
+                if (is_dummy_ && !dummy_clients_.empty()) {
+                    try {
+                        dummy_clients_.back()->tearDownAll();
+                    } catch (...) {
+                        LOG(WARNING)
+                            << "Failed to tearDownAll dummy client for "
+                            << "thread " << t << ", ignoring";
+                    }
+                    dummy_clients_.pop_back();
+                }
+                RollbackThreadBuffers(t);
                 return ret;
             }
         }
         LOG(INFO) << "Allocated " << num_threads << " thread buffers, each "
-                  << per_buf_size / MB << " MB (NUMA-aware, " << NR_SOCKETS
-                  << " sockets)";
+                  << per_buf_size / MB << " MB ("
+                  << (is_dummy_ ? "per-thread ShmHelper, "
+                                : "NUMA-aware, ")
+                  << NR_SOCKETS << " sockets)";
         return 0;
+    }
+
+    // Roll back all thread buffers in [0, count). Called when
+    // AllocateThreadBuffers fails partway through: we have to unregister
+    // each already-registered buffer with its owning dummy client (so the
+    // real client side releases the IPC fd) and free the SHM, then
+    // tearDownAll each dummy client (so its RPC + ping thread exit).
+    // After this call, thread_buffers_ and dummy_clients_ are empty.
+    void RollbackThreadBuffers(size_t count) {
+        for (size_t t = 0; t < count; ++t) {
+            auto& tb = thread_buffers_[t];
+            if (!tb.ptr) continue;
+            std::shared_ptr<mooncake::PyClient> thread_client;
+            if (is_dummy_ && t < dummy_clients_.size() &&
+                dummy_clients_[t]) {
+                thread_client = dummy_clients_[t];
+            } else {
+                thread_client = client_;
+            }
+            if (thread_client) {
+                try {
+                    thread_client->unregister_buffer(tb.ptr);
+                } catch (...) {
+                    LOG(WARNING) << "Rollback: failed to unregister "
+                                    "thread "
+                                 << t << " buffer, ignoring";
+                }
+            }
+            FreeBuffer(tb.ptr, tb.size);
+            tb.ptr = nullptr;
+        }
+        // Free any DummyClient entries left (those whose buffers were
+        // never allocated or whose buffers we already cleaned up
+        // inline). tearDownAll stops the ping thread and closes the
+        // IPC / RPC channels.
+        for (auto& dc : dummy_clients_) {
+            if (!dc) continue;
+            try {
+                dc->tearDownAll();
+            } catch (...) {
+                LOG(WARNING) << "Rollback: failed to tearDownAll dummy "
+                                "client, ignoring";
+            }
+        }
+        dummy_clients_.clear();
+        thread_buffers_.clear();
     }
 };
 
@@ -1553,6 +1909,11 @@ int main(int argc, char* argv[]) {
     LOG(INFO) << "Mooncake Stress Cluster Benchmark";
     LOG(INFO) << "  Scenario:       " << FLAGS_scenario;
     LOG(INFO) << "  Protocol:       " << FLAGS_protocol;
+    LOG(INFO) << "  Client type:    " << FLAGS_client_type;
+    if (FLAGS_client_type == "dummy") {
+        LOG(INFO) << "  Dummy server:   " << FLAGS_dummy_server_address;
+        LOG(INFO) << "  Dummy IPC path: " << FLAGS_dummy_ipc_socket_path;
+    }
     LOG(INFO) << "  Value size:     " << FLAGS_value_size / MB << " MB";
     LOG(INFO) << "  Num keys:       " << FLAGS_num_keys;
     LOG(INFO) << "  Batch size:     " << FLAGS_batch_size;
