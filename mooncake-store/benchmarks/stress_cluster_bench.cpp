@@ -191,7 +191,33 @@ DEFINE_string(ssd_offload_path, "", "SSD offload directory path");
 
 DEFINE_string(scenario, "local_memory",
               "Benchmark scenario: local_memory, remote_memory, local_disk, "
-              "remote_disk, segment_write, segment_read");
+              "remote_disk, segment_write, segment_read, client_rpc_bench, "
+              "list_segments");
+// Peer RPC server address for client_rpc_bench. Must be the
+// "local_rpc_addr" (ip:port) of the RealClient that hosts the
+// offload_rpc_server_ registered with batch_get_offload_object /
+// release_offload_buffer. The peer must be started with
+// --enable_ssd_offload=true so the offload_rpc_server_ is up.
+DEFINE_string(peer_rpc_addr, "",
+              "[client_rpc_bench] Address (ip:port) of the peer RealClient's "
+              "offload_rpc_server_, e.g. \"10.0.0.2:17888\". The peer is "
+              "expected to have --enable_ssd_offload=true.");
+// Optional: if set, we will call batch_get_offload_object with this single
+// key and --ssd_value_size. The peer's FileStorage must already hold this
+// key in its SSD directory (use scenario=local_disk on the peer first, or
+// any other writer that has offloaded to the peer's SSD). When unset, the
+// RPC is issued with empty keys (no SSD I/O on the peer); this still
+// measures a real client-to-client RPC round-trip, but the response
+// contains an empty pointers vector.
+DEFINE_string(ssd_key, "",
+              "[client_rpc_bench] Key that the peer has in its SSD. When "
+              "set, the bench actually reads from the peer's SSD; the "
+              "response will carry a real pointer (memory address) to the "
+              "data buffer on the peer. Leave empty to send an empty "
+              "request (no SSD I/O).");
+DEFINE_int64(ssd_value_size, 4096,
+             "[client_rpc_bench] Size in bytes of the SSD-backed object to "
+             "request from the peer. Only used when --ssd_key is set.");
 DEFINE_string(role, "writer",
               "Node role: writer (prefill data) or reader (benchmark reads)");
 DEFINE_string(client_type, "real",
@@ -1038,9 +1064,18 @@ class StressBenchmark {
             if (n >= 1000) {
                 p999_latency_ns = latencies_ns[static_cast<size_t>(n * 0.999)];
             }
+            // P99.99 needs n >= 10000 to be statistically meaningful.
+            // When n < 10000 we fall back to the maximum sample so
+            // downstream consumers see a non-zero number (it would
+            // otherwise be silently 0.0, which is misleading). The
+            // print code already tags it with "(n<10000)" so the
+            // user knows it's an upper-bound proxy, not a true
+            // percentile.
             if (n >= 10000) {
                 p9999_latency_ns =
                     latencies_ns[static_cast<size_t>(n * 0.9999)];
+            } else {
+                p9999_latency_ns = latencies_ns.back();
             }
         }
 
@@ -1416,6 +1451,506 @@ class StressBenchmark {
         return 0;
     }
 
+    // ------------------------------------------------------------------------
+    // client_rpc_bench: measure the round-trip latency of a single
+    // client-to-client RPC, with no master RPC, no SSD I/O, and no P2P
+    // data transfer.
+    //
+    // Implementation: spin up a standalone mooncake::ClientRequester in
+    // this process, and use it to call
+    //   RealClient::batch_get_offload_object
+    // (the only client-side RPC handler that is already registered to the
+    // peer's offload_rpc_server_) with EMPTY keys and sizes. The peer:
+    //   1. receives the RPC request
+    //   2. runs BatchGet({},{}) on its FileStorage -- with empty inputs
+    //      this is O(1) bookkeeping, no SSD read, no allocation loop
+    //   3. replies with BatchGetOffloadObjectResponse{ batch_id,
+    //      pointers=<empty>, transfer_engine_addr=<peer segment endpoint>,
+    //      gc_ttl_ms }
+    // We time the full call and treat the response's
+    // transfer_engine_addr as the "peer memory address" requested by the
+    // user.
+    //
+    // Why NOT use get_into / batch_get_into / execute_ranged_read /
+    // isExist: all of those go through the master (stage 1) or perform
+    // real data I/O (stages 2-5), so they do not isolate a single RPC
+    // hop.
+    //
+    // Prerequisite: the peer must be started with
+    // --enable_ssd_offload=true so its offload_rpc_server_ is up and
+    // the batch_get_offload_object handler is registered. Use
+    // --peer_rpc_addr to point at the peer's local_rpc_addr (ip:port).
+    // ------------------------------------------------------------------------
+    int RunClientRpcBench() {
+        LOG(INFO) << "=== CLIENT-TO-CLIENT RPC BENCHMARK (single "
+                     "ClientRequester, batch_get_offload_object with empty "
+                     "inputs) ===";
+
+        if (FLAGS_num_threads == 0) {
+            LOG(ERROR) << "--num_threads must be > 0";
+            return -1;
+        }
+
+        if (FLAGS_peer_rpc_addr.empty()) {
+            LOG(ERROR)
+                << "--peer_rpc_addr is required for client_rpc_bench. "
+                   "Pass the peer's local_rpc_addr (ip:port), e.g. "
+                   "--peer_rpc_addr=10.0.0.2:17888. The peer must be "
+                   "started with --enable_ssd_offload=true.";
+            return -1;
+        }
+
+        const std::string peer_addr = FLAGS_peer_rpc_addr;
+
+        // Standalone ClientRequester: independent of the local PyClient.
+        // It owns its own coro_rpc client pool. We share one instance
+        // across worker threads; the underlying pool is thread-safe.
+        auto requester = std::make_shared<mooncake::ClientRequester>();
+
+        // Sanity check / connection warmup. The first call to
+        // invoke_rpc<...> against a new peer_addr dials the peer and
+        // caches the connection. We do a small number of warmup
+        // iterations so the timed loop measures steady-state RTT.
+        LOG(INFO) << "Warming up connection to " << peer_addr
+                  << " (the peer must run --enable_ssd_offload=true)";
+        size_t warmup_n = static_cast<size_t>(
+            std::max<int64_t>(1, FLAGS_warmup_keys));
+        size_t warmup_done = 0;
+        std::string peer_seen_addr;  // the transfer_engine_addr echoed back
+        // Build the request payload ONCE and reuse across all iterations
+        // so every measured call hits exactly the same path. When
+        // --ssd_key is set, the request actually reads from the peer's
+        // SSD storage; otherwise it is an empty request (no SSD I/O).
+        std::vector<std::string> req_keys;
+        std::vector<int64_t> req_sizes;
+        if (!FLAGS_ssd_key.empty()) {
+            req_keys.push_back(FLAGS_ssd_key);
+            req_sizes.push_back(FLAGS_ssd_value_size);
+            LOG(INFO) << "Will request real SSD read: key=\"" << FLAGS_ssd_key
+                      << "\" size=" << FLAGS_ssd_value_size << "B. Make sure "
+                      << "the peer has this key in its SSD (write it first "
+                      << "via scenario=local_disk or similar on the peer).";
+        } else {
+            LOG(INFO) << "Will request empty payload (no SSD I/O on peer). "
+                      << "Set --ssd_key=<peer_ssd_key> to actually read SSD.";
+        }
+        for (size_t i = 0; i < warmup_n; ++i) {
+            auto r = requester->invoke_rpc<
+                &mooncake::RealClient::batch_get_offload_object,
+                mooncake::BatchGetOffloadObjectResponse>(
+                peer_addr, req_keys, req_sizes);
+            if (r) {
+                ++warmup_done;
+                if (peer_seen_addr.empty()) {
+                    peer_seen_addr = r->transfer_engine_addr;
+                }
+            }
+        }
+        LOG(INFO) << "Warmup done: " << warmup_done << "/" << warmup_n
+                  << " succeeded. Peer transfer_engine_addr=\""
+                  << peer_seen_addr << "\".";
+        if (warmup_done == 0) {
+            LOG(ERROR)
+                << "No warmup RPC succeeded. Aborting. Check that the "
+                   "peer at "
+                << peer_addr
+                << " is reachable and was started with "
+                   "--enable_ssd_offload=true.";
+            return -1;
+        }
+
+        if (FLAGS_duration == 0) {
+            return RunClientRpcBenchSinglePass(peer_addr, peer_seen_addr,
+                                               req_keys, req_sizes, requester);
+        }
+        return RunClientRpcBenchDuration(peer_addr, peer_seen_addr,
+                                         req_keys, req_sizes, requester);
+    }
+
+    int RunClientRpcBenchSinglePass(
+        const std::string& peer_addr,
+        const std::string& peer_seen_addr,
+        const std::vector<std::string>& req_keys,
+        const std::vector<int64_t>& req_sizes,
+        const std::shared_ptr<mooncake::ClientRequester>& requester) {
+        LOG(INFO)
+            << "Single-pass mode: each of " << FLAGS_num_threads
+            << " threads issues " << FLAGS_num_keys
+            << " batch_get_offload_object RPCs to " << peer_addr
+            << " (keys=" << req_keys.size() << ", sizes=" << req_sizes.size()
+            << ", "
+            << (req_keys.empty()
+                    ? "empty payload -> no SSD I/O on peer"
+                    : "real SSD read on peer")
+            << "). Measured: single client-to-client RPC RTT.";
+
+        const size_t per_thread = std::max<size_t>(1, FLAGS_num_keys);
+
+        BenchmarkStats stats;
+        stats.InitThreads(FLAGS_num_threads, per_thread);
+        stats.StartTimer();
+
+        std::latch start_latch(static_cast<ptrdiff_t>(FLAGS_num_threads));
+        std::latch done_latch(static_cast<ptrdiff_t>(FLAGS_num_threads));
+        std::vector<std::thread> threads;
+        threads.reserve(FLAGS_num_threads);
+
+        for (size_t t = 0; t < FLAGS_num_threads; ++t) {
+            threads.emplace_back([&, t]() {
+                bindToSocket(t % NR_SOCKETS);
+                ThreadResult& tr = stats.GetThreadResult(t);
+                tr.latencies_ns.reserve(per_thread);
+
+                start_latch.arrive_and_wait();
+
+                for (size_t k = 0; k < per_thread; ++k) {
+                    // --- single client-to-client RPC: send request,
+                    //     receive BatchGetOffloadObjectResponse ---
+                    auto t0 = Clock::now();
+                    auto ret = requester->invoke_rpc<
+                        &mooncake::RealClient::batch_get_offload_object,
+                        mooncake::BatchGetOffloadObjectResponse>(
+                        peer_addr, req_keys, req_sizes);
+                    auto t1 = Clock::now();
+
+                    int64_t lat_ns = ElapsedNanos(t0, t1);
+                    tr.latencies_ns.push_back(lat_ns);
+
+                    if (!ret) {
+                        ++tr.failed_ops;
+                        LOG_EVERY_N(ERROR, 100)
+                            << "batch_get_offload_object RPC failed: "
+                            << mooncake::toString(ret.error());
+                    } else {
+                        // Each successful response carries a
+                        // BatchGetOffloadObjectResponse. "Bytes" in
+                        // the stats sheet is the response size, which
+                        // is a good proxy for "amount of data
+                        // round-tripped" -- not real payload bytes.
+                        tr.total_bytes +=
+                            static_cast<size_t>(ret->pointers.size() *
+                                                    sizeof(uint64_t)) +
+                            ret->transfer_engine_addr.size() +
+                            sizeof(ret->batch_id) +
+                            sizeof(ret->gc_ttl_ms);
+                        // Sanity: the response must have been served
+                        // by the peer we asked for. Print the first
+                        // successful peer's address per thread for
+                        // end-to-end verification.
+                        if (k == 0 &&
+                            peer_seen_addr != ret->transfer_engine_addr) {
+                            LOG(WARNING)
+                                << "  [t=" << t
+                                << "] peer transfer_engine_addr mismatch: "
+                                << "expected=\"" << peer_seen_addr
+                                << "\" got=\""
+                                << ret->transfer_engine_addr << "\"";
+                        }
+                    }
+                    ++tr.total_keys;
+                    ++tr.total_queries;
+                }
+
+                done_latch.arrive_and_wait();
+            });
+        }
+
+        done_latch.wait();
+        stats.StopTimer();
+        for (auto& th : threads) th.join();
+
+        stats.Finalize();
+        stats.Print(
+            "CLIENT-TO-CLIENT RPC BENCHMARK [batch_get_offload_object "
+            "with empty inputs, single ClientRequester]");
+        return 0;
+    }
+
+    int RunClientRpcBenchDuration(
+        const std::string& peer_addr,
+        const std::string& peer_seen_addr,
+        const std::vector<std::string>& req_keys,
+        const std::vector<int64_t>& req_sizes,
+        const std::shared_ptr<mooncake::ClientRequester>& requester) {
+        LOG(INFO) << "Duration mode: " << FLAGS_num_threads
+                  << " threads continuously fire client-to-client RPCs to "
+                  << peer_addr << " for " << FLAGS_duration
+                  << "s, stats every " << FLAGS_statis_interval
+                  << "s. keys=" << req_keys.size() << ", sizes="
+                  << req_sizes.size() << " ("
+                  << (req_keys.empty()
+                          ? "empty payload -> no SSD I/O on peer"
+                          : "real SSD read on peer")
+                  << "). Measured: single client-to-client RPC RTT.";
+
+        std::atomic<bool> stop_flag{false};
+        std::atomic<size_t> global_keys{0};
+        std::atomic<size_t> global_queries{0};
+        std::atomic<size_t> global_bytes{0};
+        std::atomic<size_t> global_failed{0};
+
+        std::vector<std::vector<int64_t>> thread_latencies(FLAGS_num_threads);
+        std::vector<std::mutex> latency_mutexes(FLAGS_num_threads);
+
+        std::latch start_latch(static_cast<ptrdiff_t>(FLAGS_num_threads));
+        std::vector<std::thread> threads;
+        threads.reserve(FLAGS_num_threads);
+
+        for (size_t t = 0; t < FLAGS_num_threads; ++t) {
+            threads.emplace_back([&, t]() {
+                bindToSocket(t % NR_SOCKETS);
+                start_latch.arrive_and_wait();
+
+                if (FLAGS_batch_size <= 1) {
+                    // Single-RPC-per-iteration path. Each call is timed
+                    // individually; the latency distribution is the
+                    // steady-state RTT of one client-to-client RPC.
+                    while (
+                        !stop_flag.load(std::memory_order_relaxed)) {
+                        auto t0 = Clock::now();
+                        auto ret = requester->invoke_rpc<
+                            &mooncake::RealClient::batch_get_offload_object,
+                            mooncake::BatchGetOffloadObjectResponse>(
+                            peer_addr, req_keys, req_sizes);
+                        auto t1 = Clock::now();
+                        int64_t lat_ns = ElapsedNanos(t0, t1);
+                        {
+                            std::lock_guard<std::mutex> lk(
+                                latency_mutexes[t]);
+                            thread_latencies[t].push_back(lat_ns);
+                        }
+                        if (!ret) {
+                            global_failed.fetch_add(
+                                1, std::memory_order_relaxed);
+                        } else {
+                            global_bytes.fetch_add(
+                                static_cast<size_t>(ret->pointers.size() *
+                                                        sizeof(uint64_t)) +
+                                    ret->transfer_engine_addr.size() +
+                                    sizeof(ret->batch_id) +
+                                    sizeof(ret->gc_ttl_ms),
+                                std::memory_order_relaxed);
+                        }
+                        global_keys.fetch_add(1,
+                                              std::memory_order_relaxed);
+                        global_queries.fetch_add(1,
+                                                 std::memory_order_relaxed);
+                    }
+                } else {
+                    // Batch path: issue FLAGS_batch_size RPCs in a tight
+                    // loop, time the whole batch end-to-end, and report
+                    // per-RPC latency = batch_lat / batch_size. This
+                    // shows the per-RPC cost when the client pumps
+                    // requests at a high rate.
+                    while (
+                        !stop_flag.load(std::memory_order_relaxed)) {
+                        auto t0 = Clock::now();
+                        for (size_t b = 0; b < FLAGS_batch_size; ++b) {
+                            auto ret = requester->invoke_rpc<
+                                &mooncake::RealClient::
+                                    batch_get_offload_object,
+                                mooncake::BatchGetOffloadObjectResponse>(
+                                peer_addr, req_keys, req_sizes);
+                            if (!ret) {
+                                global_failed.fetch_add(
+                                    1, std::memory_order_relaxed);
+                            } else {
+                                global_bytes.fetch_add(
+                                    static_cast<size_t>(
+                                        ret->pointers.size() *
+                                        sizeof(uint64_t)) +
+                                        ret->transfer_engine_addr.size() +
+                                        sizeof(ret->batch_id) +
+                                        sizeof(ret->gc_ttl_ms),
+                                    std::memory_order_relaxed);
+                            }
+                            global_keys.fetch_add(
+                                1, std::memory_order_relaxed);
+                        }
+                        auto t1 = Clock::now();
+                        int64_t lat_ns = ElapsedNanos(t0, t1);
+                        {
+                            std::lock_guard<std::mutex> lk(
+                                latency_mutexes[t]);
+                            for (size_t b = 0; b < FLAGS_batch_size; ++b) {
+                                thread_latencies[t].push_back(
+                                    lat_ns / FLAGS_batch_size);
+                            }
+                        }
+                        global_queries.fetch_add(1,
+                                                 std::memory_order_relaxed);
+                    }
+                }
+            });
+        }
+
+        auto bench_start = Clock::now();
+        auto bench_end = bench_start + std::chrono::seconds(FLAGS_duration);
+        auto next_statis =
+            bench_start + std::chrono::seconds(FLAGS_statis_interval);
+
+        std::vector<IntervalLatencyStats> interval_stats_list;
+
+        // Track per-interval deltas. Declared here (not as members) so
+        // they are local to the duration run and reset on every call.
+        size_t prev_keys_inner = 0;
+        size_t prev_queries_inner = 0;
+        size_t prev_bytes_inner = 0;
+        size_t prev_failed_inner = 0;
+        auto prev_time_inner = bench_start;
+
+        std::cout << "\n";
+        std::cout << "========================================"
+                  << "========================================\n";
+        std::cout << "  CLIENT-TO-CLIENT RPC DURATION BENCHMARK "
+                     "[batch_get_offload_object with empty inputs, single "
+                     "ClientRequester, peer=" << peer_addr << "]\n";
+        std::cout << "========================================"
+                  << "========================================\n";
+        std::cout << std::fixed << std::setprecision(2);
+
+        while (Clock::now() < bench_end) {
+            auto now = Clock::now();
+            if (now >= next_statis) {
+                size_t cur_keys = global_keys.load(std::memory_order_relaxed);
+                size_t cur_queries =
+                    global_queries.load(std::memory_order_relaxed);
+                size_t cur_bytes = global_bytes.load(std::memory_order_relaxed);
+                size_t cur_failed =
+                    global_failed.load(std::memory_order_relaxed);
+
+                double interval_sec = NanosToSec(ElapsedNanos(prev_time_inner,
+                                                              now));
+                size_t interval_keys = cur_keys - prev_keys_inner;
+                size_t interval_queries = cur_queries - prev_queries_inner;
+                size_t interval_bytes = cur_bytes - prev_bytes_inner;
+                size_t interval_failed = cur_failed - prev_failed_inner;
+
+                double interval_mbps = (interval_sec > 0)
+                                           ? (static_cast<double>(interval_bytes) / MB) / interval_sec
+                                           : 0;
+                double interval_qps = (interval_sec > 0)
+                                          ? static_cast<double>(interval_queries) / interval_sec
+                                          : 0;
+                double interval_kps = (interval_sec > 0)
+                                          ? static_cast<double>(interval_keys) / interval_sec
+                                          : 0;
+
+                IntervalLatencyStats iv;
+                iv.throughput_mbps = interval_mbps;
+                iv.queries_per_sec = interval_qps;
+                iv.keys_per_sec = interval_kps;
+                for (size_t t = 0; t < FLAGS_num_threads; ++t) {
+                    std::lock_guard<std::mutex> lk(latency_mutexes[t]);
+                    iv.latencies_ns.insert(iv.latencies_ns.end(),
+                                          thread_latencies[t].begin(),
+                                          thread_latencies[t].end());
+                    thread_latencies[t].clear();
+                }
+                iv.Finalize();
+                interval_stats_list.push_back(iv);
+
+                double total_sec = NanosToSec(ElapsedNanos(bench_start, now));
+                double total_mbps = (total_sec > 0)
+                                        ? (static_cast<double>(cur_bytes) / MB) / total_sec
+                                        : 0;
+                double total_qps = (total_sec > 0)
+                                       ? static_cast<double>(cur_queries) / total_sec
+                                       : 0;
+
+                std::cout << "  [t=" << std::setw(6) << total_sec << "s]"
+                          << "  interval: " << interval_mbps << " MB/s, "
+                          << interval_qps << " qps"
+                          << " (failed=" << interval_failed << ")"
+                          << "  lat[us]: avg="
+                          << NanosToUs(iv.avg_latency_ns)
+                          << ", P50=" << NanosToUs(iv.p50_latency_ns)
+                          << ", P99=" << NanosToUs(iv.p99_latency_ns)
+                          << "  total: " << cur_queries << " queries, "
+                          << cur_keys << " keys, " << total_mbps << " MB/s, "
+                          << total_qps << " qps"
+                          << " (failed=" << cur_failed << ")\n";
+
+                prev_keys_inner = cur_keys;
+                prev_queries_inner = cur_queries;
+                prev_bytes_inner = cur_bytes;
+                prev_failed_inner = cur_failed;
+                prev_time_inner = now;
+                next_statis += std::chrono::seconds(FLAGS_statis_interval);
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        }
+
+        stop_flag.store(true, std::memory_order_relaxed);
+        for (auto& th : threads) th.join();
+
+        auto final_time = Clock::now();
+        double total_sec = NanosToSec(ElapsedNanos(bench_start, final_time));
+        size_t final_keys = global_keys.load(std::memory_order_relaxed);
+        size_t final_queries = global_queries.load(std::memory_order_relaxed);
+        size_t final_bytes = global_bytes.load(std::memory_order_relaxed);
+        size_t final_failed = global_failed.load(std::memory_order_relaxed);
+
+        double final_mbps = (total_sec > 0)
+                                ? (static_cast<double>(final_bytes) / MB) / total_sec
+                                : 0;
+        double final_qps = (total_sec > 0)
+                               ? static_cast<double>(final_queries) / total_sec
+                               : 0;
+        double final_kps = (total_sec > 0)
+                               ? static_cast<double>(final_keys) / total_sec
+                               : 0;
+
+        IntervalLatencyStats overall;
+        for (const auto& s : interval_stats_list) overall.Aggregate(s);
+
+        std::cout << "\n  FINAL SUMMARY\n";
+        std::cout << "  Total time:       " << total_sec << " s\n";
+        std::cout << "  Total queries:    " << final_queries
+                  << " (failed: " << final_failed << ")\n";
+        std::cout << "  Total keys:       " << final_keys << "\n";
+        std::cout << "  Total data:       " << FormatBytes(final_bytes)
+                  << "  (response bytes, not payload)\n";
+        std::cout << "  Throughput:       " << final_mbps << " MB/s";
+        if (final_mbps > 1024)
+            std::cout << " (" << final_mbps / 1024 << " GB/s)";
+        std::cout << "\n";
+        std::cout << "  Keys/sec:         " << final_kps << "\n";
+        std::cout << "  Queries/sec:      " << final_qps << "\n";
+
+        if (overall.total_samples > 0) {
+            std::cout << "\n  Latency (us)      [n=" << overall.total_samples
+                      << ", per-RPC]\n";
+            std::cout << "    Min:   " << std::setw(12)
+                      << NanosToUs(overall.min_latency_ns) << "\n";
+            std::cout << "    Avg:   " << std::setw(12)
+                      << NanosToUs(overall.avg_latency_ns) << "\n";
+            std::cout << "    P50:   " << std::setw(12)
+                      << NanosToUs(overall.p50_latency_ns) << "\n";
+            std::cout << "    P90:   " << std::setw(12)
+                      << NanosToUs(overall.p90_latency_ns) << "\n";
+            std::cout << "    P99:   " << std::setw(12)
+                      << NanosToUs(overall.p99_latency_ns) << "\n";
+            std::cout << "    P999:  " << std::setw(12)
+                      << NanosToUs(overall.p999_latency_ns);
+            if (overall.total_samples < 1000) std::cout << "  (n<1000)";
+            std::cout << "\n";
+            std::cout << "    P9999: " << std::setw(12)
+                      << NanosToUs(overall.p9999_latency_ns);
+            if (overall.total_samples < 10000) std::cout << "  (n<10000)";
+            std::cout << "\n";
+            std::cout << "    Max:   " << std::setw(12)
+                      << NanosToUs(overall.max_latency_ns) << "\n";
+        }
+
+        std::cout << "  Note: timed region is exactly the "
+                     "batch_get_offload_object RPC round-trip; no master, "
+                     "no P2P data, no SSD read.\n";
+        std::cout << "========================================"
+                  << "========================================\n\n";
+        return 0;
+    }
+
     int Run() {
         if (FLAGS_scenario == "local_memory") {
             return RunLocalMemory();
@@ -1427,6 +1962,8 @@ class StressBenchmark {
             return RunSegmentRead();
         } else if (FLAGS_scenario == "list_segments") {
             return RunListSegments();
+        } else if (FLAGS_scenario == "client_rpc_bench") {
+            return RunClientRpcBench();
         } else if (FLAGS_scenario == "remote_memory" ||
                    FLAGS_scenario == "remote_disk") {
             if (FLAGS_role == "writer") {
