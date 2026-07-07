@@ -181,12 +181,24 @@ build_rpm_for_platform() {
         echo "Warning: store.so not found in ${PLATFORM_BUILD_DIR}, skipping..."
     fi
 
-    # Vendored UbDiag L1 runtime artifacts. The CLI must come from the same
-    # build tree as libubdiag so feature flags and shared-memory layout stay in
-    # sync. Do not package UbDiag headers or CMake package metadata here: Layer 2
-    # must remain a customer-provided system package.
+    # UbDiag runtime artifacts. L1 packages the vendored build output. L2 packages
+    # the customer-provided system UbDiag selected by FindUbDiag.cmake. The CLI
+    # and libubdiag must come from the same layer so feature flags and shared
+    # memory layout stay in sync. Do not package UbDiag headers or CMake package
+    # metadata here: Layer 2 must remain a customer-provided system package.
     local UBDIAG_BUILD_DIR="${PLATFORM_BUILD_DIR}/extern/ubdiag_build"
-    if [ -d "${UBDIAG_BUILD_DIR}" ]; then
+    local UBDIAG_RPM_MANIFEST="${PLATFORM_BUILD_DIR}/mooncake_ubdiag_rpm.env"
+    local MOONCAKE_UBDIAG_LAYER=""
+    local MOONCAKE_UBDIAG_CLI_PATH=""
+    local MOONCAKE_UBDIAG_LIBRARY_PATH=""
+    local MOONCAKE_UBDIAG_CONFIG_PATH=""
+
+    if [ -f "${UBDIAG_RPM_MANIFEST}" ]; then
+        echo "Reading UbDiag RPM manifest: ${UBDIAG_RPM_MANIFEST}"
+        . "${UBDIAG_RPM_MANIFEST}"
+    fi
+
+    if { [ -z "${MOONCAKE_UBDIAG_LAYER}" ] || [ "${MOONCAKE_UBDIAG_LAYER}" = "submodule" ]; } && [ -d "${UBDIAG_BUILD_DIR}" ]; then
         echo "Copying vendored UbDiag CLI and SDK runtime library..."
 
         if [ -f "${UBDIAG_BUILD_DIR}/src/cli/ubdiag" ]; then
@@ -222,8 +234,54 @@ build_rpm_for_platform() {
         else
             echo "Warning: extern/ubdiag/config/ubdiag.conf.example not found, skipping UbDiag config..."
         fi
+    elif [ "${MOONCAKE_UBDIAG_LAYER}" = "system" ]; then
+        echo "Copying system UbDiag CLI and SDK runtime library selected by Layer 2..."
+
+        if [ -z "${MOONCAKE_UBDIAG_CLI_PATH}" ] || [ ! -f "${MOONCAKE_UBDIAG_CLI_PATH}" ]; then
+            echo "Error: Layer 2 selected system UbDiag, but ubdiag CLI was not found"
+            echo "       Expected CLI path from manifest: ${MOONCAKE_UBDIAG_CLI_PATH}"
+            return 1
+        fi
+
+        cp "${MOONCAKE_UBDIAG_CLI_PATH}" rpmbuild/BUILDROOT/${PACKAGE_NAME}-${PACKAGE_VERSION}-${PACKAGE_RELEASE}.${PLATFORM}/usr/bin/ubdiag
+        chmod 755 rpmbuild/BUILDROOT/${PACKAGE_NAME}-${PACKAGE_VERSION}-${PACKAGE_RELEASE}.${PLATFORM}/usr/bin/ubdiag
+        UBDIAG_RPM_FILES="${UBDIAG_RPM_FILES}
+/usr/bin/ubdiag"
+
+        local UBDIAG_SYSTEM_LIB_DIR=""
+        if [ -n "${MOONCAKE_UBDIAG_LIBRARY_PATH}" ] && [ -e "${MOONCAKE_UBDIAG_LIBRARY_PATH}" ]; then
+            UBDIAG_SYSTEM_LIB_DIR="$(dirname "${MOONCAKE_UBDIAG_LIBRARY_PATH}")"
+        fi
+        if [ -z "${UBDIAG_SYSTEM_LIB_DIR}" ] || ! compgen -G "${UBDIAG_SYSTEM_LIB_DIR}/libubdiag.so*" >/dev/null; then
+            for ubdiag_lib_dir in /usr/lib64 /usr/local/lib64 /usr/lib /usr/local/lib; do
+                if compgen -G "${ubdiag_lib_dir}/libubdiag.so*" >/dev/null; then
+                    UBDIAG_SYSTEM_LIB_DIR="${ubdiag_lib_dir}"
+                    break
+                fi
+            done
+        fi
+        if [ -z "${UBDIAG_SYSTEM_LIB_DIR}" ] || ! compgen -G "${UBDIAG_SYSTEM_LIB_DIR}/libubdiag.so*" >/dev/null; then
+            echo "Error: Layer 2 selected system UbDiag, but libubdiag.so* was not found"
+            echo "       Expected library path from manifest: ${MOONCAKE_UBDIAG_LIBRARY_PATH}"
+            return 1
+        fi
+
+        for ubdiag_lib in "${UBDIAG_SYSTEM_LIB_DIR}"/libubdiag.so*; do
+            cp -P "${ubdiag_lib}" rpmbuild/BUILDROOT/${PACKAGE_NAME}-${PACKAGE_VERSION}-${PACKAGE_RELEASE}.${PLATFORM}/usr/${LIB_DIR}/
+        done
+        chmod 755 rpmbuild/BUILDROOT/${PACKAGE_NAME}-${PACKAGE_VERSION}-${PACKAGE_RELEASE}.${PLATFORM}/usr/${LIB_DIR}/libubdiag.so* 2>/dev/null || true
+        UBDIAG_RPM_FILES="${UBDIAG_RPM_FILES}
+/usr/${LIB_DIR}/libubdiag.so*"
+
+        if [ -n "${MOONCAKE_UBDIAG_CONFIG_PATH}" ] && [ -f "${MOONCAKE_UBDIAG_CONFIG_PATH}" ]; then
+            cp "${MOONCAKE_UBDIAG_CONFIG_PATH}" rpmbuild/BUILDROOT/${PACKAGE_NAME}-${PACKAGE_VERSION}-${PACKAGE_RELEASE}.${PLATFORM}/etc/ubdiag/ubdiag.conf
+            UBDIAG_RPM_FILES="${UBDIAG_RPM_FILES}
+%config(noreplace) /etc/ubdiag/ubdiag.conf"
+        else
+            echo "Warning: Layer 2 system UbDiag config not found, skipping UbDiag config..."
+        fi
     else
-        echo "Vendored UbDiag build directory not found in ${UBDIAG_BUILD_DIR}, skipping UbDiag CLI packaging..."
+        echo "UbDiag layer is '${MOONCAKE_UBDIAG_LAYER:-unknown}', skipping UbDiag CLI packaging..."
     fi
     
     # -------------------------------------------------------------------------
