@@ -10,10 +10,19 @@ set -x
 
 # Get build directory from environment variable or argument
 BUILD_DIR="${BUILD_DIR:-${1:-build}}"
-BUILD_DIR_ABS="$(pwd)/${BUILD_DIR}"
+if [[ "${BUILD_DIR}" = /* ]]; then
+    BUILD_DIR_ABS="${BUILD_DIR}"
+else
+    BUILD_DIR_ABS="$(pwd)/${BUILD_DIR}"
+fi
 
 # Get output directory from environment variable or argument
 OUTPUT_DIR="${OUTPUT_DIR:-${2:-rpm-output}}"
+if [[ "${OUTPUT_DIR}" = /* ]]; then
+    OUTPUT_DIR_ABS="${OUTPUT_DIR}"
+else
+    OUTPUT_DIR_ABS="$(pwd)/${OUTPUT_DIR}"
+fi
 
 # Detect current host architecture
 HOST_ARCH=$(uname -m)
@@ -44,12 +53,13 @@ export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:${BUILD_DIR_ABS}/mooncake-common:/usr/lo
 # Clean previous build
 echo "Cleaning previous RPM build..."
 rm -rf rpmbuild/
-rm -rf ${OUTPUT_DIR}/
+rm -rf ${OUTPUT_DIR_ABS}/
 
 # Function to build RPM for a specific platform
 build_rpm_for_platform() {
     local PLATFORM=$1
     local LIB_DIR="lib64"
+    local UBDIAG_RPM_FILES=""
     
     echo "Building RPM for platform: ${PLATFORM}"
     
@@ -68,7 +78,7 @@ build_rpm_for_platform() {
     mkdir -p rpmbuild/BUILDROOT/${PACKAGE_NAME}-${PACKAGE_VERSION}-${PACKAGE_RELEASE}.${PLATFORM}
     
     # Create target directories in BUILDROOT
-    mkdir -p rpmbuild/BUILDROOT/${PACKAGE_NAME}-${PACKAGE_VERSION}-${PACKAGE_RELEASE}.${PLATFORM}/{usr/{bin,${LIB_DIR},include},etc/mooncake}
+    mkdir -p rpmbuild/BUILDROOT/${PACKAGE_NAME}-${PACKAGE_VERSION}-${PACKAGE_RELEASE}.${PLATFORM}/{usr/{bin,${LIB_DIR},include},etc/{mooncake,ubdiag}}
     
     # -------------------------------------------------------------------------
     # Copy executables
@@ -169,6 +179,51 @@ build_rpm_for_platform() {
         cp ${PLATFORM_BUILD_DIR}/mooncake-integration/store.*.so rpmbuild/BUILDROOT/${PACKAGE_NAME}-${PACKAGE_VERSION}-${PACKAGE_RELEASE}.${PLATFORM}/usr/${LIB_DIR}/libmooncake_store_python.so
     else
         echo "Warning: store.so not found in ${PLATFORM_BUILD_DIR}, skipping..."
+    fi
+
+    # Vendored UbDiag L1 runtime artifacts. The CLI must come from the same
+    # build tree as libubdiag so feature flags and shared-memory layout stay in
+    # sync. Do not package UbDiag headers or CMake package metadata here: Layer 2
+    # must remain a customer-provided system package.
+    local UBDIAG_BUILD_DIR="${PLATFORM_BUILD_DIR}/extern/ubdiag_build"
+    if [ -d "${UBDIAG_BUILD_DIR}" ]; then
+        echo "Copying vendored UbDiag CLI and SDK runtime library..."
+
+        if [ -f "${UBDIAG_BUILD_DIR}/src/cli/ubdiag" ]; then
+            cp "${UBDIAG_BUILD_DIR}/src/cli/ubdiag" rpmbuild/BUILDROOT/${PACKAGE_NAME}-${PACKAGE_VERSION}-${PACKAGE_RELEASE}.${PLATFORM}/usr/bin/
+            chmod 755 rpmbuild/BUILDROOT/${PACKAGE_NAME}-${PACKAGE_VERSION}-${PACKAGE_RELEASE}.${PLATFORM}/usr/bin/ubdiag
+            UBDIAG_RPM_FILES="${UBDIAG_RPM_FILES}
+/usr/bin/ubdiag"
+        else
+            echo "Error: vendored UbDiag build found, but ${UBDIAG_BUILD_DIR}/src/cli/ubdiag is missing"
+            return 1
+        fi
+
+        if compgen -G "${UBDIAG_BUILD_DIR}/src/sdk/libubdiag.so*" >/dev/null; then
+            for ubdiag_lib in "${UBDIAG_BUILD_DIR}"/src/sdk/libubdiag.so*; do
+                cp "${ubdiag_lib}" rpmbuild/BUILDROOT/${PACKAGE_NAME}-${PACKAGE_VERSION}-${PACKAGE_RELEASE}.${PLATFORM}/usr/${LIB_DIR}/
+            done
+            chmod 755 rpmbuild/BUILDROOT/${PACKAGE_NAME}-${PACKAGE_VERSION}-${PACKAGE_RELEASE}.${PLATFORM}/usr/${LIB_DIR}/libubdiag.so* 2>/dev/null || true
+            UBDIAG_RPM_FILES="${UBDIAG_RPM_FILES}
+/usr/${LIB_DIR}/libubdiag.so*"
+        elif [ -f "${UBDIAG_BUILD_DIR}/src/sdk/libubdiag.a" ]; then
+            cp "${UBDIAG_BUILD_DIR}/src/sdk/libubdiag.a" rpmbuild/BUILDROOT/${PACKAGE_NAME}-${PACKAGE_VERSION}-${PACKAGE_RELEASE}.${PLATFORM}/usr/${LIB_DIR}/
+            UBDIAG_RPM_FILES="${UBDIAG_RPM_FILES}
+/usr/${LIB_DIR}/libubdiag.a"
+        else
+            echo "Error: vendored UbDiag build found, but libubdiag was not built under ${UBDIAG_BUILD_DIR}/src/sdk"
+            return 1
+        fi
+
+        if [ -f extern/ubdiag/config/ubdiag.conf.example ]; then
+            cp extern/ubdiag/config/ubdiag.conf.example rpmbuild/BUILDROOT/${PACKAGE_NAME}-${PACKAGE_VERSION}-${PACKAGE_RELEASE}.${PLATFORM}/etc/ubdiag/ubdiag.conf
+            UBDIAG_RPM_FILES="${UBDIAG_RPM_FILES}
+%config(noreplace) /etc/ubdiag/ubdiag.conf"
+        else
+            echo "Warning: extern/ubdiag/config/ubdiag.conf.example not found, skipping UbDiag config..."
+        fi
+    else
+        echo "Vendored UbDiag build directory not found in ${UBDIAG_BUILD_DIR}, skipping UbDiag CLI packaging..."
     fi
     
     # -------------------------------------------------------------------------
@@ -324,6 +379,7 @@ ${PACKAGE_DESCRIPTION}
 /usr/${LIB_DIR}/libetcd_wrapper.so
 /usr/${LIB_DIR}/libmooncake_engine.so
 /usr/${LIB_DIR}/libmooncake_store_python.so
+${UBDIAG_RPM_FILES}
 /usr/include/mooncake/*.h
 /usr/include/mooncake/*.hpp
 /etc/mooncake/master.yaml
@@ -352,16 +408,16 @@ EOF
     fi
     
     # Create platform-specific output directory
-    mkdir -p ${OUTPUT_DIR}/${PLATFORM}
+    mkdir -p ${OUTPUT_DIR_ABS}/${PLATFORM}
     
     # Build the RPM
     rpmbuild -bb \
         --define "_topdir $(pwd)/rpmbuild" \
-        --define "_rpmdir $(pwd)/${OUTPUT_DIR}" \
+        --define "_rpmdir ${OUTPUT_DIR_ABS}" \
         rpmbuild/SPECS/${PACKAGE_NAME}-${PLATFORM}.spec
     
     # Move RPM to platform-specific directory
-    mv ${OUTPUT_DIR}/${PLATFORM}/*.rpm ${OUTPUT_DIR}/ 2>/dev/null || true
+    mv ${OUTPUT_DIR_ABS}/${PLATFORM}/*.rpm ${OUTPUT_DIR_ABS}/ 2>/dev/null || true
     
     # Cleanup BUILDROOT for next platform
     rm -rf rpmbuild/BUILDROOT/
@@ -395,7 +451,7 @@ fi
 # List created RPM files
 echo "RPM packages built successfully!"
 echo "Created RPM files:"
-ls -la ${OUTPUT_DIR}/*.rpm 2>/dev/null || echo "No RPM files created"
+ls -la ${OUTPUT_DIR_ABS}/*.rpm 2>/dev/null || echo "No RPM files created"
 
 # Cleanup
 rm -rf rpmbuild/
