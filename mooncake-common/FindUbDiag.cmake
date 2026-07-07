@@ -14,8 +14,12 @@ option(MOONCAKE_UBDIAG_BUILD_CLI
   "Build the vendored UbDiag CLI when extern/ubdiag is used" ON)
 option(MOONCAKE_UBDIAG_L1_SHARED
   "Build vendored UbDiag as libubdiag.so so Mooncake and the CLI use one SDK" ON)
+option(MOONCAKE_UBDIAG_ENABLE_PERCENTILE
+  "Enable vendored UbDiag P99/P999/P9999 percentile calculation for Mooncake PerfPoint" ON)
+option(MOONCAKE_UBDIAG_ENABLE_PERFLOG
+  "Enable vendored UbDiag PerfLog timestamp logging for Mooncake PerfPoint" ON)
 option(MOONCAKE_UBDIAG_PERFPOINT_ONLY
-  "Disable vendored UbDiag eBPF/cache extensions; Mooncake only needs PerfPoint" ON)
+  "Disable vendored UbDiag OB/MemPoint/CachePoint extensions; keep Mooncake PerfPoint/P99/PerfLog/CSV" ON)
 option(MOONCAKE_UBDIAG_DISABLE_SYSTEM
   "Skip Layer 2 system-package lookup, used only for forced mock verification" OFF)
 
@@ -41,6 +45,12 @@ if(EXISTS "${CMAKE_SOURCE_DIR}/extern/ubdiag/CMakeLists.txt")
   set(BUILD_TESTS OFF CACHE BOOL "Disable UbDiag tests when vendored by Mooncake" FORCE)
   if(MOONCAKE_UBDIAG_L1_SHARED)
     set(UBDIAG_BUILD_SHARED ON CACHE BOOL "Build vendored UbDiag as a shared library" FORCE)
+  endif()
+  if(MOONCAKE_UBDIAG_ENABLE_PERCENTILE)
+    set(ENABLE_PERCENTILE ON CACHE BOOL "Enable vendored UbDiag percentile calculation" FORCE)
+  endif()
+  if(MOONCAKE_UBDIAG_ENABLE_PERFLOG)
+    set(ENABLE_PERFLOG ON CACHE BOOL "Enable vendored UbDiag PerfLog support" FORCE)
   endif()
   if(MOONCAKE_UBDIAG_PERFPOINT_ONLY)
     set(ENABLE_OB_MEMORY OFF CACHE BOOL "Disable vendored UbDiag eBPF memory observation" FORCE)
