@@ -175,6 +175,27 @@ static std::vector<std::string> DiscoverSegmentsFromMaster(
 
     return segments;
 }
+
+// Resolve the effective list of peer RPC addresses for client_rpc_bench.
+// --peer_rpc_addrs (multi-peer, comma-separated) takes precedence over
+// --peer_rpc_addr (single-peer fallback).
+std::vector<std::string> ParsePeerRpcAddrs() {
+    std::vector<std::string> addrs;
+    if (!FLAGS_peer_rpc_addrs.empty()) {
+        std::istringstream iss(FLAGS_peer_rpc_addrs);
+        std::string a;
+        while (std::getline(iss, a, ',')) {
+            size_t s = a.find_first_not_of(" \t");
+            size_t e = a.find_last_not_of(" \t");
+            if (s != std::string::npos && e != std::string::npos) {
+                addrs.push_back(a.substr(s, e - s + 1));
+            }
+        }
+    } else if (!FLAGS_peer_rpc_addr.empty()) {
+        addrs.push_back(FLAGS_peer_rpc_addr);
+    }
+    return addrs;
+}
 }  // namespace
 
 DEFINE_string(local_hostname, "localhost",
@@ -201,7 +222,21 @@ DEFINE_string(scenario, "local_memory",
 DEFINE_string(peer_rpc_addr, "",
               "[client_rpc_bench] Address (ip:port) of the peer RealClient's "
               "offload_rpc_server_, e.g. \"10.0.0.2:17888\". The peer is "
-              "expected to have --enable_ssd_offload=true.");
+              "expected to have --enable_ssd_offload=true. Single-peer "
+              "fallback; superseded by --peer_rpc_addrs when that flag is "
+              "set.");
+// Comma-separated list of peer RPC addresses (ip:port). When non-empty,
+// takes precedence over --peer_rpc_addr. In each round of the timed
+// loop the bench issues one batch_get_offload_object RPC to each alive
+// peer in this list, and reports per-peer statistics in addition to the
+// aggregate. Each peer must be started with --enable_ssd_offload=true.
+DEFINE_string(peer_rpc_addrs, "",
+              "[client_rpc_bench] Comma-separated list of peer RealClient "
+              "offload_rpc_server_ addresses (ip:port), e.g. "
+              "\"10.0.0.2:17888,10.0.0.3:17888,...\". When non-empty, takes "
+              "precedence over --peer_rpc_addr. Each peer is expected to "
+              "have --enable_ssd_offload=true. Per-peer statistics are "
+              "reported alongside an AGGREGATE summary.");
 // Optional: if set, we will call batch_get_offload_object with this single
 // key and --ssd_value_size. The peer's FileStorage must already hold this
 // key in its SSD directory (use scenario=local_disk on the peer first, or
@@ -1456,6 +1491,14 @@ class StressBenchmark {
     // client-to-client RPC, with no master RPC, no SSD I/O, and no P2P
     // data transfer.
     //
+    // Multi-peer variant: in each round of the timed loop the bench
+    // visits every alive peer sequentially and reports per-peer
+    // statistics in addition to the AGGREGATE summary. Use
+    // --peer_rpc_addrs=ip1:port,ip2:port,... (preferred) or
+    // --peer_rpc_addr=ip:port (single-peer fallback) to point at the
+    // peer(s). Each peer must be started with
+    // --enable_ssd_offload=true so its offload_rpc_server_ is up.
+    //
     // Implementation: spin up a standalone mooncake::ClientRequester in
     // this process, and use it to call
     //   RealClient::batch_get_offload_object
@@ -1476,119 +1519,129 @@ class StressBenchmark {
     // real data I/O (stages 2-5), so they do not isolate a single RPC
     // hop.
     //
-    // Prerequisite: the peer must be started with
+    // Prerequisite: every peer must be started with
     // --enable_ssd_offload=true so its offload_rpc_server_ is up and
-    // the batch_get_offload_object handler is registered. Use
-    // --peer_rpc_addr to point at the peer's local_rpc_addr (ip:port).
+    // the batch_get_offload_object handler is registered.
     // ------------------------------------------------------------------------
     int RunClientRpcBench() {
         LOG(INFO) << "=== CLIENT-TO-CLIENT RPC BENCHMARK (single "
-                     "ClientRequester, batch_get_offload_object with empty "
-                     "inputs) ===";
+                     "ClientRequester, batch_get_offload_object, multi-peer) ===";
 
         if (FLAGS_num_threads == 0) {
             LOG(ERROR) << "--num_threads must be > 0";
             return -1;
         }
 
-        if (FLAGS_peer_rpc_addr.empty()) {
+        auto peer_addrs = ParsePeerRpcAddrs();
+        if (peer_addrs.empty()) {
             LOG(ERROR)
-                << "--peer_rpc_addr is required for client_rpc_bench. "
-                   "Pass the peer's local_rpc_addr (ip:port), e.g. "
-                   "--peer_rpc_addr=10.0.0.2:17888. The peer must be "
-                   "started with --enable_ssd_offload=true.";
+                << "Provide --peer_rpc_addrs=ip1:port,ip2:port,... or "
+                   "--peer_rpc_addr=ip:port for client_rpc_bench. Each peer "
+                   "must be started with --enable_ssd_offload=true.";
             return -1;
         }
+        LOG(INFO) << "Targeting " << peer_addrs.size() << " peer(s):";
+        for (size_t i = 0; i < peer_addrs.size(); ++i) {
+            LOG(INFO) << "  peer[" << i << "]: " << peer_addrs[i];
+        }
 
-        const std::string peer_addr = FLAGS_peer_rpc_addr;
-
-        // Standalone ClientRequester: independent of the local PyClient.
-        // It owns its own coro_rpc client pool. We share one instance
-        // across worker threads; the underlying pool is thread-safe.
+        // One ClientRequester shared by all worker threads; the
+        // underlying coro_rpc client pool is thread-safe.
         auto requester = std::make_shared<mooncake::ClientRequester>();
 
-        // Sanity check / connection warmup. The first call to
-        // invoke_rpc<...> against a new peer_addr dials the peer and
-        // caches the connection. We do a small number of warmup
-        // iterations so the timed loop measures steady-state RTT.
-        LOG(INFO) << "Warming up connection to " << peer_addr
-                  << " (the peer must run --enable_ssd_offload=true)";
-        size_t warmup_n = static_cast<size_t>(
-            std::max<int64_t>(1, FLAGS_warmup_keys));
-        size_t warmup_done = 0;
-        std::string peer_seen_addr;  // the transfer_engine_addr echoed back
-        // Build the request payload ONCE and reuse across all iterations
-        // so every measured call hits exactly the same path. When
-        // --ssd_key is set, the request actually reads from the peer's
-        // SSD storage; otherwise it is an empty request (no SSD I/O).
+        // Build the request payload ONCE and reuse across all peers and
+        // all iterations so every measured call hits exactly the same
+        // path. When --ssd_key is set, the request actually reads from
+        // the peer's SSD storage; otherwise it is an empty request (no
+        // SSD I/O).
         std::vector<std::string> req_keys;
         std::vector<int64_t> req_sizes;
         if (!FLAGS_ssd_key.empty()) {
             req_keys.push_back(FLAGS_ssd_key);
             req_sizes.push_back(FLAGS_ssd_value_size);
-            LOG(INFO) << "Will request real SSD read: key=\"" << FLAGS_ssd_key
-                      << "\" size=" << FLAGS_ssd_value_size << "B. Make sure "
-                      << "the peer has this key in its SSD (write it first "
-                      << "via scenario=local_disk or similar on the peer).";
+            LOG(INFO) << "Will request real SSD read: key=\""
+                      << FLAGS_ssd_key << "\" size="
+                      << FLAGS_ssd_value_size << "B. Make sure the peer "
+                      << "has this key in its SSD (write it first via "
+                      << "scenario=local_disk or similar on the peer).";
         } else {
             LOG(INFO) << "Will request empty payload (no SSD I/O on peer). "
                       << "Set --ssd_key=<peer_ssd_key> to actually read SSD.";
         }
-        for (size_t i = 0; i < warmup_n; ++i) {
-            auto r = requester->invoke_rpc<
-                &mooncake::RealClient::batch_get_offload_object,
-                mooncake::BatchGetOffloadObjectResponse>(
-                peer_addr, req_keys, req_sizes);
-            if (r) {
-                ++warmup_done;
-                if (peer_seen_addr.empty()) {
-                    peer_seen_addr = r->transfer_engine_addr;
+
+        // Per-peer warmup. Peers whose warmup fully fails are kept in
+        // the list and marked warmup_ok=false so the timed loop skips
+        // them. We only abort if EVERY peer fails warmup.
+        std::vector<PeerBenchState> peer_states(peer_addrs.size());
+        for (size_t p = 0; p < peer_addrs.size(); ++p) {
+            peer_states[p].peer_addr = peer_addrs[p];
+            size_t warmup_n = static_cast<size_t>(
+                std::max<int64_t>(1, FLAGS_warmup_keys));
+            size_t warmup_done = 0;
+            for (size_t i = 0; i < warmup_n; ++i) {
+                auto r = requester->batch_get_offload_object(
+                    peer_addrs[p], req_keys, req_sizes);
+                if (r) {
+                    ++warmup_done;
+                    if (peer_states[p].peer_seen_addr.empty()) {
+                        peer_states[p].peer_seen_addr =
+                            r->transfer_engine_addr;
+                    }
                 }
             }
-        }
-        LOG(INFO) << "Warmup done: " << warmup_done << "/" << warmup_n
-                  << " succeeded. Peer transfer_engine_addr=\""
-                  << peer_seen_addr << "\".";
-        if (warmup_done == 0) {
-            LOG(ERROR)
-                << "No warmup RPC succeeded. Aborting. Check that the "
-                   "peer at "
-                << peer_addr
-                << " is reachable and was started with "
-                   "--enable_ssd_offload=true.";
-            return -1;
+            peer_states[p].warmup_ok = (warmup_done > 0);
+            LOG(INFO) << "Peer[" << p << "] " << peer_addrs[p]
+                      << " warmup " << warmup_done << "/" << warmup_n
+                      << ", transfer_engine_addr=\""
+                      << peer_states[p].peer_seen_addr << "\"";
+            if (!peer_states[p].warmup_ok) {
+                LOG(ERROR) << "Peer[" << p << "] " << peer_addrs[p]
+                           << " warmup failed; this peer will be skipped.";
+            }
         }
 
-        if (FLAGS_duration == 0) {
-            return RunClientRpcBenchSinglePass(peer_addr, peer_seen_addr,
-                                               req_keys, req_sizes, requester);
+        size_t alive_peers = 0;
+        for (const auto& ps : peer_states) {
+            if (ps.warmup_ok) ++alive_peers;
         }
-        return RunClientRpcBenchDuration(peer_addr, peer_seen_addr,
-                                         req_keys, req_sizes, requester);
+        if (alive_peers == 0) {
+            LOG(ERROR) << "All peer warmups failed. Aborting. Check that "
+                          "the peers are reachable and were started with "
+                          "--enable_ssd_offload=true.";
+            return -1;
+        }
+        LOG(INFO) << alive_peers << "/" << peer_states.size()
+                  << " peer(s) ready for the timed loop.";
+
+        if (FLAGS_duration == 0) {
+            return RunClientRpcBenchSinglePass(peer_states, req_keys,
+                                               req_sizes, requester);
+        }
+        return RunClientRpcBenchDuration(peer_states, req_keys, req_sizes,
+                                         requester);
     }
 
     int RunClientRpcBenchSinglePass(
-        const std::string& peer_addr,
-        const std::string& peer_seen_addr,
+        std::vector<PeerBenchState>& peer_states,
         const std::vector<std::string>& req_keys,
         const std::vector<int64_t>& req_sizes,
         const std::shared_ptr<mooncake::ClientRequester>& requester) {
-        LOG(INFO)
-            << "Single-pass mode: each of " << FLAGS_num_threads
-            << " threads issues " << FLAGS_num_keys
-            << " batch_get_offload_object RPCs to " << peer_addr
-            << " (keys=" << req_keys.size() << ", sizes=" << req_sizes.size()
-            << ", "
-            << (req_keys.empty()
-                    ? "empty payload -> no SSD I/O on peer"
-                    : "real SSD read on peer")
-            << "). Measured: single client-to-client RPC RTT.";
-
+        const size_t num_peers = peer_states.size();
         const size_t per_thread = std::max<size_t>(1, FLAGS_num_keys);
+        const size_t per_thread_rpcs = per_thread * num_peers;
 
-        BenchmarkStats stats;
-        stats.InitThreads(FLAGS_num_threads, per_thread);
-        stats.StartTimer();
+        LOG(INFO)
+            << "Single-pass mode: " << FLAGS_num_threads << " threads x "
+            << per_thread << " rounds x " << num_peers
+            << " peers (skipping warmup-failed) = up to "
+            << (FLAGS_num_threads * per_thread_rpcs)
+            << " total RPCs. Measured: single client-to-client RPC RTT.";
+
+        for (auto& ps : peer_states) {
+            if (ps.warmup_ok) {
+                ps.stats.InitThreads(FLAGS_num_threads, per_thread);
+            }
+        }
 
         std::latch start_latch(static_cast<ptrdiff_t>(FLAGS_num_threads));
         std::latch done_latch(static_cast<ptrdiff_t>(FLAGS_num_threads));
@@ -1598,57 +1651,70 @@ class StressBenchmark {
         for (size_t t = 0; t < FLAGS_num_threads; ++t) {
             threads.emplace_back([&, t]() {
                 bindToSocket(t % NR_SOCKETS);
-                ThreadResult& tr = stats.GetThreadResult(t);
-                tr.latencies_ns.reserve(per_thread);
-
+                for (auto& ps : peer_states) {
+                    if (ps.warmup_ok) {
+                        ps.stats.GetThreadResult(t).latencies_ns.reserve(
+                            per_thread);
+                    }
+                }
                 start_latch.arrive_and_wait();
 
                 for (size_t k = 0; k < per_thread; ++k) {
-                    // --- single client-to-client RPC: send request,
-                    //     receive BatchGetOffloadObjectResponse ---
-                    auto t0 = Clock::now();
-                    auto ret = requester->invoke_rpc<
-                        &mooncake::RealClient::batch_get_offload_object,
-                        mooncake::BatchGetOffloadObjectResponse>(
-                        peer_addr, req_keys, req_sizes);
-                    auto t1 = Clock::now();
+                    // One round = one RPC per alive peer, sequentially.
+                    for (size_t p = 0; p < num_peers; ++p) {
+                        if (!peer_states[p].warmup_ok) continue;
+                        const std::string& addr = peer_states[p].peer_addr;
 
-                    int64_t lat_ns = ElapsedNanos(t0, t1);
-                    tr.latencies_ns.push_back(lat_ns);
+                        // --- single client-to-client RPC: send
+                        //     request, receive
+                        //     BatchGetOffloadObjectResponse ---
+                        auto t0 = Clock::now();
+                        auto ret = requester->batch_get_offload_object(
+                            addr, req_keys, req_sizes);
+                        auto t1 = Clock::now();
 
-                    if (!ret) {
-                        ++tr.failed_ops;
-                        LOG_EVERY_N(ERROR, 100)
-                            << "batch_get_offload_object RPC failed: "
-                            << mooncake::toString(ret.error());
-                    } else {
-                        // Each successful response carries a
-                        // BatchGetOffloadObjectResponse. "Bytes" in
-                        // the stats sheet is the response size, which
-                        // is a good proxy for "amount of data
-                        // round-tripped" -- not real payload bytes.
-                        tr.total_bytes +=
-                            static_cast<size_t>(ret->pointers.size() *
-                                                    sizeof(uint64_t)) +
-                            ret->transfer_engine_addr.size() +
-                            sizeof(ret->batch_id) +
-                            sizeof(ret->gc_ttl_ms);
-                        // Sanity: the response must have been served
-                        // by the peer we asked for. Print the first
-                        // successful peer's address per thread for
-                        // end-to-end verification.
-                        if (k == 0 &&
-                            peer_seen_addr != ret->transfer_engine_addr) {
-                            LOG(WARNING)
-                                << "  [t=" << t
-                                << "] peer transfer_engine_addr mismatch: "
-                                << "expected=\"" << peer_seen_addr
-                                << "\" got=\""
-                                << ret->transfer_engine_addr << "\"";
+                        int64_t lat_ns = ElapsedNanos(t0, t1);
+                        ThreadResult& tr =
+                            peer_states[p].stats.GetThreadResult(t);
+                        tr.latencies_ns.push_back(lat_ns);
+
+                        if (!ret) {
+                            ++tr.failed_ops;
+                            LOG_EVERY_N(ERROR, 100)
+                                << "batch_get_offload_object RPC to "
+                                << addr << " failed: "
+                                << mooncake::toString(ret.error());
+                        } else {
+                            // Each successful response carries a
+                            // BatchGetOffloadObjectResponse. "Bytes" in
+                            // the stats sheet is the response size,
+                            // which is a good proxy for "amount of data
+                            // round-tripped" -- not real payload bytes.
+                            tr.total_bytes +=
+                                static_cast<size_t>(
+                                    ret->pointers.size() * sizeof(uint64_t)) +
+                                ret->transfer_engine_addr.size() +
+                                sizeof(ret->batch_id) +
+                                sizeof(ret->gc_ttl_ms);
+                            // Sanity: the response must have been served
+                            // by the peer we asked for. Print the first
+                            // successful peer's address per thread for
+                            // end-to-end verification.
+                            if (k == 0 &&
+                                peer_states[p].peer_seen_addr !=
+                                    ret->transfer_engine_addr) {
+                                LOG(WARNING)
+                                    << "  [t=" << t << " p=" << p
+                                    << "] peer transfer_engine_addr "
+                                    << "mismatch: expected=\""
+                                    << peer_states[p].peer_seen_addr
+                                    << "\" got=\""
+                                    << ret->transfer_engine_addr << "\"";
+                            }
                         }
+                        ++tr.total_keys;
+                        ++tr.total_queries;
                     }
-                    ++tr.total_keys;
-                    ++tr.total_queries;
                 }
 
                 done_latch.arrive_and_wait();
@@ -1656,25 +1722,33 @@ class StressBenchmark {
         }
 
         done_latch.wait();
-        stats.StopTimer();
         for (auto& th : threads) th.join();
 
-        stats.Finalize();
-        stats.Print(
-            "CLIENT-TO-CLIENT RPC BENCHMARK [batch_get_offload_object "
-            "with empty inputs, single ClientRequester]");
+        // Per-peer prints, then AGGREGATE.
+        for (auto& ps : peer_states) {
+            if (!ps.warmup_ok) continue;
+            ps.stats.Finalize();
+            std::string title = "CLIENT-TO-CLIENT RPC BENCHMARK [peer=" +
+                                ps.peer_addr + "]";
+            ps.stats.Print(title);
+        }
+        BenchmarkStats agg = MergePeerStats(peer_states);
+        agg.Print(
+            "CLIENT-TO-CLIENT RPC BENCHMARK [AGGREGATE across all alive "
+            "peers]");
+
         return 0;
     }
 
     int RunClientRpcBenchDuration(
-        const std::string& peer_addr,
-        const std::string& peer_seen_addr,
+        std::vector<PeerBenchState>& peer_states,
         const std::vector<std::string>& req_keys,
         const std::vector<int64_t>& req_sizes,
         const std::shared_ptr<mooncake::ClientRequester>& requester) {
+        const size_t num_peers = peer_states.size();
         LOG(INFO) << "Duration mode: " << FLAGS_num_threads
                   << " threads continuously fire client-to-client RPCs to "
-                  << peer_addr << " for " << FLAGS_duration
+                  << num_peers << " peer(s) for " << FLAGS_duration
                   << "s, stats every " << FLAGS_statis_interval
                   << "s. keys=" << req_keys.size() << ", sizes="
                   << req_sizes.size() << " ("
@@ -1683,15 +1757,13 @@ class StressBenchmark {
                           : "real SSD read on peer")
                   << "). Measured: single client-to-client RPC RTT.";
 
+        for (auto& ps : peer_states) {
+            if (ps.warmup_ok) {
+                ps.InitDuration(FLAGS_num_threads);
+            }
+        }
+
         std::atomic<bool> stop_flag{false};
-        std::atomic<size_t> global_keys{0};
-        std::atomic<size_t> global_queries{0};
-        std::atomic<size_t> global_bytes{0};
-        std::atomic<size_t> global_failed{0};
-
-        std::vector<std::vector<int64_t>> thread_latencies(FLAGS_num_threads);
-        std::vector<std::mutex> latency_mutexes(FLAGS_num_threads);
-
         std::latch start_latch(static_cast<ptrdiff_t>(FLAGS_num_threads));
         std::vector<std::thread> threads;
         threads.reserve(FLAGS_num_threads);
@@ -1702,60 +1774,32 @@ class StressBenchmark {
                 start_latch.arrive_and_wait();
 
                 if (FLAGS_batch_size <= 1) {
-                    // Single-RPC-per-iteration path. Each call is timed
-                    // individually; the latency distribution is the
-                    // steady-state RTT of one client-to-client RPC.
+                    // Single-RPC-per-iteration path. Each round
+                    // visits every alive peer sequentially and times
+                    // each RPC individually; the latency distribution
+                    // is the steady-state RTT of one client-to-client
+                    // RPC to that peer.
                     while (
                         !stop_flag.load(std::memory_order_relaxed)) {
-                        auto t0 = Clock::now();
-                        auto ret = requester->invoke_rpc<
-                            &mooncake::RealClient::batch_get_offload_object,
-                            mooncake::BatchGetOffloadObjectResponse>(
-                            peer_addr, req_keys, req_sizes);
-                        auto t1 = Clock::now();
-                        int64_t lat_ns = ElapsedNanos(t0, t1);
-                        {
-                            std::lock_guard<std::mutex> lk(
-                                latency_mutexes[t]);
-                            thread_latencies[t].push_back(lat_ns);
-                        }
-                        if (!ret) {
-                            global_failed.fetch_add(
-                                1, std::memory_order_relaxed);
-                        } else {
-                            global_bytes.fetch_add(
-                                static_cast<size_t>(ret->pointers.size() *
-                                                        sizeof(uint64_t)) +
-                                    ret->transfer_engine_addr.size() +
-                                    sizeof(ret->batch_id) +
-                                    sizeof(ret->gc_ttl_ms),
-                                std::memory_order_relaxed);
-                        }
-                        global_keys.fetch_add(1,
-                                              std::memory_order_relaxed);
-                        global_queries.fetch_add(1,
-                                                 std::memory_order_relaxed);
-                    }
-                } else {
-                    // Batch path: issue FLAGS_batch_size RPCs in a tight
-                    // loop, time the whole batch end-to-end, and report
-                    // per-RPC latency = batch_lat / batch_size. This
-                    // shows the per-RPC cost when the client pumps
-                    // requests at a high rate.
-                    while (
-                        !stop_flag.load(std::memory_order_relaxed)) {
-                        auto t0 = Clock::now();
-                        for (size_t b = 0; b < FLAGS_batch_size; ++b) {
-                            auto ret = requester->invoke_rpc<
-                                &mooncake::RealClient::
-                                    batch_get_offload_object,
-                                mooncake::BatchGetOffloadObjectResponse>(
-                                peer_addr, req_keys, req_sizes);
+                        for (size_t p = 0; p < num_peers; ++p) {
+                            if (!peer_states[p].warmup_ok) continue;
+                            const std::string& addr = peer_states[p].peer_addr;
+                            auto t0 = Clock::now();
+                            auto ret = requester->batch_get_offload_object(
+                                addr, req_keys, req_sizes);
+                            auto t1 = Clock::now();
+                            int64_t lat_ns = ElapsedNanos(t0, t1);
+                            PeerBenchState& ps = peer_states[p];
+                            {
+                                std::lock_guard<std::mutex> lk(
+                                    ps.latency_mutexes[t]);
+                                ps.thread_latencies[t].push_back(lat_ns);
+                            }
                             if (!ret) {
-                                global_failed.fetch_add(
+                                ps.global_failed.fetch_add(
                                     1, std::memory_order_relaxed);
                             } else {
-                                global_bytes.fetch_add(
+                                ps.global_bytes.fetch_add(
                                     static_cast<size_t>(
                                         ret->pointers.size() *
                                         sizeof(uint64_t)) +
@@ -1764,21 +1808,66 @@ class StressBenchmark {
                                         sizeof(ret->gc_ttl_ms),
                                     std::memory_order_relaxed);
                             }
-                            global_keys.fetch_add(
+                            ps.global_keys.fetch_add(
+                                1, std::memory_order_relaxed);
+                            ps.global_queries.fetch_add(
                                 1, std::memory_order_relaxed);
                         }
-                        auto t1 = Clock::now();
-                        int64_t lat_ns = ElapsedNanos(t0, t1);
-                        {
-                            std::lock_guard<std::mutex> lk(
-                                latency_mutexes[t]);
-                            for (size_t b = 0; b < FLAGS_batch_size; ++b) {
-                                thread_latencies[t].push_back(
-                                    lat_ns / FLAGS_batch_size);
+                    }
+                } else {
+                    // Batch path: each "batch" is FLAGS_batch_size
+                    // rounds, and each round visits all alive peers.
+                    // We time the whole batch and split equally across
+                    // (batch_size * num_peers) RPCs for the per-RPC
+                    // latency samples, then attribute FLAGS_batch_size
+                    // samples (= per_rpc_ns each) to every alive peer
+                    // to match the original single-peer semantics
+                    // (one sample per RPC issued to that peer).
+                    while (
+                        !stop_flag.load(std::memory_order_relaxed)) {
+                        auto t0 = Clock::now();
+                        for (size_t b = 0; b < FLAGS_batch_size; ++b) {
+                            for (size_t p = 0; p < num_peers; ++p) {
+                                if (!peer_states[p].warmup_ok) continue;
+                                const std::string& addr =
+                                    peer_states[p].peer_addr;
+                                auto ret = requester->batch_get_offload_object(
+                                    addr, req_keys, req_sizes);
+                                PeerBenchState& ps = peer_states[p];
+                                if (!ret) {
+                                    ps.global_failed.fetch_add(
+                                        1, std::memory_order_relaxed);
+                                } else {
+                                    ps.global_bytes.fetch_add(
+                                        static_cast<size_t>(
+                                            ret->pointers.size() *
+                                            sizeof(uint64_t)) +
+                                            ret->transfer_engine_addr.size() +
+                                            sizeof(ret->batch_id) +
+                                            sizeof(ret->gc_ttl_ms),
+                                        std::memory_order_relaxed);
+                                }
+                                ps.global_keys.fetch_add(
+                                    1, std::memory_order_relaxed);
                             }
                         }
-                        global_queries.fetch_add(1,
-                                                 std::memory_order_relaxed);
+                        auto t1 = Clock::now();
+                        int64_t batch_lat_ns = ElapsedNanos(t0, t1);
+                        int64_t per_rpc_ns = batch_lat_ns /
+                                             (FLAGS_batch_size * num_peers);
+                        for (auto& ps : peer_states) {
+                            if (!ps.warmup_ok) continue;
+                            std::lock_guard<std::mutex> lk(
+                                ps.latency_mutexes[t]);
+                            for (size_t b = 0; b < FLAGS_batch_size; ++b) {
+                                ps.thread_latencies[t].push_back(per_rpc_ns);
+                            }
+                        }
+                        for (auto& ps : peer_states) {
+                            if (!ps.warmup_ok) continue;
+                            ps.global_queries.fetch_add(
+                                1, std::memory_order_relaxed);
+                        }
                     }
                 }
             });
@@ -1789,22 +1878,29 @@ class StressBenchmark {
         auto next_statis =
             bench_start + std::chrono::seconds(FLAGS_statis_interval);
 
-        std::vector<IntervalLatencyStats> interval_stats_list;
+        // Per-peer interval state (one prev_* set per peer so the
+        // per-peer interval deltas are computed independently).
+        std::vector<size_t> prev_keys(num_peers, 0);
+        std::vector<size_t> prev_queries(num_peers, 0);
+        std::vector<size_t> prev_bytes(num_peers, 0);
+        std::vector<size_t> prev_failed(num_peers, 0);
+        std::vector<Clock::time_point> prev_time(num_peers, bench_start);
+        std::vector<IntervalLatencyStats> interval_stats_list(num_peers);
 
-        // Track per-interval deltas. Declared here (not as members) so
-        // they are local to the duration run and reset on every call.
-        size_t prev_keys_inner = 0;
-        size_t prev_queries_inner = 0;
-        size_t prev_bytes_inner = 0;
-        size_t prev_failed_inner = 0;
-        auto prev_time_inner = bench_start;
+        // Aggregate interval state.
+        size_t prev_keys_agg = 0;
+        size_t prev_queries_agg = 0;
+        size_t prev_bytes_agg = 0;
+        size_t prev_failed_agg = 0;
+        auto prev_time_agg = bench_start;
+        std::vector<IntervalLatencyStats> interval_agg_list;
 
         std::cout << "\n";
         std::cout << "========================================"
                   << "========================================\n";
         std::cout << "  CLIENT-TO-CLIENT RPC DURATION BENCHMARK "
-                     "[batch_get_offload_object with empty inputs, single "
-                     "ClientRequester, peer=" << peer_addr << "]\n";
+                     "[batch_get_offload_object, " << num_peers
+                  << " peer(s)]\n";
         std::cout << "========================================"
                   << "========================================\n";
         std::cout << std::fixed << std::setprecision(2);
@@ -1812,70 +1908,186 @@ class StressBenchmark {
         while (Clock::now() < bench_end) {
             auto now = Clock::now();
             if (now >= next_statis) {
-                size_t cur_keys = global_keys.load(std::memory_order_relaxed);
-                size_t cur_queries =
-                    global_queries.load(std::memory_order_relaxed);
-                size_t cur_bytes = global_bytes.load(std::memory_order_relaxed);
-                size_t cur_failed =
-                    global_failed.load(std::memory_order_relaxed);
+                // ---- Per-peer interval print ----
+                for (size_t p = 0; p < num_peers; ++p) {
+                    if (!peer_states[p].warmup_ok) continue;
+                    PeerBenchState& ps = peer_states[p];
+                    size_t cur_keys =
+                        ps.global_keys.load(std::memory_order_relaxed);
+                    size_t cur_queries =
+                        ps.global_queries.load(std::memory_order_relaxed);
+                    size_t cur_bytes =
+                        ps.global_bytes.load(std::memory_order_relaxed);
+                    size_t cur_failed =
+                        ps.global_failed.load(std::memory_order_relaxed);
 
-                double interval_sec = NanosToSec(ElapsedNanos(prev_time_inner,
-                                                              now));
-                size_t interval_keys = cur_keys - prev_keys_inner;
-                size_t interval_queries = cur_queries - prev_queries_inner;
-                size_t interval_bytes = cur_bytes - prev_bytes_inner;
-                size_t interval_failed = cur_failed - prev_failed_inner;
+                    double interval_sec =
+                        NanosToSec(ElapsedNanos(prev_time[p], now));
+                    size_t interval_keys = cur_keys - prev_keys[p];
+                    size_t interval_queries =
+                        cur_queries - prev_queries[p];
+                    size_t interval_bytes = cur_bytes - prev_bytes[p];
+                    size_t interval_failed =
+                        cur_failed - prev_failed[p];
 
-                double interval_mbps = (interval_sec > 0)
-                                           ? (static_cast<double>(interval_bytes) / MB) / interval_sec
-                                           : 0;
-                double interval_qps = (interval_sec > 0)
-                                          ? static_cast<double>(interval_queries) / interval_sec
-                                          : 0;
-                double interval_kps = (interval_sec > 0)
-                                          ? static_cast<double>(interval_keys) / interval_sec
-                                          : 0;
+                    double interval_mbps =
+                        (interval_sec > 0)
+                            ? (static_cast<double>(interval_bytes) / MB) /
+                                  interval_sec
+                            : 0;
+                    double interval_qps =
+                        (interval_sec > 0)
+                            ? static_cast<double>(interval_queries) /
+                                  interval_sec
+                            : 0;
+                    double interval_kps =
+                        (interval_sec > 0)
+                            ? static_cast<double>(interval_keys) /
+                                  interval_sec
+                            : 0;
 
-                IntervalLatencyStats iv;
-                iv.throughput_mbps = interval_mbps;
-                iv.queries_per_sec = interval_qps;
-                iv.keys_per_sec = interval_kps;
-                for (size_t t = 0; t < FLAGS_num_threads; ++t) {
-                    std::lock_guard<std::mutex> lk(latency_mutexes[t]);
-                    iv.latencies_ns.insert(iv.latencies_ns.end(),
-                                          thread_latencies[t].begin(),
-                                          thread_latencies[t].end());
-                    thread_latencies[t].clear();
+                    IntervalLatencyStats iv;
+                    iv.throughput_mbps = interval_mbps;
+                    iv.queries_per_sec = interval_qps;
+                    iv.keys_per_sec = interval_kps;
+                    for (size_t tt = 0; tt < FLAGS_num_threads; ++tt) {
+                        std::lock_guard<std::mutex> lk(
+                            ps.latency_mutexes[tt]);
+                        iv.latencies_ns.insert(
+                            iv.latencies_ns.end(),
+                            ps.thread_latencies[tt].begin(),
+                            ps.thread_latencies[tt].end());
+                        ps.thread_latencies[tt].clear();
+                    }
+                    iv.Finalize();
+                    interval_stats_list[p].Aggregate(iv);
+
+                    double total_sec =
+                        NanosToSec(ElapsedNanos(bench_start, now));
+                    double total_mbps =
+                        (total_sec > 0)
+                            ? (static_cast<double>(cur_bytes) / MB) /
+                                  total_sec
+                            : 0;
+                    double total_qps =
+                        (total_sec > 0)
+                            ? static_cast<double>(cur_queries) / total_sec
+                            : 0;
+
+                    std::cout << "  [t=" << std::setw(6) << total_sec
+                              << "s]"
+                              << "  peer[" << ps.peer_addr
+                              << "]  interval: " << interval_mbps
+                              << " MB/s, " << interval_qps << " qps"
+                              << " (failed=" << interval_failed << ")"
+                              << "  lat[us]: avg="
+                              << NanosToUs(iv.avg_latency_ns)
+                              << ", P50=" << NanosToUs(iv.p50_latency_ns)
+                              << ", P99=" << NanosToUs(iv.p99_latency_ns)
+                              << "  total: " << cur_queries << " queries, "
+                              << cur_keys << " keys, " << total_mbps
+                              << " MB/s, " << total_qps << " qps"
+                              << " (failed=" << cur_failed << ")\n";
+
+                    prev_keys[p] = cur_keys;
+                    prev_queries[p] = cur_queries;
+                    prev_bytes[p] = cur_bytes;
+                    prev_failed[p] = cur_failed;
+                    prev_time[p] = now;
                 }
-                iv.Finalize();
-                interval_stats_list.push_back(iv);
 
-                double total_sec = NanosToSec(ElapsedNanos(bench_start, now));
-                double total_mbps = (total_sec > 0)
-                                        ? (static_cast<double>(cur_bytes) / MB) / total_sec
-                                        : 0;
-                double total_qps = (total_sec > 0)
-                                       ? static_cast<double>(cur_queries) / total_sec
-                                       : 0;
+                // ---- Aggregate interval print ----
+                {
+                    size_t cur_keys = 0, cur_queries = 0, cur_bytes = 0,
+                           cur_failed = 0;
+                    for (const auto& ps : peer_states) {
+                        if (!ps.warmup_ok) continue;
+                        cur_keys +=
+                            ps.global_keys.load(std::memory_order_relaxed);
+                        cur_queries +=
+                            ps.global_queries.load(std::memory_order_relaxed);
+                        cur_bytes +=
+                            ps.global_bytes.load(std::memory_order_relaxed);
+                        cur_failed +=
+                            ps.global_failed.load(std::memory_order_relaxed);
+                    }
+                    double interval_sec =
+                        NanosToSec(ElapsedNanos(prev_time_agg, now));
+                    size_t interval_keys = cur_keys - prev_keys_agg;
+                    size_t interval_queries =
+                        cur_queries - prev_queries_agg;
+                    size_t interval_bytes = cur_bytes - prev_bytes_agg;
+                    size_t interval_failed =
+                        cur_failed - prev_failed_agg;
 
-                std::cout << "  [t=" << std::setw(6) << total_sec << "s]"
-                          << "  interval: " << interval_mbps << " MB/s, "
-                          << interval_qps << " qps"
-                          << " (failed=" << interval_failed << ")"
-                          << "  lat[us]: avg="
-                          << NanosToUs(iv.avg_latency_ns)
-                          << ", P50=" << NanosToUs(iv.p50_latency_ns)
-                          << ", P99=" << NanosToUs(iv.p99_latency_ns)
-                          << "  total: " << cur_queries << " queries, "
-                          << cur_keys << " keys, " << total_mbps << " MB/s, "
-                          << total_qps << " qps"
-                          << " (failed=" << cur_failed << ")\n";
+                    double interval_mbps =
+                        (interval_sec > 0)
+                            ? (static_cast<double>(interval_bytes) / MB) /
+                                  interval_sec
+                            : 0;
+                    double interval_qps =
+                        (interval_sec > 0)
+                            ? static_cast<double>(interval_queries) /
+                                  interval_sec
+                            : 0;
+                    double interval_kps =
+                        (interval_sec > 0)
+                            ? static_cast<double>(interval_keys) /
+                                  interval_sec
+                            : 0;
 
-                prev_keys_inner = cur_keys;
-                prev_queries_inner = cur_queries;
-                prev_bytes_inner = cur_bytes;
-                prev_failed_inner = cur_failed;
-                prev_time_inner = now;
+                    IntervalLatencyStats iv;
+                    iv.throughput_mbps = interval_mbps;
+                    iv.queries_per_sec = interval_qps;
+                    iv.keys_per_sec = interval_kps;
+                    for (auto& ps : peer_states) {
+                        if (!ps.warmup_ok) continue;
+                        for (size_t tt = 0; tt < FLAGS_num_threads; ++tt) {
+                            std::lock_guard<std::mutex> lk(
+                                ps.latency_mutexes[tt]);
+                            iv.latencies_ns.insert(
+                                iv.latencies_ns.end(),
+                                ps.thread_latencies[tt].begin(),
+                                ps.thread_latencies[tt].end());
+                            ps.thread_latencies[tt].clear();
+                        }
+                    }
+                    iv.Finalize();
+                    interval_agg_list.push_back(iv);
+
+                    double total_sec =
+                        NanosToSec(ElapsedNanos(bench_start, now));
+                    double total_mbps =
+                        (total_sec > 0)
+                            ? (static_cast<double>(cur_bytes) / MB) /
+                                  total_sec
+                            : 0;
+                    double total_qps =
+                        (total_sec > 0)
+                            ? static_cast<double>(cur_queries) / total_sec
+                            : 0;
+
+                    std::cout << "  [t=" << std::setw(6) << total_sec
+                              << "s]"
+                              << "  AGGREGATE   interval: " << interval_mbps
+                              << " MB/s, " << interval_qps << " qps"
+                              << " (failed=" << interval_failed << ")"
+                              << "  lat[us]: avg="
+                              << NanosToUs(iv.avg_latency_ns)
+                              << ", P50=" << NanosToUs(iv.p50_latency_ns)
+                              << ", P99=" << NanosToUs(iv.p99_latency_ns)
+                              << "  total: " << cur_queries << " queries, "
+                              << cur_keys << " keys, " << total_mbps
+                              << " MB/s, " << total_qps << " qps"
+                              << " (failed=" << cur_failed << ")\n";
+
+                    prev_keys_agg = cur_keys;
+                    prev_queries_agg = cur_queries;
+                    prev_bytes_agg = cur_bytes;
+                    prev_failed_agg = cur_failed;
+                    prev_time_agg = now;
+                }
+
                 next_statis += std::chrono::seconds(FLAGS_statis_interval);
             }
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
@@ -1884,63 +2096,151 @@ class StressBenchmark {
         stop_flag.store(true, std::memory_order_relaxed);
         for (auto& th : threads) th.join();
 
-        auto final_time = Clock::now();
-        double total_sec = NanosToSec(ElapsedNanos(bench_start, final_time));
-        size_t final_keys = global_keys.load(std::memory_order_relaxed);
-        size_t final_queries = global_queries.load(std::memory_order_relaxed);
-        size_t final_bytes = global_bytes.load(std::memory_order_relaxed);
-        size_t final_failed = global_failed.load(std::memory_order_relaxed);
+        // ---- Per-peer final summary ----
+        auto per_peer_final_time = Clock::now();
+        for (size_t p = 0; p < num_peers; ++p) {
+            if (!peer_states[p].warmup_ok) continue;
+            PeerBenchState& ps = peer_states[p];
+            double total_sec =
+                NanosToSec(ElapsedNanos(bench_start, per_peer_final_time));
+            size_t final_keys =
+                ps.global_keys.load(std::memory_order_relaxed);
+            size_t final_queries =
+                ps.global_queries.load(std::memory_order_relaxed);
+            size_t final_bytes =
+                ps.global_bytes.load(std::memory_order_relaxed);
+            size_t final_failed =
+                ps.global_failed.load(std::memory_order_relaxed);
 
-        double final_mbps = (total_sec > 0)
-                                ? (static_cast<double>(final_bytes) / MB) / total_sec
-                                : 0;
-        double final_qps = (total_sec > 0)
-                               ? static_cast<double>(final_queries) / total_sec
-                               : 0;
-        double final_kps = (total_sec > 0)
-                               ? static_cast<double>(final_keys) / total_sec
-                               : 0;
+            double final_mbps =
+                (total_sec > 0)
+                    ? (static_cast<double>(final_bytes) / MB) / total_sec
+                    : 0;
+            double final_qps =
+                (total_sec > 0)
+                    ? static_cast<double>(final_queries) / total_sec
+                    : 0;
+            double final_kps =
+                (total_sec > 0)
+                    ? static_cast<double>(final_keys) / total_sec
+                    : 0;
 
-        IntervalLatencyStats overall;
-        for (const auto& s : interval_stats_list) overall.Aggregate(s);
+            const IntervalLatencyStats& overall = interval_stats_list[p];
 
-        std::cout << "\n  FINAL SUMMARY\n";
-        std::cout << "  Total time:       " << total_sec << " s\n";
-        std::cout << "  Total queries:    " << final_queries
-                  << " (failed: " << final_failed << ")\n";
-        std::cout << "  Total keys:       " << final_keys << "\n";
-        std::cout << "  Total data:       " << FormatBytes(final_bytes)
-                  << "  (response bytes, not payload)\n";
-        std::cout << "  Throughput:       " << final_mbps << " MB/s";
-        if (final_mbps > 1024)
-            std::cout << " (" << final_mbps / 1024 << " GB/s)";
-        std::cout << "\n";
-        std::cout << "  Keys/sec:         " << final_kps << "\n";
-        std::cout << "  Queries/sec:      " << final_qps << "\n";
-
-        if (overall.total_samples > 0) {
-            std::cout << "\n  Latency (us)      [n=" << overall.total_samples
-                      << ", per-RPC]\n";
-            std::cout << "    Min:   " << std::setw(12)
-                      << NanosToUs(overall.min_latency_ns) << "\n";
-            std::cout << "    Avg:   " << std::setw(12)
-                      << NanosToUs(overall.avg_latency_ns) << "\n";
-            std::cout << "    P50:   " << std::setw(12)
-                      << NanosToUs(overall.p50_latency_ns) << "\n";
-            std::cout << "    P90:   " << std::setw(12)
-                      << NanosToUs(overall.p90_latency_ns) << "\n";
-            std::cout << "    P99:   " << std::setw(12)
-                      << NanosToUs(overall.p99_latency_ns) << "\n";
-            std::cout << "    P999:  " << std::setw(12)
-                      << NanosToUs(overall.p999_latency_ns);
-            if (overall.total_samples < 1000) std::cout << "  (n<1000)";
+            std::cout << "\n  FINAL SUMMARY [peer=" << ps.peer_addr << "]\n";
+            std::cout << "  Total time:       " << total_sec << " s\n";
+            std::cout << "  Total queries:    " << final_queries
+                      << " (failed: " << final_failed << ")\n";
+            std::cout << "  Total keys:       " << final_keys << "\n";
+            std::cout << "  Total data:       " << FormatBytes(final_bytes)
+                      << "  (response bytes, not payload)\n";
+            std::cout << "  Throughput:       " << final_mbps << " MB/s";
+            if (final_mbps > 1024)
+                std::cout << " (" << final_mbps / 1024 << " GB/s)";
             std::cout << "\n";
-            std::cout << "    P9999: " << std::setw(12)
-                      << NanosToUs(overall.p9999_latency_ns);
-            if (overall.total_samples < 10000) std::cout << "  (n<10000)";
+            std::cout << "  Keys/sec:         " << final_kps << "\n";
+            std::cout << "  Queries/sec:      " << final_qps << "\n";
+
+            if (overall.total_samples > 0) {
+                std::cout << "\n  Latency (us)      [n="
+                          << overall.total_samples << ", per-RPC]\n";
+                std::cout << "    Min:   " << std::setw(12)
+                          << NanosToUs(overall.min_latency_ns) << "\n";
+                std::cout << "    Avg:   " << std::setw(12)
+                          << NanosToUs(overall.avg_latency_ns) << "\n";
+                std::cout << "    P50:   " << std::setw(12)
+                          << NanosToUs(overall.p50_latency_ns) << "\n";
+                std::cout << "    P90:   " << std::setw(12)
+                          << NanosToUs(overall.p90_latency_ns) << "\n";
+                std::cout << "    P99:   " << std::setw(12)
+                          << NanosToUs(overall.p99_latency_ns) << "\n";
+                std::cout << "    P999:  " << std::setw(12)
+                          << NanosToUs(overall.p999_latency_ns);
+                if (overall.total_samples < 1000) std::cout << "  (n<1000)";
+                std::cout << "\n";
+                std::cout << "    P9999: " << std::setw(12)
+                          << NanosToUs(overall.p9999_latency_ns);
+                if (overall.total_samples < 10000)
+                    std::cout << "  (n<10000)";
+                std::cout << "\n";
+                std::cout << "    Max:   " << std::setw(12)
+                          << NanosToUs(overall.max_latency_ns) << "\n";
+            }
+        }
+
+        // ---- Aggregate final summary ----
+        {
+            size_t final_keys = 0, final_queries = 0, final_bytes = 0,
+                   final_failed = 0;
+            for (const auto& ps : peer_states) {
+                if (!ps.warmup_ok) continue;
+                final_keys +=
+                    ps.global_keys.load(std::memory_order_relaxed);
+                final_queries +=
+                    ps.global_queries.load(std::memory_order_relaxed);
+                final_bytes +=
+                    ps.global_bytes.load(std::memory_order_relaxed);
+                final_failed +=
+                    ps.global_failed.load(std::memory_order_relaxed);
+            }
+            double total_sec =
+                NanosToSec(ElapsedNanos(bench_start, per_peer_final_time));
+            double final_mbps =
+                (total_sec > 0)
+                    ? (static_cast<double>(final_bytes) / MB) / total_sec
+                    : 0;
+            double final_qps =
+                (total_sec > 0)
+                    ? static_cast<double>(final_queries) / total_sec
+                    : 0;
+            double final_kps =
+                (total_sec > 0)
+                    ? static_cast<double>(final_keys) / total_sec
+                    : 0;
+
+            IntervalLatencyStats overall;
+            for (const auto& s : interval_agg_list) overall.Aggregate(s);
+
+            std::cout << "\n  FINAL SUMMARY [AGGREGATE across all alive "
+                         "peers]\n";
+            std::cout << "  Total time:       " << total_sec << " s\n";
+            std::cout << "  Total queries:    " << final_queries
+                      << " (failed: " << final_failed << ")\n";
+            std::cout << "  Total keys:       " << final_keys << "\n";
+            std::cout << "  Total data:       " << FormatBytes(final_bytes)
+                      << "  (response bytes, not payload)\n";
+            std::cout << "  Throughput:       " << final_mbps << " MB/s";
+            if (final_mbps > 1024)
+                std::cout << " (" << final_mbps / 1024 << " GB/s)";
             std::cout << "\n";
-            std::cout << "    Max:   " << std::setw(12)
-                      << NanosToUs(overall.max_latency_ns) << "\n";
+            std::cout << "  Keys/sec:         " << final_kps << "\n";
+            std::cout << "  Queries/sec:      " << final_qps << "\n";
+
+            if (overall.total_samples > 0) {
+                std::cout << "\n  Latency (us)      [n="
+                          << overall.total_samples << ", per-RPC]\n";
+                std::cout << "    Min:   " << std::setw(12)
+                          << NanosToUs(overall.min_latency_ns) << "\n";
+                std::cout << "    Avg:   " << std::setw(12)
+                          << NanosToUs(overall.avg_latency_ns) << "\n";
+                std::cout << "    P50:   " << std::setw(12)
+                          << NanosToUs(overall.p50_latency_ns) << "\n";
+                std::cout << "    P90:   " << std::setw(12)
+                          << NanosToUs(overall.p90_latency_ns) << "\n";
+                std::cout << "    P99:   " << std::setw(12)
+                          << NanosToUs(overall.p99_latency_ns) << "\n";
+                std::cout << "    P999:  " << std::setw(12)
+                          << NanosToUs(overall.p999_latency_ns);
+                if (overall.total_samples < 1000) std::cout << "  (n<1000)";
+                std::cout << "\n";
+                std::cout << "    P9999: " << std::setw(12)
+                          << NanosToUs(overall.p9999_latency_ns);
+                if (overall.total_samples < 10000)
+                    std::cout << "  (n<10000)";
+                std::cout << "\n";
+                std::cout << "    Max:   " << std::setw(12)
+                          << NanosToUs(overall.max_latency_ns) << "\n";
+            }
         }
 
         std::cout << "  Note: timed region is exactly the "
@@ -1978,6 +2278,72 @@ class StressBenchmark {
     }
 
    private:
+    // Per-peer benchmark state used by RunClientRpcBench* in multi-peer
+    // mode. Each peer owns its own per-thread results (single-pass) and
+    // its own per-thread latencies / global counters (duration), so the
+    // stats for every peer can be reported independently and then
+    // merged into an AGGREGATE summary.
+    struct PeerBenchState {
+        std::string peer_addr;
+        // transfer_engine_addr echoed back from the peer's first
+        // successful warmup RPC; used for end-to-end sanity checking.
+        std::string peer_seen_addr;
+        // Set to true if the per-peer warmup completed at least one
+        // successful RPC. Peers that fail warmup are kept in the list
+        // and skipped at timed-loop time.
+        bool warmup_ok = false;
+
+        // Single-pass mode: per-thread results aggregated by
+        // BenchmarkStats::Finalize / Print.
+        BenchmarkStats stats;
+
+        // Duration mode: per-thread latency samples and global
+        // counters. The worker loop visits every alive peer in
+        // sequence within each round, and writes each peer's samples /
+        // counters into its own PeerBenchState.
+        std::vector<std::vector<int64_t>> thread_latencies;
+        std::vector<std::mutex> latency_mutexes;
+        std::atomic<size_t> global_keys{0};
+        std::atomic<size_t> global_queries{0};
+        std::atomic<size_t> global_bytes{0};
+        std::atomic<size_t> global_failed{0};
+
+        void InitDuration(size_t n_threads) {
+            thread_latencies.assign(n_threads, {});
+            latency_mutexes.assign(n_threads, {});
+            global_keys.store(0);
+            global_queries.store(0);
+            global_bytes.store(0);
+            global_failed.store(0);
+        }
+    };
+
+    // Merge per-peer per-thread results into a single BenchmarkStats
+    // for the AGGREGATE print. Only peers with warmup_ok == true are
+    // included. Called only by RunClientRpcBenchSinglePass.
+    static BenchmarkStats MergePeerStats(
+        const std::vector<PeerBenchState>& peer_states) {
+        BenchmarkStats agg;
+        if (FLAGS_num_threads == 0) return agg;
+        agg.InitThreads(FLAGS_num_threads, /*expected_per_thread=*/0);
+        for (size_t t = 0; t < FLAGS_num_threads; ++t) {
+            ThreadResult& agg_tr = agg.GetThreadResult(t);
+            for (const auto& ps : peer_states) {
+                if (!ps.warmup_ok) continue;
+                const ThreadResult& pr_tr = ps.stats.GetThreadResult(t);
+                agg_tr.latencies_ns.insert(agg_tr.latencies_ns.end(),
+                                           pr_tr.latencies_ns.begin(),
+                                           pr_tr.latencies_ns.end());
+                agg_tr.total_bytes += pr_tr.total_bytes;
+                agg_tr.total_keys += pr_tr.total_keys;
+                agg_tr.total_queries += pr_tr.total_queries;
+                agg_tr.failed_ops += pr_tr.failed_ops;
+            }
+        }
+        agg.Finalize();
+        return agg;
+    }
+
     static std::string MakeKey(size_t idx) {
         return "bench_key_" + std::to_string(idx);
     }
