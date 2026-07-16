@@ -25,9 +25,9 @@ extern "C" {
 #define tent_batch_id_t uint64_t
 #define tent_segment_id_t uint64_t
 
-#ifndef LOCAL_SEGMENT_ID
-#define LOCAL_SEGMENT_ID (0ull)
-#endif
+// C API local-segment sentinel.  Do not alias to LOCAL_SEGMENT_ID here: that
+// name is used by mooncake::tent (constexpr) and mooncake (old TE const).
+#define TENT_LOCAL_SEGMENT_ID 0ull
 
 #define OPCODE_READ (0)
 #define OPCODE_WRITE (1)
@@ -174,6 +174,9 @@ void tent_free_notifs(tent_notifi_info* info);
 int tent_task_status(tent_engine_t engine, tent_batch_id_t batch_id,
                      size_t task_id, tent_status_t* status);
 
+int tent_cancel_task(tent_engine_t engine, tent_batch_id_t batch_id,
+                     size_t task_id);
+
 int tent_overall_status(tent_engine_t engine, tent_batch_id_t batch_id,
                         tent_status_t* status);
 
@@ -298,6 +301,11 @@ class TransferEngine {
     Status submitTransfer(BatchID batch_id,
                           const std::vector<Request>& request_list,
                           const Notification& notifi);
+
+    // Best-effort task cancellation. Work that has not reached the transport
+    // is prevented from being submitted. Device work already posted may still
+    // complete, so callers must continue polling for a terminal status.
+    Status cancelTransfer(BatchID batch_id, size_t task_id);
 
     Status sendNotification(SegmentID target_id, const Notification& notifi);
 

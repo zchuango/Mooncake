@@ -45,6 +45,18 @@ Status ControlClient::bootstrap(const std::string& server_addr,
     return Status::OK();
 }
 
+Status ControlClient::bootstrapUb(const std::string& server_addr,
+                                  const UbBootstrapDesc& request,
+                                  UbBootstrapDesc& response) {
+    std::string request_raw, response_raw;
+    json j = request;
+    request_raw = j.dump();
+    CHECK_STATUS(
+        tl_rpc_agent.call(server_addr, BootstrapUb, request_raw, response_raw));
+    response = json::parse(response_raw).get<UbBootstrapDesc>();
+    return Status::OK();
+}
+
 Status ControlClient::sendData(const std::string& server_addr,
                                uint64_t peer_mem_addr, void* local_mem_addr,
                                size_t length) {
@@ -176,6 +188,11 @@ ControlService::ControlService(const std::string& type,
             onBootstrapRdma(request, response);
         });
     rpc_server_->registerFunction(
+        BootstrapUb,
+        [this](const std::string_view& request, std::string& response) {
+            onBootstrapUb(request, response);
+        });
+    rpc_server_->registerFunction(
         SendData,
         [this](const std::string_view& request, std::string& response) {
             onSendData(request, response);
@@ -226,7 +243,7 @@ Status ControlService::start(uint16_t& port, bool ipv6_) {
 
 void ControlService::onGetSegmentDesc(const std::string_view& request,
                                       std::string& response) {
-    // Re-use the cached dump shared across concurrent peer fetches.
+    // Reuse the cached dump shared across concurrent peer fetches.
     auto cached = manager_->getLocalDumpedJson();
     response = *cached;
 }
@@ -242,6 +259,31 @@ void ControlService::onBootstrapRdma(const std::string_view& request,
     response = j.dump();
 }
 
+void ControlService::onBootstrapUb(const std::string_view& request,
+                                   std::string& response) {
+    UbBootstrapDesc request_desc =
+        json::parse(std::string(request)).get<UbBootstrapDesc>();
+    UbBootstrapDesc response_desc;
+    int ret = 0;
+    {
+        // Serialize callback replacement with invocation so uninstall waits
+        // for an in-flight bootstrap before destroying the UB transport.
+        std::lock_guard<std::mutex> lock(ub_bootstrap_callback_mutex_);
+        if (ub_bootstrap_callback_) {
+            ret = ub_bootstrap_callback_(request_desc, response_desc);
+        } else {
+            ret = -1;
+            response_desc.reply_msg = "BootstrapUb callback is not registered";
+        }
+    }
+    if (ret != 0 && response_desc.reply_msg.empty()) {
+        response_desc.reply_msg =
+            "BootstrapUb callback failed, ret=" + std::to_string(ret);
+    }
+    json j = response_desc;
+    response = j.dump();
+}
+
 void ControlService::onSendData(const std::string_view& request,
                                 std::string& response) {
     if (request.size() < sizeof(XferDataDesc)) {
@@ -249,7 +291,7 @@ void ControlService::onSendData(const std::string_view& request,
         return;
     }
     XferDataDesc* desc = (XferDataDesc*)request.data();
-    auto local_desc = manager_->getLocal().get();
+    auto local_desc = manager_->getLocal();
     auto peer_mem_addr = le64toh(desc->peer_mem_addr);
     auto length = le64toh(desc->length);
 
@@ -273,7 +315,7 @@ void ControlService::onRecvData(const std::string_view& request,
         return;
     }
     XferDataDesc* desc = (XferDataDesc*)request.data();
-    auto local_desc = manager_->getLocal().get();
+    auto local_desc = manager_->getLocal();
     auto peer_mem_addr = le64toh(desc->peer_mem_addr);
     auto length = le64toh(desc->length);
 

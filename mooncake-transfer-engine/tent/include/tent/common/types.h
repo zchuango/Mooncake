@@ -39,9 +39,10 @@ struct Notification {
     std::string msg;
 };
 
-#ifndef LOCAL_SEGMENT_ID
-#define LOCAL_SEGMENT_ID (0ull)
-#endif
+// Local segment handle.  Use constexpr (not #define) so this does not clash
+// with mooncake::LOCAL_SEGMENT_ID in common.h when USE_UB pulls in old-TE
+// headers in the same translation unit.
+static constexpr SegmentID LOCAL_SEGMENT_ID = 0;
 
 enum TransportType : int {
     UNSPEC = 0,
@@ -54,6 +55,8 @@ enum TransportType : int {
     TCP,
     AscendDirect,
     SUNRISE_LINK,
+    UB,  // Kunpeng UB / URMA transport
+    TPU,
     // Sentinel: must remain the last enumerator.
     kNumTransportTypes,
 };
@@ -64,6 +67,16 @@ inline TransportType c_to_transport_hint(int v) {
     if (v < 0 || v >= kSupportedTransportTypes) return UNSPEC;
     return static_cast<TransportType>(v);
 }
+
+enum class IntentType : int {
+    INTENT_UNSPEC = 0,
+    FOREGROUND_GET,
+    BACKGROUND_PREFETCH,
+    MIGRATION,
+    CHECKPOINT,
+    WEIGHT_LOADING,
+    STAGING_INTERNAL,
+};
 
 struct Request {
     enum OpCode { READ, WRITE };
@@ -85,6 +98,7 @@ struct Request {
     // (MLU = actual transfer time / available window) on completion; it does
     // not yet drive any admission or scheduling decision. See RFC #2519.
     uint64_t deadline_ns = 0;
+    IntentType intent_type = IntentType::INTENT_UNSPEC;
 };
 
 enum TransferStatusEnum {
